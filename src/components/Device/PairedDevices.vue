@@ -131,6 +131,10 @@ const updateUsbDeviceList = async () => {
     try {
         usbDeviceList.value = await client.getUsbDeviceList();
         console.log('Updated USB device list:', usbDeviceList.value);
+        // 新增：设备列表更新后，若列表不为空且未连接设备，则连接第一个设备
+        if (usbDeviceList.value.length > 0 && !selected.value) {
+            await selectDevice(usbDeviceList.value[0]);
+        }
     } catch (error: any) {
         console.error('Failed to update USB device list:', error);
         errorMessage.value = '获取设备列表失败';
