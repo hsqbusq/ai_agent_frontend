@@ -4,27 +4,35 @@
         <div class="header">
             <div class="header-left">
                 <div class="nav-buttons">
-                    <el-button type="primary" size="small" @click="showToast('开始调试')" style="padding: 15px">
-                        <img src="../assets/01.svg" alt="" style="width: 14px;height: 14px"> 开始调试
+                    <el-button type="primary" size="small" @click="startDebugging" style="padding: 15px">
+                        <img src="../assets/01.svg" alt="" style="width: 14px;height: 14px" /> 开始调试
                     </el-button>
-                    <el-button type="primary" size="small" @click="showToast('导入用例')" style="padding: 15px">
-                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px"> 导入用例
+                    <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
+                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 增加用例
+                    </el-button>
+                    <el-button type="primary" size="small" @click="importXlsmFile" style="padding: 15px">
+                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 导入用例
                     </el-button>
                     <el-button type="primary" size="small" @click="showToast('导出用例')" style="padding: 15px">
-                        <img src="../assets/03.svg" alt="" style="width: 14px;height: 14px"> 导出测试用例
+                        <img src="../assets/03.svg" alt="" style="width: 14px;height: 14px" /> 导出测试用例
                     </el-button>
                     <el-button type="primary" size="small" @click="showToast('导出测试报告')" style="padding: 15px">
-                        <img src="../assets/04.svg" alt="" style="width: 14px;height: 14px"> 导出测试报告
+                        <img src="../assets/04.svg" alt="" style="width: 14px;height: 14px" /> 导出测试报告
                     </el-button>
                     <el-button type="primary" size="small" @click="showToast('Python代码生成')" style="padding: 15px">
-                        <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px"> Python代码生成
+                        <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> Python代码生成
                     </el-button>
                     <el-button type="primary" size="small" @click="showToast('序列化用例转化')" style="padding: 15px">
-                        <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px"> 序列化用例转化
+                        <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px" /> 序列化用例转化
+                    </el-button>
+                    <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
+                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
                     </el-button>
                 </div>
             </div>
         </div>
+
+        <input type="file" ref="fileInput" accept=".xlsm" @change="handleFileUpload" style="display: none;" />
 
 
         <!-- 主内容区 -->
@@ -33,24 +41,19 @@
                 <!-- 测试用例表格 -->
                 <div class="card">
                     <el-table :data="paginatedCases" class="editable-table" height="450" highlight-current-row
-                        @row-click="handleRowClick" style="width: 100%">
-                        <el-table-column type="selection" :selectable="selectable" width="55" />
-                        <el-table-column prop="id" label="Case ID" width="80" align="center" />
-                        <el-table-column prop="module" label="功能点" min-width="120" />
-                        <el-table-column prop="steps" label="操作步骤" min-width="200" />
-                        <el-table-column prop="expected" label="期望结果" min-width="180" />
-                        <el-table-column prop="condition" label="测试序列前置条件" min-width="180" />
-                        <el-table-column prop="action" label="动作测试序列" min-width="140" />
-                        <el-table-column prop="status" label="预测测试序列结果" width="150" align="center">
-                            <!-- <template #default="{ row }">
-                <el-tag size="small" :type="statusType(row.status)">
-                  {{ row.status }}
-                </el-tag>
-              </template> -->
-                        </el-table-column>
+                        @selection-change="handleSelectionChange" style="width: 100%" row-key="id">
+                        <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
+                        <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
+                        <el-table-column prop="TestKey" label="测试功能点" min-width="120"></el-table-column>
+                        <el-table-column prop="Initial_Condition" label="初始条件" min-width="200"></el-table-column>
+                        <el-table-column prop="Action" label="动作" min-width="180"></el-table-column>
+                        <el-table-column prop="Expected_Result" label="预期结果" min-width="180"></el-table-column>
+                        <el-table-column prop="InitTestSequences" label="初始条件序列" min-width="180"></el-table-column>
+                        <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140"></el-table-column>
+                        <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140"></el-table-column>
                     </el-table>
                     <div class="pagination-container">
-                        <el-pagination background layout="prev, pager, next" :total="logs.length" :page-size="pageSize"
+                        <el-pagination background layout="prev, pager, next" :total="cases.length" :page-size="pageSize"
                             :current-page="currentPage" @current-change="handlePageChange">
                         </el-pagination>
                     </div>
@@ -74,18 +77,20 @@
                                 <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px"> 清除
                             </el-button>
                         </div>
-                        <el-tabs v-model="activeName" type="card" @tab-click="handleClick">
+                        <el-tabs v-model="activeName" type="card">
                             <el-tab-pane label="Yolo11日志" name="first">
                                 <el-table :data="logCases" class="logs-table" height="210" style="width: 100%">
-                                    <el-table-column prop="id" label="序号" width="80" align="center" />
-                                    <el-table-column prop="time" label="时间" min-width="160" sortable />
-                                    <el-table-column prop="message" label="消息" min-width="260" />
+                                    <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
+                                    <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
+                                    <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
                                     <el-table-column label="操作" min-width="260">
-                                        <!-- <template #default="{ row }">
-                      <el-button type="primary" size="small" @click="showToast(row.id)" style="padding: 15px">
-                        <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px"> 查看
-                      </el-button>
-                    </template> -->
+                                        <template #default="{ row }">
+                                            <el-button type="primary" size="small" @click="fetchTestLogs(row.id)"
+                                                style="padding: 15px">
+                                                <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
+                                                查看
+                                            </el-button>
+                                        </template>
                                     </el-table-column>
                                 </el-table>
                                 <div style="display: flex;align-items: center">
@@ -100,9 +105,25 @@
                                     </div>
                                 </div>
                             </el-tab-pane>
-                            <el-tab-pane label="模型日志" name="second">模型日志</el-tab-pane>
-                            <el-tab-pane label="测试执行日志" name="third">测试执行日志</el-tab-pane>
-                            <el-tab-pane label="其他日志" name="fourth">其他日志</el-tab-pane>
+                            <el-tab-pane label="测试执行日志" name="third">
+                                <el-table :data="executionLogs" class="logs-table" height="210" style="width: 100%">
+                                    <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
+                                    <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
+                                    <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
+                                </el-table>
+                                <div style="display: flex;align-items: center">
+                                    <div>
+                                        每页{{ pageSize2 }}条，共{{ executionLogs.length }}条
+                                    </div>
+                                    <div class="pagination-container">
+                                        <el-pagination background layout="prev, pager, next"
+                                            :total="executionLogs.length" :page-size="pageSize2"
+                                            :current-page="currentPage2" @current-change="handlePageChange2">
+                                        </el-pagination>
+                                    </div>
+                                </div>
+                            </el-tab-pane>
+                            <!-- <el-tab-pane label="其他日志" name="fourth">其他日志</el-tab-pane> -->
                         </el-tabs>
 
 
@@ -125,14 +146,72 @@
 
         </div>
 
+        <!-- 新增的弹窗组件 -->
+        <el-dialog v-model="dialogVisible" title="新增测试用例" width="50%">
+            <el-form :model="newCase" label-width="120px">
+                <el-form-item label="测试功能点">
+                    <el-input v-model="newCase.TestKey" placeholder="请输入测试功能点"></el-input>
+                </el-form-item>
+                <el-form-item label="初始条件">
+                    <el-input v-model="newCase.Initial_Condition" placeholder="请输入初始条件"></el-input>
+                </el-form-item>
+                <el-form-item label="动作">
+                    <el-input v-model="newCase.Action" placeholder="请输入动作"></el-input>
+                </el-form-item>
+                <el-form-item label="预期结果">
+                    <el-input v-model="newCase.Expected_Result" placeholder="请输入预期结果"></el-input>
+                </el-form-item>
+                <el-form-item label="初始条件序列">
+                    <el-input v-model="newCase.InitTestSequences" placeholder="请输入初始条件序列"></el-input>
+                </el-form-item>
+                <el-form-item label="操作步骤序列">
+                    <el-input v-model="newCase.ActionTestSequences" placeholder="请输入操作步骤序列"></el-input>
+                </el-form-item>
+                <el-form-item label="预期结果序列">
+                    <el-input v-model="newCase.ExpectedTestSequences" placeholder="请输入预期结果序列"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="dialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="confirmAddTestCase">确定</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
+        <!-- 查看测试日志的弹窗组件 -->
+        <el-dialog v-model="logDialogVisible" title="测试日志详情" width="70%">
+            <el-tabs v-model="logActiveTab" type="card">
+                <el-tab-pane label="日志" name="logs">
+                    <pre style="text-align: left;">{{ logDetails.logs }}</pre>
+                </el-tab-pane>
+                <el-tab-pane label="Python代码" name="python">
+                    <el-collapse v-model="activeCodeFile">
+                        <el-collapse-item v-for="(codeFile, index) in logDetails.code_files" :key="index"
+                            :title="codeFile.filename">
+                            <pre>{{ codeFile.content }}</pre>
+                        </el-collapse-item>
+                    </el-collapse>
+                </el-tab-pane>
+                <el-tab-pane label="测试图片" name="images"> <!-- 新增图片展示栏 -->
+                    <div v-for="(image, index) in logDetails.images" :key="index">
+                        <p><strong>{{ image.filename }}</strong></p>
+                        <img :src="'data:image/png;base64,' + image.base64_data" alt="Test Image"
+                            style="width: 100%; margin-bottom: 10px;" />
+                    </div>
+                </el-tab-pane>
+
+            </el-tabs>
+        </el-dialog>
         <!-- 底部栏 -->
     </div>
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import DeviceView from './DeviceView.vue'
+import * as XLSX from 'xlsx'
 export default {
     components: {
         DeviceView
@@ -141,36 +220,35 @@ export default {
         const activeName = ref('first')
         const activeDevice = ref('five')
         // 测试用例数据
-        const cases = ref([
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC001', module: '用户登录', steps: '输入用户名和密码，点击登录', expected: '成功登录系统', status: '待测试' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC002', module: '订单创建', steps: '选择商品，填写收货信息，提交订单', expected: '订单创建成功', status: '通过' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC003', module: '支付流程', steps: '选择支付方式，完成支付', expected: '支付成功，状态更新', status: '未通过' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC004', module: '个人信息更新', steps: '修改个人资料并保存', expected: '信息更新成功', status: '待测试' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC005', module: '商品搜索', steps: '输入关键词进行搜索', expected: '返回相关商品列表', status: '通过' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC006', module: '购物车管理', steps: '添加商品到购物车，修改数量', expected: '购物车内容正确更新', status: '待测试' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC007', module: '评论功能', steps: '提交商品评论', expected: '评论显示在商品详情页', status: '通过' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC008', module: '库存管理', steps: '修改商品库存数量', expected: '库存数量正确更新', status: '未通过' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC009', module: '数据导出', steps: '选择日期范围导出数据', expected: '导出正确的Excel文件', status: '待测试' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC010', module: '权限管理', steps: '修改用户权限并保存', expected: '用户权限成功更新', status: '通过' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC011', module: '用户注册', steps: '填写注册信息并提交', expected: '注册成功并发送验证邮件', status: '待测试' },
-            { action: '动作测试序列', condition: '测试序列前置条件', id: 'TC012', module: '找回密码', steps: '输入邮箱申请重置密码', expected: '成功发送重置密码邮件', status: '通过' },
-        ])
+        const cases = ref([])
 
         // 日志数据
-        const logs = ref([
-            { id: 1, time: '2024-11-12 04:50', message: '调试开始: 用户登录模块测试', hasOperation: '有' },
-            { id: 2, time: '2024-10-23 04:55', message: '支付流程测试完成，结果: 通过', hasOperation: '有' },
-            { id: 3, time: '2024-10-06 16:43', message: '发现错误: 购物车数量更新异常', hasOperation: '有' },
-            { id: 4, time: '2025-11-28 20:21', message: '新增测试用例 TC010 - 权限管理', hasOperation: '有' },
-            { id: 5, time: '2025-12-09 19:50', message: '系统性能优化完成', hasOperation: '无' },
-            { id: 5, time: '2025-12-09 19:50', message: '系统性能优化完成', hasOperation: '无' },
-            { id: 5, time: '2025-12-09 19:50', message: '系统性能优化完成', hasOperation: '无' },
-            { id: 5, time: '2025-12-09 19:50', message: '系统性能优化完成', hasOperation: '无' },
-            { id: 5, time: '2025-12-09 19:50', message: '系统性能优化完成', hasOperation: '无' },
-            { id: 5, time: '2025-12-09 19:50', message: '系统性能优化完成', hasOperation: '无' },
-            { id: 5, time: '2025-12-09 19:50', message: '系统性能优化完成', hasOperation: '无' },
+        const logs = ref([])
 
-        ])
+        // 测试执行日志数据
+        const executionLogs = ref([])
+
+        // 新增的弹窗相关数据
+        const dialogVisible = ref(false)
+        const newCase = reactive({
+            TestKey: '',
+            Initial_Condition: '',
+            Action: '',
+            Expected_Result: '',
+            InitTestSequences: '',
+            ActionTestSequences: '',
+            ExpectedTestSequences: ''
+        })
+
+        // 查看日志的弹窗相关数据
+        const logDialogVisible = ref(false)
+        const logActiveTab = ref('logs')
+        const activeCodeFile = ref([])
+        const logDetails = reactive({
+            logs: '',
+            code_files: [],
+            images: []
+        })
 
         // 搜索功能
         const searchQuery = ref('')
@@ -190,6 +268,9 @@ export default {
         const currentPage1 = ref(1)
         const pageSize1 = ref(8)
 
+        const currentPage2 = ref(1)
+        const pageSize2 = ref(8)
+
         // 计算当前页显示的数据
         const paginatedCases = computed(() => {
             const start = (currentPage.value - 1) * pageSize.value
@@ -201,6 +282,12 @@ export default {
             const start = (currentPage1.value - 1) * pageSize1.value
             const end = start + pageSize1.value
             return filteredLogCases.value.slice(start, end)
+        })
+
+        const executionLogCases = computed(() => {
+            const start = (currentPage2.value - 1) * pageSize2.value
+            const end = start + pageSize2.value
+            return executionLogs.value.slice(start, end)
         })
 
         // 日志设置
@@ -237,48 +324,58 @@ export default {
             }
         }
 
-        // 添加新测试用例
+        // 用于添加测试用例的方法现在需要打开弹窗
         const addTestCase = () => {
-            const newId = `TC${String(cases.value.length + 1).padStart(3, '0')}`
-            cases.value.unshift({
-                id: newId,
-                module: '新功能模块',
-                steps: '请描述操作步骤...',
-                expected: '预期结果...',
-                status: '待测试'
-            })
-            showToast('测试用例已添加', 'success')
+            dialogVisible.value = true
         }
 
-        // 编辑测试用例
-        const editTestCase = (row) => {
-            logs.value.unshift({
-                id: logs.value.length + 1,
-                time: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                message: `编辑测试用例: ${row.module} (${row.id})`,
-                hasOperation: '有'
+        // 新增的确认添加测试用例的方法
+        const confirmAddTestCase = () => {
+            const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
+            cases.value.push({
+                id: newId,
+                TestKey: newCase.TestKey,
+                Initial_Condition: newCase.Initial_Condition,
+                Action: newCase.Action,
+                Expected_Result: newCase.Expected_Result,
+                InitTestSequences: newCase.InitTestSequences,
+                ActionTestSequences: newCase.ActionTestSequences,
+                ExpectedTestSequences: newCase.ExpectedTestSequences,
             })
-            showToast(`正在编辑用例: ${row.id}`)
+            showToast('测试用例已添加', 'success')
+            dialogVisible.value = false
+            // 清空输入框
+            Object.assign(newCase, {
+                TestKey: '',
+                Initial_Condition: '',
+                Action: '',
+                Expected_Result: '',
+                InitTestSequences: '',
+                ActionTestSequences: '',
+                ExpectedTestSequences: ''
+            })
         }
 
         // 删除测试用例
-        const deleteTestCase = (row) => {
-            const index = cases.value.findIndex(c => c.id === row.id)
-            if (index !== -1) {
-                cases.value.splice(index, 1)
-                showToast('测试用例已删除', 'success')
+        const deleteTestCase = () => {
+            if (selectedRows.value.length === 0) {
+                showToast('请先选择要删除的测试用例', 'warning')
+                return
             }
+
+            selectedRows.value.forEach((row) => {
+                const index = cases.value.findIndex(c => c.id === row.id)
+                if (index !== -1) {
+                    cases.value.splice(index, 1)
+                }
+            })
+
+            showToast('测试用例已删除', 'success')
         }
 
         // 运行测试用例
-        const runTestCase = (row) => {
-            logs.value.unshift({
-                id: logs.value.length + 1,
-                time: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                message: `开始执行测试用例: ${row.module} (${row.id})`,
-                hasOperation: '有'
-            })
-            showToast(`正在运行用例: ${row.id}`)
+        const runTestCase = (query) => {
+            startPollingForDebugResults(query);
         }
 
         // 清除日志
@@ -287,25 +384,31 @@ export default {
             showToast('日志已清除', 'info')
         }
 
-        // 表格行点击处理
-        const handleRowClick = (row, column, event) => {
-            // 清除之前的高亮
-            const tableRows = event.currentTarget.parentElement.querySelectorAll('.el-table__row')
-            tableRows.forEach(el => {
-                el.classList.remove('highlight')
-            })
+        // 选中的行
+        const selectedRows = ref([]);
 
-            // 高亮当前行
-            event.currentTarget.classList.add('highlight')
+        // 处理选中改变事件
+        const handleSelectionChange = (selection) => {
+            console.log('Selection changed: ', selection);
+            selectedRows.value = selection;
 
-            // 添加到日志
-            logs.value.unshift({
-                id: logs.value.length + 1,
-                time: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                message: `选中测试用例: ${row.id} - ${row.module}`,
-                hasOperation: '无'
-            })
-        }
+            // 移除所有行的高亮
+            const tableRows = document.querySelectorAll('.el-table__row');
+            tableRows.forEach((el) => {
+                el.classList.remove('highlight');
+                el.removeAttribute('data-id');
+            });
+
+            // 高亮选中的行
+            selection.forEach((row) => {
+                const currentRow = document.querySelector(`.el-table__row[data-row-key='${row.id}']`);
+                if (currentRow) {
+                    currentRow.classList.add('highlight');
+                    currentRow.setAttribute('data-id', row.id);
+                }
+            });
+
+        };
 
         // 分页变化处理
         const handlePageChange = (newPage) => {
@@ -318,17 +421,164 @@ export default {
             showToast(`切换到第 ${newPage} 页`, 'info')
         }
 
+        const handlePageChange2 = (newPage) => {
+            currentPage2.value = newPage
+            showToast(`切换到第 ${newPage} 页`, 'info')
+        }
+        // 导入xlsm文件
+        const fileInput = ref(null)
+        const importXlsmFile = () => {
+            fileInput.value.click()
+        }
+
+        const handleFileUpload = (event) => {
+            const file = event.target.files[0]
+            if (file && file.type === 'application/vnd.ms-excel.sheet.macroEnabled.12') {
+                showToast(`正在导入文件: ${file.name}`, 'info')
+                const reader = new FileReader()
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result)
+                    const workbook = XLSX.read(data, { type: 'array' })
+                    const firstSheetName = workbook.SheetNames[0]
+                    const worksheet = workbook.Sheets[firstSheetName]
+                    const json = XLSX.utils.sheet_to_json(worksheet)
+                    json.forEach((row) => {
+                        const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
+                        cases.value.push({
+                            id: newId,
+                            TestKey: row['TestKey\r\n测试功能点'],
+                            Initial_Condition: row['Initial_Condition\r\n初始条件'],
+                            Action: row['Action\r\n动作'],
+                            Expected_Result: row['Expected_Result\r\n预期结果'],
+                            InitTestSequences: row['InitTestSequences\r\n初始条件序列'],
+                            ActionTestSequences: row['ActionTestSequences\r\n操作步骤序列'],
+                            ExpectedTestSequences: row['ExpectedTestSequences\r\n预期结果序列'],
+                        })
+                    })
+                    showToast(`文件导入完成: ${file.name}`, 'success')
+                }
+                reader.readAsArrayBuffer(file)
+            } else {
+                showToast('请选择有效的 xlsm 文件', 'error')
+            }
+        }
+
+        // 开始调试功能
+        const startDebugging = () => {
+            if (selectedRows.value.length === 0) {
+                showToast('请先选择要调试的测试用例', 'warning')
+                return
+            }
+
+            selectedRows.value.forEach((row) => {
+                const query = `${row.Initial_Condition} ${row.Action} ${row.Expected_Result}`
+                runTestCase(query);
+            })
+        }
+
+        let pollingInterval = null;
+        const startPollingForDebugResults = (query) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'http://49.235.121.69:19000/chat', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Accept', 'text/event-stream');
+
+            xhr.onreadystatechange = () => {
+                if (xhr.readyState === 3) { // xhr.readyState === 3 表示响应正在被接收
+                    const responseText = xhr.responseText;
+                    console.log("Received response text:", responseText); // 调试信息：打印接收到的响应文本
+
+                    const lines = responseText.split('\n');
+                    lines.forEach(line => {
+                        if (line.trim() === '') return; // 跳过空行
+                        console.log("Processing line:", line); // 调试信息：打印正在处理的行
+                        if (line === '') return;
+                        try {
+                            executionLogs.value.push({
+                                id: executionLogs.value.length + 1,
+                                time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                                message: `${line}`,
+                            });
+                        } catch (parseError) {
+                            console.error("Error parsing chunk:", parseError);
+                        }
+                    });
+                }
+            };
+
+            xhr.onload = () => {
+                console.log("Stream ended"); // 调试信息：打印流结束信息
+            };
+
+            xhr.onerror = (error) => {
+                console.error("Error in stream:", error); // 调试信息：打印错误信息
+            };
+
+            xhr.send(JSON.stringify({ query }));
+        }
+
+        // 停止轮询
+        const stopPolling = () => {
+            if (pollingInterval) clearInterval(pollingInterval);
+        }
+
+        // 获取测试用例列表
+        const fetchTestList = () => {
+            fetch('http://49.235.121.69:19000/test_list')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === "200") {
+                        const testCases = data.result.items.map((item) => ({
+                            id: item.test_id,
+                            time: item.create_time,
+                            message: item.query,
+                        }));
+                        logs.value = testCases;
+                        showToast('测试用例列表加载成功', 'success');
+                    } else {
+                        showToast('测试用例列表加载失败', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching test list:', error);
+                    showToast('测试用例列表加载失败', 'error');
+                });
+        }
+
+
+        // 获取测试日志
+        const fetchTestLogs = (test_id) => {
+            fetch(`http://49.235.121.69:19000/test_logs/${test_id}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === "200") {
+                        // 直接赋值接口返回的日志内容
+                        logDetails.logs = data.result.logs.chat_log;
+                        logDetails.code_files = data.result.logs.code_files;
+                        logDetails.images = data.result.logs.images;
+                        console.log(logDetails.code_files);
+                        logDialogVisible.value = true;
+                        showToast(`测试日志加载成功`, 'success');
+                    } else {
+                        showToast('测试日志加载失败', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching test logs:', error);
+                    showToast('测试日志加载失败', 'error');
+                });
+        }
 
         // 模拟组件加载
         onMounted(() => {
             setTimeout(() => {
-                logs.value.unshift({
-                    id: logs.value.length + 1,
-                    time: new Date().toISOString().slice(0, 19).replace('T', ' '),
-                    message: '系统初始化完成，准备测试',
-                    hasOperation: '有'
-                })
+                fetchTestList();
             }, 500)
+        })
+
+        // 组件卸载时停止轮询
+        onUnmounted(() => {
+            stopPolling();
         })
 
         return {
@@ -339,27 +589,45 @@ export default {
             searchQuery,
             filteredCases,
             logCases,
+            executionLogs,
+            executionLogCases,
             filteredLogCases,
             paginatedCases,
             currentPage,
             pageSize,
             currentPage1,
             pageSize1,
+            currentPage2,
+            pageSize2,
             logSettings,
             logLevel,
             activeStep,
-
+            dialogVisible,
+            newCase,
+            selectedRows,
             showToast,
             autoSave,
             statusType,
             addTestCase,
-            editTestCase,
+            confirmAddTestCase,
             deleteTestCase,
             runTestCase,
             clearLogs,
-            handleRowClick,
+            handleSelectionChange,
             handlePageChange,
-            handlePageChange1
+            handlePageChange1,
+            handlePageChange2,
+            fileInput,
+            importXlsmFile,
+            handleFileUpload,
+            startDebugging,
+            stopPolling,
+            fetchTestList,
+            fetchTestLogs,
+            logDialogVisible,
+            logActiveTab,
+            activeCodeFile,
+            logDetails,
         }
     }
 }
@@ -548,5 +816,15 @@ body {
 
 .highlight {
     background-color: #f0f7ff;
+}
+
+pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background-color: #f8f8f8;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-family: 'Consolas', monospace;
 }
 </style>
