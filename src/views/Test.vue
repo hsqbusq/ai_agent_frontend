@@ -48,9 +48,29 @@
                         <el-table-column prop="Initial_Condition" label="初始条件" min-width="200"></el-table-column>
                         <el-table-column prop="Action" label="动作" min-width="180"></el-table-column>
                         <el-table-column prop="Expected_Result" label="预期结果" min-width="180"></el-table-column>
-                        <el-table-column prop="InitTestSequences" label="初始条件序列" min-width="180"></el-table-column>
-                        <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140"></el-table-column>
-                        <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140"></el-table-column>
+                        <el-table-column prop="InitTestSequences" label="初始条件序列" min-width="180">
+                            <template #default="scope">
+                                <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
+                                    @blur="scope.row.editing = false"></el-input>
+                                <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences }}</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
+                            <template #default="scope">
+                                <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
+                                    @blur="scope.row.editing = false"></el-input>
+                                <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
+                                    }}</span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
+                            <template #default="scope">
+                                <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
+                                    @blur="scope.row.editing = false"></el-input>
+                                <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
+                                    }}</span>
+                            </template>
+                        </el-table-column>
                     </el-table>
                     <div class="pagination-container">
                         <el-pagination background layout="prev, pager, next" :total="cases.length" :page-size="pageSize"
@@ -62,7 +82,7 @@
                 <!-- 日志输出 -->
                 <div style="display: flex">
                     <div class="card" style="flex: 5;padding: 10px">
-                        <div class="nav-buttons" style="display: flex;align-items: center;margin: 10px 0">
+                        <!-- <div class="nav-buttons" style="display: flex;align-items: center;margin: 10px 0">
                             <label for="">日志输出：</label>
                             <el-button type="primary" size="small" @click="showToast('滚动显示')" style="padding: 15px">
                                 <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px"> 滚动显示
@@ -76,7 +96,7 @@
                             <el-button type="primary" size="small" @click="showToast('清除')" style="padding: 15px">
                                 <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px"> 清除
                             </el-button>
-                        </div>
+                        </div> -->
                         <el-tabs v-model="activeName" type="card">
                             <el-tab-pane label="Yolo11日志" name="first">
                                 <el-table :data="logCases" class="logs-table" height="210" style="width: 100%">
@@ -131,20 +151,18 @@
                     <div class="card" style="flex: 5;padding: 10px;">
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <el-tab-pane label="手机设备" name="five">
-                <div class="video-container">
-                    <video ref="videoPlayer" width="720" height="480" autoplay muted controls playsinline></video>
-                    <div class="stream-controls">
-                        <el-button 
-                            type="primary" 
-                            @click="toggleStream"
-                            :loading="isConnecting"
-                            :disabled="isDisconnecting">
-                            {{ isStreaming ? '停止视频流' : '启动视频流' }}
-                        </el-button>
-                        <span class="status-indicator" :class="streamStatusClass"></span>
-                        <span class="status-text">{{ streamStatusText }}</span>
-                    </div>
-                </div>
+                                <div class="video-container">
+                                    <video ref="videoPlayer" width="720" height="480" autoplay muted controls
+                                        playsinline></video>
+                                    <div class="stream-controls">
+                                        <el-button type="primary" @click="toggleStream" :loading="isConnecting"
+                                            :disabled="isDisconnecting">
+                                            {{ isStreaming ? '停止视频流' : '启动视频流' }}
+                                        </el-button>
+                                        <span class="status-indicator" :class="streamStatusClass"></span>
+                                        <span class="status-text">{{ streamStatusText }}</span>
+                                    </div>
+                                </div>
                             </el-tab-pane>
                         </el-tabs>
                     </div>
@@ -268,14 +286,14 @@ export default {
         })
 
         const videoPlayer = ref(null)
-const isStreaming = ref(false)
-const isConnecting = ref(false)
-const isDisconnecting = ref(false)
-const streamStatus = ref('disconnected') // disconnected, connecting, connected, error
-const msePlayer = ref(null)
-const ws = ref(null)
+        const isStreaming = ref(false)
+        const isConnecting = ref(false)
+        const isDisconnecting = ref(false)
+        const streamStatus = ref('disconnected') // disconnected, connecting, connected, error
+        const msePlayer = ref(null)
+        const ws = ref(null)
 
-const deviceUdid = 'a2f30770' // 设备UDID
+        const deviceUdid = 'a2f30770' // 设备UDID
 
         // 计算属性
         const streamStatusText = computed(() => {
@@ -286,7 +304,7 @@ const deviceUdid = 'a2f30770' // 设备UDID
                 error: '连接错误'
             }[streamStatus.value]
         })
-        
+
         const streamStatusClass = computed(() => {
             return {
                 disconnected: 'status-disconnected',
@@ -307,16 +325,16 @@ const deviceUdid = 'a2f30770' // 设备UDID
                 if (mediaSource.value) {
                     URL.revokeObjectURL(videoPlayer.value.src)
                 }
-                
+
                 mediaSource.value = new MediaSource()
                 const objectUrl = URL.createObjectURL(mediaSource.value)
                 videoPlayer.value.src = objectUrl
-                
+
                 mediaSource.value.addEventListener('sourceopen', () => {
                     console.log('MediaSource ready')
                     resolve()
                 }, { once: true })
-                
+
                 mediaSource.value.addEventListener('sourceerror', () => {
                     reject(new Error('MediaSource error'))
                 }, { once: true })
@@ -329,16 +347,16 @@ const deviceUdid = 'a2f30770' // 设备UDID
                 if (!mediaSource.value || mediaSource.value.readyState !== 'open') {
                     return reject(new Error('MediaSource not ready'))
                 }
-                
+
                 // 检查浏览器支持的MIME类型
                 const mimeType = 'video/mp4; codecs="avc1.42E01E"'
                 if (!MediaSource.isTypeSupported(mimeType)) {
                     return reject(new Error(`Unsupported MIME type: ${mimeType}`))
                 }
-                
+
                 sourceBuffer.value = mediaSource.value.addSourceBuffer(mimeType)
                 sourceBuffer.value.mode = 'sequence'
-                
+
                 sourceBuffer.value.addEventListener('updateend', () => {
                     if (!sourceBuffer.value.updating && mediaSource.value.readyState === 'open') {
                         // 清理旧的视频数据（保留最近10秒）
@@ -351,11 +369,11 @@ const deviceUdid = 'a2f30770' // 设备UDID
                         }
                     }
                 })
-                
+
                 sourceBuffer.value.addEventListener('error', () => {
                     reject(new Error('SourceBuffer error'))
                 })
-                
+
                 resolve()
             })
         }
@@ -364,18 +382,18 @@ const deviceUdid = 'a2f30770' // 设备UDID
         const connectWebSocket = () => {
             return new Promise((resolve, reject) => {
                 const wsUrl = buildWebSocketUrl()
-                
+
                 ws.value = new WebSocket(wsUrl)
                 ws.value.binaryType = 'arraybuffer'
-                
+
                 ws.value.onopen = () => {
                     console.log('WebSocket connected')
                     streamStatus.value = 'connected'
                     resolve()
                 }
-                
+
                 ws.value.onmessage = (event) => {
-                    
+
                     if (sourceBuffer.value && !sourceBuffer.value.updating) {
                         try {
                             sourceBuffer.value.appendBuffer(event.data)
@@ -385,13 +403,13 @@ const deviceUdid = 'a2f30770' // 设备UDID
                         }
                     }
                 }
-                
+
                 ws.value.onerror = (error) => {
                     console.error('WebSocket error:', error)
                     streamStatus.value = 'error'
                     reject(error)
                 }
-                
+
                 ws.value.onclose = () => {
                     console.log('WebSocket closed')
                     if (streamStatus.value !== 'error') {
@@ -402,81 +420,81 @@ const deviceUdid = 'a2f30770' // 设备UDID
         }
 
         // 启动视频流
-const startStream = async () => {
-  try {
-    isConnecting.value = true
-    streamStatus.value = 'connecting'
-    
-    // 初始化流程
-    await initMediaSource()
-    await initSourceBuffer()
-    
-    // 添加SourceBuffer监听
-    sourceBuffer.value.addEventListener('error', (e) => {
-      console.error('SourceBuffer error:', e)
-      stopStream()
-    })
-    
-    // 连接WebSocket
-    const wsUrl = buildWebSocketUrl()
-    ws.value = new WebSocket(wsUrl)
-    ws.value.binaryType = 'arraybuffer'
-    
-    // 添加接收数据统计
-    let bytesReceived = 0
-    const startTime = Date.now()
-    
-    ws.value.onmessage = (event) => {
-      bytesReceived += event.data.byteLength
-      
-      // 实时显示接收速率
-      const elapsed = (Date.now() - startTime) / 1000
-      const rate = (bytesReceived / (1024 * elapsed)).toFixed(2)
-      console.log(`Receiving: ${rate} KB/s`)
-      
-      try {
-        if (sourceBuffer.value && !sourceBuffer.value.updating) {
-          sourceBuffer.value.appendBuffer(event.data)
+        const startStream = async () => {
+            try {
+                isConnecting.value = true
+                streamStatus.value = 'connecting'
+
+                // 初始化流程
+                await initMediaSource()
+                await initSourceBuffer()
+
+                // 添加SourceBuffer监听
+                sourceBuffer.value.addEventListener('error', (e) => {
+                    console.error('SourceBuffer error:', e)
+                    stopStream()
+                })
+
+                // 连接WebSocket
+                const wsUrl = buildWebSocketUrl()
+                ws.value = new WebSocket(wsUrl)
+                ws.value.binaryType = 'arraybuffer'
+
+                // 添加接收数据统计
+                let bytesReceived = 0
+                const startTime = Date.now()
+
+                ws.value.onmessage = (event) => {
+                    bytesReceived += event.data.byteLength
+
+                    // 实时显示接收速率
+                    const elapsed = (Date.now() - startTime) / 1000
+                    const rate = (bytesReceived / (1024 * elapsed)).toFixed(2)
+                    console.log(`Receiving: ${rate} KB/s`)
+
+                    try {
+                        if (sourceBuffer.value && !sourceBuffer.value.updating) {
+                            sourceBuffer.value.appendBuffer(event.data)
+                        }
+                    } catch (e) {
+                        console.error('Append error:', e)
+                        stopStream()
+                    }
+                }
+
+                await new Promise((resolve, reject) => {
+                    ws.value.onopen = resolve
+                    ws.value.onerror = reject
+                    setTimeout(() => reject(new Error('Connection timeout')), 5000)
+                })
+
+                isStreaming.value = true
+                streamStatus.value = 'connected'
+                ElMessage.success('视频流已启动')
+
+            } catch (error) {
+                console.error('Stream startup failed:', {
+                    error,
+                    mediaSourceState: mediaSource.value?.readyState,
+                    sourceBufferState: sourceBuffer.value?.updating
+                })
+                stopStream()
+                throw error
+            } finally {
+                isConnecting.value = false
+            }
         }
-      } catch (e) {
-        console.error('Append error:', e)
-        stopStream()
-      }
-    }
-    
-    await new Promise((resolve, reject) => {
-      ws.value.onopen = resolve
-      ws.value.onerror = reject
-      setTimeout(() => reject(new Error('Connection timeout')), 5000)
-    })
-    
-    isStreaming.value = true
-    streamStatus.value = 'connected'
-    ElMessage.success('视频流已启动')
-    
-  } catch (error) {
-    console.error('Stream startup failed:', {
-      error,
-      mediaSourceState: mediaSource.value?.readyState,
-      sourceBufferState: sourceBuffer.value?.updating
-    })
-    stopStream()
-    throw error
-  } finally {
-    isConnecting.value = false
-  }
-}
 
         // 停止视频流
         const stopStream = () => {
             isDisconnecting.value = true
-            
+
             // 关闭WebSocket
             if (ws.value) {
                 ws.value.close()
                 ws.value = null
             }
-            
+
             // 清理SourceBuffer
             if (sourceBuffer.value) {
                 try {
@@ -488,7 +506,7 @@ const startStream = async () => {
                 }
                 sourceBuffer.value = null
             }
-            
+
             // 清理MediaSource
             if (mediaSource.value) {
                 if (mediaSource.value.readyState === 'open') {
@@ -497,12 +515,12 @@ const startStream = async () => {
                 URL.revokeObjectURL(videoPlayer.value.src)
                 mediaSource.value = null
             }
-            
+
             // 重置视频元素
             if (videoPlayer.value) {
                 videoPlayer.value.src = ''
             }
-            
+
             isStreaming.value = false
             isDisconnecting.value = false
             streamStatus.value = 'disconnected'
@@ -718,6 +736,57 @@ const startStream = async () => {
                     showToast(`文件导入完成: ${file.name}`, 'success')
                 }
                 reader.readAsArrayBuffer(file)
+            } else if (file && file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+                showToast(`正在导入文件: ${file.name}`, 'info')
+                const reader = new FileReader()
+                reader.onload = (e) => {
+                    const data = new Uint8Array(e.target.result)
+                    const workbook = XLSX.read(data, { type: 'array' })
+
+                    // 获取工作表数量
+                    const sheetCount = workbook.SheetNames.length
+                    
+                    // 遍历所有工作表
+                    for (let i = 1; i < sheetCount - 1; i++) {
+                        const sheetName = workbook.SheetNames[i]
+                        const worksheet = workbook.Sheets[sheetName]
+                        const json = XLSX.utils.sheet_to_json(worksheet, { range: 6 })
+
+                        json.forEach((row) => {
+                            const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
+                            cases.value.push({
+                                id: newId,
+                                TestKey: row['Test Key\r\n功能点'],
+                                Initial_Condition: row['Pre-condition\r\n前提条件'],
+                                Action: row['Action\r\n操作步骤'],
+                                Expected_Result: row['Expected Result\r\n期望结果'],
+                                InitTestSequences: row['Init Test Sequences\r\n测试序列前置条件'],
+                                ActionTestSequences: row['Action Test Sequences\r\n动作测试序列'],
+                                ExpectedTestSequences: row['Expected Test Sequences\r\n预期测试序列结果'],
+
+                            })
+                        })
+                    }
+                    // const firstSheetName = workbook.SheetNames[1]
+                    // const worksheet = workbook.Sheets[firstSheetName]
+                    // const json = XLSX.utils.sheet_to_json(worksheet, { range: 6 })
+                    // console.log(json);
+                    // json.forEach((row) => {
+                    //     const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
+                    //     cases.value.push({
+                    //         id: newId,
+                    //         TestKey: row['Test Key\r\n功能点'],
+                    //         Initial_Condition: row['Pre-condition\r\n前提条件'],
+                    //         Action: row['Action\r\n操作步骤'],
+                    //         Expected_Result: row['Expected Result\r\n期望结果'],
+                    //         InitTestSequences: row['Init Test Sequences\r\n测试序列前置条件'],
+                    //         ActionTestSequences: row['Action Test Sequences\r\n动作测试序列'],
+                    //         ExpectedTestSequences: row['Expected Test Sequences\r\n预期测试序列结果'],
+                    //     })
+                    // })
+                    showToast(`文件导入完成: ${file.name}`, 'success')
+                }
+                reader.readAsArrayBuffer(file)
             } else {
                 showToast('请选择有效的 xlsm 文件', 'error')
             }
@@ -731,7 +800,7 @@ const startStream = async () => {
             }
 
             selectedRows.value.forEach((row) => {
-                const query = `${row.Initial_Condition} ${row.Action} ${row.Expected_Result}`
+                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果: ${row.ExpectedTestSequences}`
                 runTestCase(query);
             })
         }
@@ -885,7 +954,7 @@ const startStream = async () => {
             fetchTestList,
             fetchTestLogs,
             logDialogVisible,
-             videoPlayer,
+            videoPlayer,
             isStreaming,
             isConnecting,
             isDisconnecting,
