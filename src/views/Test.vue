@@ -22,7 +22,7 @@
                     <el-button type="primary" size="small" @click="showToast('Python代码生成')" style="padding: 15px">
                         <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> Python代码生成
                     </el-button>
-                    <el-button type="primary" size="small" @click="showToast('序列化用例转化')" style="padding: 15px">
+                    <el-button type="primary" size="small" @click="caseConversion" style="padding: 15px">
                         <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px" /> 序列化用例转化
                     </el-button>
                     <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
@@ -51,24 +51,24 @@
                         <el-table-column prop="InitTestSequences" label="初始条件序列" min-width="180">
                             <template #default="scope">
                                 <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
-                                    @blur="scope.row.editing = false"></el-input>
+                                    @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
                             <template #default="scope">
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
-                                    @blur="scope.row.editing = false"></el-input>
+                                    @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
                             <template #default="scope">
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
-                                    @blur="scope.row.editing = false"></el-input>
+                                    @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                     </el-table>
@@ -656,6 +656,11 @@ export default {
             startPollingForDebugResults(query);
         }
 
+        // 运行测试用例
+        const runCaseConversion = (row) => {
+            startCaseConversion(row);
+        }
+
         // 清除日志
         const clearLogs = () => {
             logs.value = []
@@ -745,7 +750,7 @@ export default {
 
                     // 获取工作表数量
                     const sheetCount = workbook.SheetNames.length
-                    
+
                     // 遍历所有工作表
                     for (let i = 1; i < sheetCount - 1; i++) {
                         const sheetName = workbook.SheetNames[i]
@@ -805,6 +810,18 @@ export default {
             })
         }
 
+        // 开始序列号用例转化
+        const caseConversion = () => {
+            if (selectedRows.value.length === 0) {
+                showToast('请先选择要转换的测试用例', 'warning')
+                return
+            }
+
+            selectedRows.value.forEach((row) => {
+                runCaseConversion(row);
+            })
+        }
+
         let pollingInterval = null;
         const startPollingForDebugResults = (query) => {
             const xhr = new XMLHttpRequest();
@@ -844,6 +861,44 @@ export default {
             };
 
             xhr.send(JSON.stringify({ query }));
+        }
+
+        const startCaseConversion = (row) => {
+            // 第一次调用
+            callApi(row.id, row.Initial_Condition, 'A', false);
+            // 第二次调用
+            callApi(row.id, row.Action, 'B', false);
+            // 第三次调用
+            callApi(row.id, row.Expected_Result, 'C', false);
+        }
+
+        const callApi = (id, input, task, stream) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'http://49.235.121.69:19000/v1/chat/completions', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Accept', 'text/event-stream');
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState === 3) {
+                    const response = JSON.parse(xhr.responseText);
+                    const content = response.choices[0].message.content;
+                    if (task === 'A') {
+                        const index = cases.value.findIndex(c => c.id === id);
+                        cases.value[index].InitTestSequences = content;
+                    }
+                    if (task === 'B') {
+                        const index = cases.value.findIndex(c => c.id === id);
+                        cases.value[index].ActionTestSequences = content;
+                    }
+                    if (task === 'C') {
+                        const index = cases.value.findIndex(c => c.id === id);
+                        cases.value[index].ExpectedTestSequences = content;
+
+                    }
+                }
+            };
+
+            xhr.send(JSON.stringify({ input, task, stream }));
         }
 
         // 停止轮询
@@ -941,6 +996,7 @@ export default {
             confirmAddTestCase,
             deleteTestCase,
             runTestCase,
+            runCaseConversion,
             clearLogs,
             handleSelectionChange,
             handlePageChange,
@@ -950,6 +1006,7 @@ export default {
             importXlsmFile,
             handleFileUpload,
             startDebugging,
+            caseConversion,
             stopPolling,
             fetchTestList,
             fetchTestLogs,
