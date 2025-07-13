@@ -131,7 +131,7 @@
                                     <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
                                     <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
                                 </el-table>
-                                <div style="display: flex;align-items: center">
+                                <!-- <div style="display: flex;align-items: center">
                                     <div>
                                         每页{{ pageSize2 }}条，共{{ executionLogs.length }}条
                                     </div>
@@ -141,7 +141,7 @@
                                             :current-page="currentPage2" @current-change="handlePageChange2">
                                         </el-pagination>
                                     </div>
-                                </div>
+                                </div> -->
                             </el-tab-pane>
                             <!-- <el-tab-pane label="其他日志" name="fourth">其他日志</el-tab-pane> -->
                         </el-tabs>
