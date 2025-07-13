@@ -3,33 +3,19 @@ import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from "vue";
 import { useDisplay } from "vuetify";
 import PairedDevices from "../components/Device/PairedDevices.vue";
 import VideoContainer from "../components/Device/VideoContainer.vue";
-import NavigationBar from "../components/Device/NavigationBar.vue";
 import state from "../components/Scrcpy/scrcpy-state";
 import DeviceSelectDrawer from '../components/Device/DeviceSelectDrawer.vue'
 
 const { width } = useDisplay();
-const showRightPanel = computed(() => width.value >= 960);
 
 const containerSize = ref({ width: 0, height: 0 });
 const userSetLeftPanelWidth = ref(560);
 const leftPanelWidth = computed(() => {
-  if (!showRightPanel.value) {
-    return width.value;
-  }
-  return userSetLeftPanelWidth.value;
+  return containerSize.value.width;
 });
-
-
-const isResizing = ref(false);
-const startX = ref(0);
-const startWidth = ref(0);
 
 const deviceMeta = shallowRef(undefined);
 const connected = ref(false);
-
-const isHorizontalLayout = computed(() => {
-  return containerSize.value.width > leftPanelWidth.value + 200;
-});
 
 const handleDisconnected = () => {
   connected.value = false;
@@ -50,23 +36,33 @@ const handleConnectionStatus = async (status) => {
   }
 };
 
-
-const resize = (e) => {
-  if (!isResizing.value) return;
-  const clientX = e.clientX || e.touches[0]?.clientX;
-  const diff = clientX - startX.value;
-  userSetLeftPanelWidth.value = Math.max(
-    300,
-    Math.min(startWidth.value + diff, containerSize.value.width - 300)
-  );
+// 自动连接第一个可用设备
+const autoConnectFirstDevice = async () => {
+  // 模拟获取设备列表
+  const devices = await getAvailableDevices();
+  
+  if (devices.length > 0) {
+    const firstDevice = devices[0];
+    onPairDevice(firstDevice);
+    handleConnectionStatus(true);
+    
+    // 模拟连接过程
+    setTimeout(() => {
+      state.connecting = false;
+      state.running = true;
+    }, 1500);
+  }
 };
 
-const stopResize = () => {
-  isResizing.value = false;
-  document.removeEventListener("mousemove", resize);
-  document.removeEventListener("touchmove", resize);
-  document.removeEventListener("mouseup", stopResize);
-  document.removeEventListener("touchend", stopResize);
+// 模拟获取可用设备列表
+const getAvailableDevices = () => {
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve([
+        { id: 'device-1', name: 'My Android Phone', model: 'Pixel 6' }
+      ]);
+    }, 500);
+  });
 };
 
 const containerRef = ref(null);
@@ -78,11 +74,10 @@ const containerDimensions = computed(() => {
   const horizontalPadding = 20;
   const verticalPadding = 30;
   const navBarWidth = 80;
-  const borderWidth = 6; // 考虑边框宽度
+  const borderWidth = 6;
 
   return {
-    width:
-      leftPanelWidth.value - (navBarWidth + horizontalPadding + borderWidth),
+    width: leftPanelWidth.value - (navBarWidth + horizontalPadding + borderWidth),
     height: containerSize.value.height - (verticalPadding * 2 + borderWidth),
   };
 });
@@ -91,11 +86,9 @@ const containerDimensions = computed(() => {
 watch(
   () => containerDimensions.value,
   (newDimensions) => {
-    if (videoWrapperRef.value) {
-      // 更新视频包装器的尺寸
+    if (videoWrapperRef.value && state.running) {
       videoWrapperRef.value.style.width = `${newDimensions.width}px`;
       videoWrapperRef.value.style.height = `${newDimensions.height}px`;
-      // 通知 state 更新视频容器
       state.updateVideoContainer();
     }
   },
@@ -110,15 +103,6 @@ const updateContainerSize = () => {
       width: rect.width,
       height: rect.height,
     };
-    // 强制设置视频包装器的初始尺寸
-    if (videoWrapperRef.value) {
-      videoWrapperRef.value.style.width = `${containerDimensions.value.width}px`;
-      videoWrapperRef.value.style.height = `${containerDimensions.value.height}px`;
-      // 通知 state 更新视频容器
-      if (state.running) {
-        state.updateVideoContainer();
-      }
-    }
   }
 };
 
@@ -141,10 +125,12 @@ onMounted(async () => {
   // 确保容器尺寸已准备好
   await ensureContainerSize();
   window.addEventListener('resize', updateContainerSize);
+  
+  // 启动时自动连接第一个设备
+  autoConnectFirstDevice();
 });
 
 onUnmounted(() => {
-  stopResize();
   window.removeEventListener("resize", updateContainerSize);
 });
 
@@ -157,15 +143,6 @@ watch(
   }
 );
 
-watch(width, (newWidth, oldWidth) => {
-  if (newWidth < 960 && oldWidth >= 960) {
-    userSetLeftPanelWidth.value = newWidth;
-  } else if (newWidth >= 960 && oldWidth < 960) {
-    userSetLeftPanelWidth.value = 450;
-  }
-});
-
-
 const showDeviceDrawer = ref(false);
 </script>
 
@@ -177,6 +154,7 @@ const showDeviceDrawer = ref(false);
           @pair-device="onPairDevice"
           @update-connection-status="handleConnectionStatus"
         />
+        <v-spacer />
       </v-container>
     </v-app-bar>
 
@@ -184,7 +162,6 @@ const showDeviceDrawer = ref(false);
       <div
         ref="containerRef"
         class="resizable-container"
-        :class="{ 'horizontal-layout': isHorizontalLayout }"
       >
         <div class="left-panel" :style="{ width: leftPanelWidth + 'px' }">
           <v-card class="panel-content">
@@ -203,9 +180,6 @@ const showDeviceDrawer = ref(false);
                   }"
                 >
                   <VideoContainer />
-                </div>
-                <div class="navigation-wrapper">
-                  <NavigationBar />
                 </div>
               </div>
               <div v-else class="d-flex align-center justify-center">
@@ -292,16 +266,12 @@ const showDeviceDrawer = ref(false);
   height: calc(100vh - 64px);
   overflow: hidden;
 
-  &.horizontal-layout {
-    flex-direction: row;
-  }
-
   .left-panel {
     min-width: 200px;
     max-width: 100%;
     overflow: hidden;
     margin: 16px;
-
+    height: calc(100% - 32px);
     .panel-content {
       display: flex;
       flex-direction: column;
@@ -311,48 +281,17 @@ const showDeviceDrawer = ref(false);
       padding: 16px;
     }
   }
-
-  .resizer {
-    width: 8px;
-    background-color: #e0e0e0;
-    cursor: col-resize;
-    transition: background-color 0.3s ease;
-
-    &:hover {
-      background-color: #bdbdbd;
-    }
-  }
-}
-
-.v-window-item {
-  height: 100%;
-  overflow-y: auto;
-}
-
-@media (max-width: 959px) {
-  .resizable-container {
-    flex-direction: column;
-
-    .left-panel {
-      max-width: 100%;
-      margin: 16px;
-    }
-
-    .resizer {
-      display: none;
-    }
-  }
 }
 
 .device-container {
   display: flex;
   flex-direction: row;
   width: 100%;
-  height: 100%;
-  padding: 30px 10px;
+  // height: 100%;
+  // padding: 30px 10px;
   gap: 16px;
-  box-sizing: border-box;
-  background: transparent;
+  // box-sizing: border-box;
+  // background: transparent;
 }
 
 .video-wrapper {
@@ -368,15 +307,6 @@ const showDeviceDrawer = ref(false);
   transition: none !important;
 }
 
-.navigation-wrapper {
-  width: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 0;
-  background: transparent;
-}
-
 .device-container.hidden {
   display: none;
 }
@@ -389,10 +319,5 @@ const showDeviceDrawer = ref(false);
     border-radius: 0 0 16px 16px;
     overflow: hidden;
   }
-}
-
-.discord-icon {
-  width: 24px;
-  height: 24px;
 }
 </style>
