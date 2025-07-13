@@ -121,13 +121,19 @@ const ensureContainerSize = () => {
   });
 };
 
+// 新增：从 PairedDevices 组件获取设备列表的引用
+const pairedDevicesRef = ref(null);
+
 onMounted(async () => {
   // 确保容器尺寸已准备好
   await ensureContainerSize();
   window.addEventListener('resize', updateContainerSize);
-  
-  // 启动时自动连接第一个设备
-  autoConnectFirstDevice();
+
+  // 新增：默认选择第一个设备
+  if (pairedDevicesRef.value && pairedDevicesRef.value.devices && pairedDevicesRef.value.devices.length > 0) {
+    onPairDevice(pairedDevicesRef.value.devices[0]);
+    handleConnectionStatus(true);
+  }
 });
 
 onUnmounted(() => {
@@ -150,7 +156,9 @@ const showDeviceDrawer = ref(false);
   <v-app>
     <v-app-bar height="64" color="white" app>
       <v-container class="d-flex align-center justify-center pa-0" fluid>
+        <!-- 修改 PairedDevices 组件，添加 ref -->
         <PairedDevices
+          ref="pairedDevicesRef"
           @pair-device="onPairDevice"
           @update-connection-status="handleConnectionStatus"
         />
