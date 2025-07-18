@@ -71,6 +71,7 @@
                                 }}</span>
                             </template>
                         </el-table-column>
+                        <el-table-column prop="Result" label="测试结果" min-width="180"></el-table-column>
                     </el-table>
                     <div class="pagination-container">
                         <el-pagination background layout="prev, pager, next" :total="cases.length" :page-size="pageSize"
@@ -82,24 +83,9 @@
                 <!-- 日志输出 -->
                 <div style="display: flex">
                     <div class="card" style="flex: 5;padding: 10px">
-                        <!-- <div class="nav-buttons" style="display: flex;align-items: center;margin: 10px 0">
-                            <label for="">日志输出：</label>
-                            <el-button type="primary" size="small" @click="showToast('滚动显示')" style="padding: 15px">
-                                <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px"> 滚动显示
-                            </el-button>
-                            <el-button type="primary" size="small" @click="showToast('列表显示')" style="padding: 15px">
-                                <img src="../assets/08.svg" alt="" style="width: 14px;height: 14px"> 列表显示
-                            </el-button>
-                            <el-button type="primary" size="small" @click="showToast('暂停')" style="padding: 15px">
-                                <img src="../assets/09.svg" alt="" style="width: 14px;height: 14px"> 暂停
-                            </el-button>
-                            <el-button type="primary" size="small" @click="showToast('清除')" style="padding: 15px">
-                                <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px"> 清除
-                            </el-button>
-                        </div> -->
                         <el-tabs v-model="activeName" type="card">
                             <el-tab-pane label="Yolo11日志" name="first">
-                                <el-table :data="logCases" class="logs-table" height="210" style="width: 100%">
+                                <el-table :data="logCases" class="logs-table" height="440" style="width: 100%">
                                     <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
                                     <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
                                     <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
@@ -126,24 +112,12 @@
                                 </div>
                             </el-tab-pane>
                             <el-tab-pane label="测试执行日志" name="third">
-                                <el-table :data="executionLogs" class="logs-table" height="210" style="width: 100%">
+                                <el-table :data="executionLogs" class="logs-table" height="440" style="width: 100%">
                                     <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
                                     <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
                                     <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
                                 </el-table>
-                                <!-- <div style="display: flex;align-items: center">
-                                    <div>
-                                        每页{{ pageSize2 }}条，共{{ executionLogs.length }}条
-                                    </div>
-                                    <div class="pagination-container">
-                                        <el-pagination background layout="prev, pager, next"
-                                            :total="executionLogs.length" :page-size="pageSize2"
-                                            :current-page="currentPage2" @current-change="handlePageChange2">
-                                        </el-pagination>
-                                    </div>
-                                </div> -->
                             </el-tab-pane>
-                            <!-- <el-tab-pane label="其他日志" name="fourth">其他日志</el-tab-pane> -->
                         </el-tabs>
 
 
@@ -237,6 +211,7 @@ import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import DeviceView from './DeviceView.vue'
 import * as XLSX from 'xlsx'
+import { result } from 'lodash'
 export default {
     components: {
         DeviceView
@@ -652,8 +627,8 @@ export default {
         }
 
         // 运行测试用例
-        const runTestCase = (query) => {
-            startPollingForDebugResults(query);
+        const runTestCase = (query, id) => {
+            startPollingForDebugResults(query, id);
         }
 
         // 运行测试用例
@@ -772,23 +747,6 @@ export default {
                             })
                         })
                     }
-                    // const firstSheetName = workbook.SheetNames[1]
-                    // const worksheet = workbook.Sheets[firstSheetName]
-                    // const json = XLSX.utils.sheet_to_json(worksheet, { range: 6 })
-                    // console.log(json);
-                    // json.forEach((row) => {
-                    //     const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
-                    //     cases.value.push({
-                    //         id: newId,
-                    //         TestKey: row['Test Key\r\n功能点'],
-                    //         Initial_Condition: row['Pre-condition\r\n前提条件'],
-                    //         Action: row['Action\r\n操作步骤'],
-                    //         Expected_Result: row['Expected Result\r\n期望结果'],
-                    //         InitTestSequences: row['Init Test Sequences\r\n测试序列前置条件'],
-                    //         ActionTestSequences: row['Action Test Sequences\r\n动作测试序列'],
-                    //         ExpectedTestSequences: row['Expected Test Sequences\r\n预期测试序列结果'],
-                    //     })
-                    // })
                     showToast(`文件导入完成: ${file.name}`, 'success')
                 }
                 reader.readAsArrayBuffer(file)
@@ -806,7 +764,8 @@ export default {
 
             selectedRows.value.forEach((row) => {
                 const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果: ${row.ExpectedTestSequences}`
-                runTestCase(query);
+                //const query = `前提条件:4.Pwr-1-SupplyPoner-13`
+                runTestCase(query, row.id);
             })
         }
 
@@ -823,22 +782,65 @@ export default {
         }
 
         let pollingInterval = null;
-        const startPollingForDebugResults = (query) => {
+        const startPollingForDebugResults = (query, id) => {
+            let testIdFound = false; // 添加标志变量
             const xhr = new XMLHttpRequest();
             xhr.open('POST', 'http://49.235.121.69:19000/chat', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
 
             xhr.onreadystatechange = () => {
-                if (xhr.readyState === 3) { // xhr.readyState === 3 表示响应正在被接收
+                if (xhr.readyState === 3) {
                     const responseText = xhr.responseText;
-                    console.log("Received response text:", responseText); // 调试信息：打印接收到的响应文本
+                    console.log("Received response text:", responseText);
 
                     const lines = responseText.split('\n');
+                    // console.log(lines)
                     lines.forEach(line => {
                         if (line.trim() === '') return; // 跳过空行
-                        console.log("Processing line:", line); // 调试信息：打印正在处理的行
                         if (line === '') return;
+                        const match = line.match(/data: \[.*?\]\{"test_id": "(.*?)"\}/);
+                        if (!testIdFound) {
+                            if (match) {
+                                const test_id = match[1];
+                                console.log("Found test_id:", test_id); // 调试信息：打印找到的测试用例ID
+                                testIdFound = true;
+                                const pollForResult = async () => {
+                                    const maxPollingTime = 60000; // 5 分钟（单位：毫秒）
+                                    const interval = 5000; // 每 5 秒轮询一次
+                                    let elapsedTime = 0;
+
+                                    const intervalId = setInterval(async () => {
+                                        try {
+                                            const response = await fetch(`http://49.235.121.69:19000/result/${test_id}`);
+                                            // const response = await fetch(`http://49.235.121.69:19000/result/test_20250717_235334`);
+                                            const data = await response.json();
+                                            console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
+                                            if (data.result !== null) {
+                                                console.log("Result is not null, stopping polling." + data.result);
+                                                const index = cases.value.findIndex(c => c.id === id);
+                                                if (index !== -1) {
+                                                    cases.value[index].Result = data.result;
+                                                }
+                                                clearInterval(intervalId); // 停止轮询
+                                            }
+                                        } catch (error) {
+                                            console.error("Error fetching result:", error);
+                                        }
+
+                                        elapsedTime += interval;
+                                        if (elapsedTime >= maxPollingTime) {
+                                            console.log("Max polling time reached, stopping polling.");
+                                            clearInterval(intervalId); // 停止轮询
+                                        }
+                                    }, interval);
+                                };
+
+                                pollForResult(); // 启动轮询
+                                return; // 找到 test_id 后停止处理当前迭代
+                            }
+                        }
+                        if (testIdFound && match) return;  // 仅在找到 test_id 时进行匹配
                         try {
                             executionLogs.value.push({
                                 id: executionLogs.value.length + 1,
