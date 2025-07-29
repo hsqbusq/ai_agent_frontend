@@ -40,11 +40,16 @@
             <div class="main-content">
                 <!-- 测试用例表格 -->
                 <div class="card">
+                    <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange">
+                        <el-option label="关键信息" value="critical"></el-option>
+                        <el-option label="全部信息" value="all"></el-option>
+                    </el-select>
                     <el-table :data="paginatedCases" class="editable-table" height="450" highlight-current-row
                         @selection-change="handleSelectionChange" style="width: 100%" row-key="id">
                         <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
                         <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
-                        <el-table-column prop="TestKey" label="测试功能点" min-width="120"></el-table-column>
+                        <el-table-column prop="TestKey" label="测试功能点" min-width="120"
+                            v-if="showTestKey"></el-table-column>
                         <el-table-column prop="Initial_Condition" label="初始条件" min-width="200"></el-table-column>
                         <el-table-column prop="Action" label="动作" min-width="180"></el-table-column>
                         <el-table-column prop="Expected_Result" label="预期结果" min-width="180"></el-table-column>
@@ -60,7 +65,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -68,10 +73,28 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="Result" label="测试结果" min-width="180"></el-table-column>
+                        <el-table-column prop="Result" label="测试结果" min-width="180">
+                            <template #default="scope">
+                                <span>{{ scope.row.Result }}</span>
+                                <br />
+                                <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
+                                    @click="fetchTestLogs(scope.row.Testid)" style="padding: 15px">
+                                    <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
+                                    查看
+                                </el-button>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="Testid" v-if="showTestidColumn"> </el-table-column>
+                        <!-- <el-table-column label="查看" min-width="260">
+                            <el-button type="primary" size="small" @click="fetchTestLogs(row.id)" style="padding: 15px"
+                                v-if="scope.row.Result !== null">
+                                <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
+                                查看
+                            </el-button>
+                        </el-table-column> -->
                     </el-table>
                     <div class="pagination-container">
                         <el-pagination background layout="prev, pager, next" :total="cases.length" :page-size="pageSize"
@@ -217,6 +240,16 @@ export default {
         DeviceView
     },
     setup() {
+        const infoType = ref('all'); // 默认值为关键信息
+        const showTestKey = ref(true); // 控制“测试功能点”列的显示
+        const showTestidColumn = false;
+
+
+        const handleInfoTypeChange = (value) => {
+            showTestKey.value = value !== 'critical';
+        };
+
+
         const activeName = ref('first')
         const activeDevice = ref('five')
         // 测试用例数据
@@ -628,6 +661,7 @@ export default {
 
         // 运行测试用例
         const runTestCase = (query, id) => {
+            executionLogCases.value = []
             startPollingForDebugResults(query, id);
         }
 
@@ -764,7 +798,7 @@ export default {
 
             selectedRows.value.forEach((row) => {
                 const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果: ${row.ExpectedTestSequences}`
-                //const query = `前提条件:4.Pwr-1-SupplyPoner-13`
+                // const query = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
                 runTestCase(query, row.id);
             })
         }
@@ -788,13 +822,15 @@ export default {
             xhr.open('POST', 'http://49.235.121.69:19000/chat', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
-
+            let lastProcessedLength = 0;
             xhr.onreadystatechange = () => {
                 if (xhr.readyState === 3) {
-                    const responseText = xhr.responseText;
-                    console.log("Received response text:", responseText);
+                    // 获取新接收到的部分响应数据
+                    const newResponseText = xhr.responseText.slice(lastProcessedLength);
+                    console.log("Received new response text:", newResponseText);
 
-                    const lines = responseText.split('\n');
+
+                    const lines = newResponseText.split('\n');
                     // console.log(lines)
                     lines.forEach(line => {
                         if (line.trim() === '') return; // 跳过空行
@@ -806,8 +842,8 @@ export default {
                                 console.log("Found test_id:", test_id); // 调试信息：打印找到的测试用例ID
                                 testIdFound = true;
                                 const pollForResult = async () => {
-                                    const maxPollingTime = 60000; // 5 分钟（单位：毫秒）
-                                    const interval = 5000; // 每 5 秒轮询一次
+                                    const maxPollingTime = 300000; //   300s
+                                    const interval = 5000; //   5s
                                     let elapsedTime = 0;
 
                                     const intervalId = setInterval(async () => {
@@ -817,20 +853,27 @@ export default {
                                             const data = await response.json();
                                             console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
                                             if (data.result !== null) {
-                                                console.log("Result is not null, stopping polling." + data.result);
+                                                // console.log("Result is not null, stopping polling." + data.result);
                                                 const index = cases.value.findIndex(c => c.id === id);
                                                 if (index !== -1) {
                                                     cases.value[index].Result = data.result;
+                                                    cases.value[index].Testid = test_id;
                                                 }
+                                                fetchTestList(); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
                                             }
                                         } catch (error) {
+                                            cases.value[index].Result = '获取测试结果失败';
+                                            cases.value[index].Testid = test_id;
                                             console.error("Error fetching result:", error);
                                         }
 
                                         elapsedTime += interval;
                                         if (elapsedTime >= maxPollingTime) {
-                                            console.log("Max polling time reached, stopping polling.");
+                                            console.log("超时未获取测试结果");
+                                            cases.value[index].Result = '超时未获取测试结果';
+                                            cases.value[index].Testid = test_id;
+                                            fetchTestList(); // 刷新测试用例列表    
                                             clearInterval(intervalId); // 停止轮询
                                         }
                                     }, interval);
@@ -841,6 +884,7 @@ export default {
                             }
                         }
                         if (testIdFound && match) return;  // 仅在找到 test_id 时进行匹配
+                        console.log("Received line:", line); // 调试信息：打印接收到的其他行数据
                         try {
                             executionLogs.value.push({
                                 id: executionLogs.value.length + 1,
@@ -851,6 +895,8 @@ export default {
                             console.error("Error parsing chunk:", parseError);
                         }
                     });
+                    // 更新已处理的数据位置
+                    lastProcessedLength = xhr.responseText.length;
                 }
             };
 
@@ -969,6 +1015,9 @@ export default {
 
         return {
             activeName,
+            infoType,
+            showTestKey,
+            showTestidColumn,
             activeDevice,
             cases,
             logs,
@@ -1024,6 +1073,7 @@ export default {
             logActiveTab,
             activeCodeFile,
             logDetails,
+            handleInfoTypeChange
         }
     }
 }
