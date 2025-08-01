@@ -28,15 +28,22 @@
                     <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
                         <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
                     </el-button>
-                    <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
+                    <!-- <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
+                    <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span> -->
+                    <div class="file-button-group">
+                        <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
+                            <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取DBC
+                        </el-button>
+                        <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span>
+                    </div>
                 </div>
             </div>
         </div>
 
         <input type="file" ref="fileInput" accept=".xlsm,.xlsx" @change="handleFileUpload" style="display: none;" />
-
+        <input type="file" ref="dbcFileInput" accept=".dbc" @change="handleDbcFileUpload" style="display: none;" />
 
         <!-- 主内容区 -->
         <div class="content-layout">
@@ -83,7 +90,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -91,7 +98,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -111,7 +118,7 @@
                         </el-table-column>
                         <!-- <el-table-column prop="TestResult" label="测试结果" min-width="120" v-if="showTestKey">
                         </el-table-column> -->
-                        
+
                         <el-table-column prop="PRNo" label="PR号" min-width="120" v-if="showTestKey">
                         </el-table-column>
                         <el-table-column prop="TestLogs" label="测试日志" min-width="120" v-if="showTestKey">
@@ -184,10 +191,8 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <el-tab-pane label="手机设备" name="five">
                                 <div class="video-container">
-                                    <iframe ref="videoPlayer" width=100% height="480"
-                                        src=""
-                                        frameborder="0" allow="autoplay; fullscreen; picture-in-picture"
-                                        allowfullscreen></iframe>
+                                    <iframe ref="videoPlayer" width=100% height="480" src="" frameborder="0"
+                                        allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
                                 </div>
                             </el-tab-pane>
                         </el-tabs> <!-- 新增设备视图 -->
@@ -627,7 +632,7 @@ export default {
         const showToast = (message, type = 'success') => {
             ElMessage({
                 type: type,
-                message: `${message} 功能已触发`,
+                message: `${message}`,
                 offset: 60
             })
         }
@@ -756,8 +761,13 @@ export default {
         }
         // 导入xlsm文件
         const fileInput = ref(null)
+        const dbcFileInput = ref(null)
         const importXlsmFile = () => {
             fileInput.value.click()
+        }
+        const selectDbcFile = () => {
+            dbcFileInput.value.click()
+            showToast('请选择DBC文件', 'info')
         }
 
         const handleFileUpload = (event) => {
@@ -884,6 +894,8 @@ export default {
 
                     const lines = newResponseText.split('\n');
                     // console.log(lines)
+                    const thinkFlag = false; // 标志是否有思考提示
+
                     lines.forEach(line => {
                         if (line.trim() === '') return; // 跳过空行
                         if (line === '') return;
@@ -935,8 +947,17 @@ export default {
                                 return; // 找到 test_id 后停止处理当前迭代
                             }
                         }
-                        if (testIdFound && match) return;  // 仅在找到 test_id 时进行匹配
-                        console.log("Received line:", line); // 调试信息：打印接收到的其他行数据
+                        if (testIdFound && match) return;  
+                        if (line.includes('<think>')) {
+                            thinkFlag = true;
+                            return;
+                        }
+                        if (line.includes('</think>')) {
+                            thinkFlag = false;
+                            return;
+                        }
+                        if (thinkFlag) return;
+                        console.log("Received line:", line); 
                         try {
                             executionLogs.value.push({
                                 id: executionLogs.value.length + 1,
@@ -1053,6 +1074,14 @@ export default {
                     showToast('测试日志加载失败', 'error');
                 });
         }
+        const dbcFileName = ref('')
+        const handleDbcFileUpload = (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                dbcFileName.value = file;
+            }
+            showToast('DBC文件选择成功', 'success')
+        }
 
         // 模拟组件加载
         onMounted(() => {
@@ -1095,6 +1124,7 @@ export default {
             dialogVisible,
             newCase,
             selectedRows,
+            selectDbcFile,
             showToast,
             autoSave,
             statusType,
@@ -1108,7 +1138,10 @@ export default {
             handlePageChange,
             handlePageChange1,
             handlePageChange2,
+            handleDbcFileUpload,
+            dbcFileName,
             fileInput,
+            dbcFileInput,
             importXlsmFile,
             handleFileUpload,
             startDebugging,
@@ -1178,6 +1211,7 @@ body {
 
 .nav-buttons {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
@@ -1329,4 +1363,23 @@ pre {
     border-radius: 6px;
     font-family: 'Consolas', monospace;
 }
+
+.file-name {
+    font-size: 14px; /* 文件名的字体大小 */
+    color: #ffffff; /* 文件名的颜色，与按钮文字颜色一致 */
+    padding: 5px 10px; /* 文件名的内边距 */
+    background-color: #409EFF; /* 文件名的背景颜色，与按钮背景颜色一致 */
+    border-radius: 4px; /* 文件名的圆角 */
+    vertical-align: middle; /* 垂直对齐按钮 */
+    display: inline-block; /* 确保文件名能够与其他元素在同一行显示 */
+}
+
+.file-button-group {
+    display: flex;
+    align-items: center;
+    /* 垂直对齐按钮和文件名 */
+    gap: 5px;
+    /* 调整按钮和文件名之间的间距 */
+}
+
 </style>
