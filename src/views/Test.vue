@@ -253,11 +253,18 @@
                     <pre style="text-align: left;">{{ logDetails.ignition_logs }}</pre>
                 </el-tab-pane>
                 <el-tab-pane v-if="logDetails.images" label="测试图片" name="images"> <!-- 新增图片展示栏 -->
-                    <div v-for="(image, index) in logDetails.images" :key="index">
+                    <!-- <div v-for="(image, index) in logDetails.images" :key="index">
                         <p><strong>{{ image.filename }}</strong></p>
                         <img :src="'data:image/png;base64,' + image.base64_data" alt="Test Image"
                             style="width: 100%; margin-bottom: 10px;" />
-                    </div>
+                    </div> -->
+                    <el-collapse v-model="activeCodeFile">
+                        <el-collapse-item v-for="(image, index) in logDetails.images" :key="index"
+                            :title="image.filename">
+                            <img :src="'data:image/png;base64,' + image.base64_data" alt="Test Image"
+                            style="width: 100%; margin-bottom: 10px;" />
+                        </el-collapse-item>
+                    </el-collapse>
                 </el-tab-pane>
                 <el-tab-pane v-if="logDetails.json_files" label="图片检出位置" name="json">
                     <el-collapse v-model="activeCodeFile">
