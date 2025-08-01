@@ -259,7 +259,14 @@
                             style="width: 100%; margin-bottom: 10px;" />
                     </div>
                 </el-tab-pane>
-
+                <el-tab-pane v-if="logDetails.json_files" label="图片检出位置" name="json">
+                    <el-collapse v-model="activeCodeFile">
+                        <el-collapse-item v-for="(file, index) in logDetails.json_files" :key="index"
+                            :title="file.filename">
+                            <pre>{{ file.content }}</pre>
+                        </el-collapse-item>
+                    </el-collapse>
+                </el-tab-pane>
             </el-tabs>
         </el-dialog>
         <!-- 底部栏 -->
@@ -267,11 +274,10 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import DeviceView from './DeviceView.vue'
 import * as XLSX from 'xlsx'
-import { result } from 'lodash'
 export default {
     components: {
         DeviceView
@@ -798,7 +804,7 @@ export default {
                 }
                 reader.readAsArrayBuffer(file)
             } else if (file && file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-                showToast(`正在导入文件: ${file.name}`, 'info')
+                showToast(`正在导入文件: ${file.name},请等待！`, 'info')
                 const reader = new FileReader()
                 reader.onload = (e) => {
                     const data = new Uint8Array(e.target.result)
@@ -947,7 +953,7 @@ export default {
                                 return; // 找到 test_id 后停止处理当前迭代
                             }
                         }
-                        if (testIdFound && match) return;  
+                        if (testIdFound && match) return;
                         if (line.includes('<think>')) {
                             thinkFlag = true;
                             return;
@@ -957,7 +963,7 @@ export default {
                             return;
                         }
                         if (thinkFlag) return;
-                        console.log("Received line:", line); 
+                        console.log("Received line:", line);
                         try {
                             executionLogs.value.push({
                                 id: executionLogs.value.length + 1,
@@ -1062,6 +1068,7 @@ export default {
                         logDetails.code_files = data.result.logs.code_files;
                         logDetails.images = data.result.logs.images;
                         logDetails.ignition_logs = data.result.logs.ignition_log;
+                        logDetails.json_files = data.result.logs.json_files;
                         console.log(logDetails.code_files);
                         logDialogVisible.value = true;
                         showToast(`测试日志加载成功`, 'success');
@@ -1365,13 +1372,20 @@ pre {
 }
 
 .file-name {
-    font-size: 14px; /* 文件名的字体大小 */
-    color: #ffffff; /* 文件名的颜色，与按钮文字颜色一致 */
-    padding: 5px 10px; /* 文件名的内边距 */
-    background-color: #409EFF; /* 文件名的背景颜色，与按钮背景颜色一致 */
-    border-radius: 4px; /* 文件名的圆角 */
-    vertical-align: middle; /* 垂直对齐按钮 */
-    display: inline-block; /* 确保文件名能够与其他元素在同一行显示 */
+    font-size: 14px;
+    /* 文件名的字体大小 */
+    color: #ffffff;
+    /* 文件名的颜色，与按钮文字颜色一致 */
+    padding: 5px 10px;
+    /* 文件名的内边距 */
+    background-color: #409EFF;
+    /* 文件名的背景颜色，与按钮背景颜色一致 */
+    border-radius: 4px;
+    /* 文件名的圆角 */
+    vertical-align: middle;
+    /* 垂直对齐按钮 */
+    display: inline-block;
+    /* 确保文件名能够与其他元素在同一行显示 */
 }
 
 .file-button-group {
@@ -1381,5 +1395,4 @@ pre {
     gap: 5px;
     /* 调整按钮和文件名之间的间距 */
 }
-
 </style>
