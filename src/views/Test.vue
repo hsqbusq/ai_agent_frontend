@@ -299,6 +299,8 @@ export default {
         const isDisconnecting = ref(false)
         const streamStatus = ref('disconnected') // disconnected, connecting, connected, error
         const msePlayer = ref(null)
+        const mediaSource = ref(null)
+        const sourceBuffer = ref(null)
         const ws = ref(null)
 
         const deviceUdid = 'a2f30770' // 设备UDID
@@ -1019,6 +1021,8 @@ export default {
             showTestKey,
             showTestidColumn,
             activeDevice,
+            mediaSource,
+            sourceBuffer,
             cases,
             logs,
             searchQuery,
