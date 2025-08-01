@@ -90,7 +90,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -98,7 +98,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -107,6 +107,17 @@
                                 <br />
                                 <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
                                     @click="fetchTestLogs(scope.row.Testid)" style="padding: 15px">
+                                    <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
+                                    查看
+                                </el-button>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="ActualResult" label="实际结果" min-width="180">
+                            <template #default="scope">
+                                <br />
+                                <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
+                                    @click="fetchActualResult(scope.row.Testid, scope.row.ExpectedTestSequences)"
+                                    style="padding: 15px">
                                     <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
                                     查看
                                 </el-button>
@@ -262,7 +273,7 @@
                         <el-collapse-item v-for="(image, index) in logDetails.images" :key="index"
                             :title="image.filename">
                             <img :src="'data:image/png;base64,' + image.base64_data" alt="Test Image"
-                            style="width: 100%; margin-bottom: 10px;" />
+                                style="width: 100%; margin-bottom: 10px;" />
                         </el-collapse-item>
                     </el-collapse>
                 </el-tab-pane>
@@ -872,7 +883,7 @@ export default {
             }
 
             selectedRows.value.forEach((row) => {
-                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果: ${row.ExpectedTestSequences}`
+                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences}`
                 // const query = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
                 runTestCase(query, row.id);
             })
@@ -1088,6 +1099,31 @@ export default {
                     showToast('测试日志加载失败', 'error');
                 });
         }
+
+        const fetchActualResult = (test_id, command) => {
+            fetch(`http://117.72.163.123:19000/api/crop_by_semantics`, {
+                method: 'POST', 
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ test_id, command }) 
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === "200") {
+                        console.log(data.result);
+                        //todo
+
+                        showToast(`实际结果加载成功`, 'success');
+                    } else {
+                        showToast('实际结果加载失败', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching test result:', error);
+                    showToast('实际结果加载失败', 'error');
+                });
+        }
         const dbcFileName = ref('')
         const handleDbcFileUpload = (event) => {
             const file = event.target.files[0];
@@ -1163,6 +1199,7 @@ export default {
             stopPolling,
             fetchTestList,
             fetchTestLogs,
+            fetchActualResult,
             logDialogVisible,
             videoPlayer,
             isStreaming,
