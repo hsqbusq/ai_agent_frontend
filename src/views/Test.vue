@@ -26,7 +26,10 @@
                         <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px" /> 序列化用例转化
                     </el-button>
                     <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
-                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
+                        <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
+                    </el-button>
+                    <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
+                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
                 </div>
             </div>
@@ -48,6 +51,21 @@
                         @selection-change="handleSelectionChange" style="width: 100%" row-key="id">
                         <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
                         <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
+                        <el-table-column prop="TestCaseID" label="测试用例ID" min-width="120"
+                            v-if="showTestKey"></el-table-column>
+                        <el-table-column prop="SyRDIDFSRD" label="SyRD/FSRD ID" min-width="120"
+                            v-if="showTestKey"></el-table-column>
+                        <el-table-column prop="Auto_testID" label="自动测试ID" min-width="120"
+                            v-if="showTestKey"></el-table-column>
+                        <el-table-column prop="TSR" label="TSR" min-width="120" v-if="showTestKey"></el-table-column>
+                        <el-table-column prop="CasePriority" label="用例优先级" min-width="120"
+                            v-if="showTestKey"></el-table-column>
+                        <el-table-column prop="TestMethod" label="测试方法" min-width="120"
+                            v-if="showTestKey"></el-table-column>
+                        <el-table-column prop="TestStrategy" label="测试策略" min-width="120"
+                            v-if="showTestKey"></el-table-column>
+                        <el-table-column prop="DesignMethod" label="设计方法" min-width="120"
+                            v-if="showTestKey"></el-table-column>
                         <el-table-column prop="TestKey" label="测试功能点" min-width="120"
                             v-if="showTestKey"></el-table-column>
                         <el-table-column prop="Initial_Condition" label="初始条件" min-width="200"></el-table-column>
@@ -65,7 +83,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -73,7 +91,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -86,6 +104,23 @@
                                     查看
                                 </el-button>
                             </template>
+                        </el-table-column>
+                        <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
+                        </el-table-column>
+                        <el-table-column prop="Selected" label="是否选中" min-width="120" v-if="showTestKey">
+                        </el-table-column>
+                        <!-- <el-table-column prop="TestResult" label="测试结果" min-width="120" v-if="showTestKey">
+                        </el-table-column> -->
+                        
+                        <el-table-column prop="PRNo" label="PR号" min-width="120" v-if="showTestKey">
+                        </el-table-column>
+                        <el-table-column prop="TestLogs" label="测试日志" min-width="120" v-if="showTestKey">
+                        </el-table-column>
+                        <el-table-column prop="Numberoftests" label="测试次数" min-width="120" v-if="showTestKey">
+                        </el-table-column>
+                        <el-table-column prop="TestDate" label="测试日期" min-width="120" v-if="showTestKey">
+                        </el-table-column>
+                        <el-table-column prop="Remark" label="备注" min-width="120" v-if="showTestKey">
                         </el-table-column>
                         <el-table-column label="Testid" v-if="showTestidColumn"> </el-table-column>
                         <!-- <el-table-column label="查看" min-width="260">
@@ -149,19 +184,13 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <el-tab-pane label="手机设备" name="five">
                                 <div class="video-container">
-                                    <video ref="videoPlayer" width="720" height="480" autoplay muted controls
-                                        playsinline></video>
-                                    <div class="stream-controls">
-                                        <el-button type="primary" @click="toggleStream" :loading="isConnecting"
-                                            :disabled="isDisconnecting">
-                                            {{ isStreaming ? '停止视频流' : '启动视频流' }}
-                                        </el-button>
-                                        <span class="status-indicator" :class="streamStatusClass"></span>
-                                        <span class="status-text">{{ streamStatusText }}</span>
-                                    </div>
+                                    <iframe ref="videoPlayer" width=100% height="480"
+                                        src=""
+                                        frameborder="0" allow="autoplay; fullscreen; picture-in-picture"
+                                        allowfullscreen></iframe>
                                 </div>
                             </el-tab-pane>
-                        </el-tabs>
+                        </el-tabs> <!-- 新增设备视图 -->
                     </div>
                 </div>
             </div>
@@ -204,10 +233,10 @@
         <!-- 查看测试日志的弹窗组件 -->
         <el-dialog v-model="logDialogVisible" title="测试日志详情" width="70%">
             <el-tabs v-model="logActiveTab" type="card">
-                <el-tab-pane label="日志" name="logs">
+                <el-tab-pane v-if="logDetails.logs" label="日志" name="logs">
                     <pre style="text-align: left;">{{ logDetails.logs }}</pre>
                 </el-tab-pane>
-                <el-tab-pane label="Python代码" name="python">
+                <el-tab-pane v-if="logDetails.code_files" label="Python代码" name="python">
                     <el-collapse v-model="activeCodeFile">
                         <el-collapse-item v-for="(codeFile, index) in logDetails.code_files" :key="index"
                             :title="codeFile.filename">
@@ -215,7 +244,10 @@
                         </el-collapse-item>
                     </el-collapse>
                 </el-tab-pane>
-                <el-tab-pane label="测试图片" name="images"> <!-- 新增图片展示栏 -->
+                <el-tab-pane v-if="logDetails.ignition_logs" label="python执行日志" name="ignition_logs">
+                    <pre style="text-align: left;">{{ logDetails.ignition_logs }}</pre>
+                </el-tab-pane>
+                <el-tab-pane v-if="logDetails.images" label="测试图片" name="images"> <!-- 新增图片展示栏 -->
                     <div v-for="(image, index) in logDetails.images" :key="index">
                         <p><strong>{{ image.filename }}</strong></p>
                         <img :src="'data:image/png;base64,' + image.base64_data" alt="Test Image"
@@ -279,6 +311,7 @@ export default {
         const activeCodeFile = ref([])
         const logDetails = reactive({
             logs: '',
+            ignition_logs: '',
             code_files: [],
             images: []
         })
@@ -303,7 +336,7 @@ export default {
         const sourceBuffer = ref(null)
         const ws = ref(null)
 
-        const deviceUdid = 'a2f30770' // 设备UDID
+        const deviceUdid = '23961224697701' // 设备UDID
 
         // 计算属性
         const streamStatusText = computed(() => {
@@ -326,7 +359,9 @@ export default {
 
         // 构建WebSocket URL
         const buildWebSocketUrl = () => {
-            return `ws://localhost:8000/?action=proxy-adb&remote=tcp%3A8886&udid=${deviceUdid}`
+            return `ws://localhost:8000/?action=stream&udid=${deviceUdid}&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D${deviceUdid}`
+            // return `ws://localhost:8000/?action=proxy-adb&remote=tcp%3A8886&udid=${deviceUdid}`
+            // http://localhost:8000/#!action=stream&udid=23961224697701&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D23961224697701
         }
 
         // 初始化MediaSource
@@ -767,11 +802,19 @@ export default {
                         const sheetName = workbook.SheetNames[i]
                         const worksheet = workbook.Sheets[sheetName]
                         const json = XLSX.utils.sheet_to_json(worksheet, { range: 6 })
-
+                        console.log(json)
                         json.forEach((row) => {
                             const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
                             cases.value.push({
                                 id: newId,
+                                TestCaseID: row['Test Case ID'],
+                                SyRDIDFSRD: row['SyRD ID/FSR'],
+                                Auto_testID: row['Auto_test ID'],
+                                TSR: row['TSR'],
+                                CasePriority: row['Case\r\nPriority'],
+                                DesignMethod: row["Design Method "],
+                                TestMethod: row["Test Method"],
+                                TestStrategy: row["Test\r\nStrategy "],
                                 TestKey: row['Test Key\r\n功能点'],
                                 Initial_Condition: row['Pre-condition\r\n前提条件'],
                                 Action: row['Action\r\n操作步骤'],
@@ -779,7 +822,14 @@ export default {
                                 InitTestSequences: row['Init Test Sequences\r\n测试序列前置条件'],
                                 ActionTestSequences: row['Action Test Sequences\r\n动作测试序列'],
                                 ExpectedTestSequences: row['Expected Test Sequences\r\n预期测试序列结果'],
-
+                                Selected: row['Selected'],
+                                Result: row['Test Result'],
+                                ActualResult: row['Actual Result'],
+                                PRNo: row['PR No.'],
+                                TestLogs: row['Test Logs'],
+                                Numberoftests: row['Number of tests'],
+                                TestDate: row['Test Date'],
+                                Remark: row['Remark'],
                             })
                         })
                     }
@@ -821,7 +871,7 @@ export default {
         const startPollingForDebugResults = (query, id) => {
             let testIdFound = false; // 添加标志变量
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'http://49.235.121.69:19000/chat', true);
+            xhr.open('POST', 'http://117.72.163.123:19000/chat', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
             let lastProcessedLength = 0;
@@ -850,8 +900,8 @@ export default {
 
                                     const intervalId = setInterval(async () => {
                                         try {
-                                            const response = await fetch(`http://49.235.121.69:19000/result/${test_id}`);
-                                            // const response = await fetch(`http://49.235.121.69:19000/result/test_20250717_235334`);
+                                            const response = await fetch(`http://117.72.163.123:19000/result/${test_id}`);
+                                            // const response = await fetch(`http://117.72.163.123:19000/result/test_20250717_235334`);
                                             const data = await response.json();
                                             console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
                                             if (data.result !== null) {
@@ -924,7 +974,7 @@ export default {
 
         const callApi = (id, input, task, stream) => {
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'http://49.235.121.69:19000/v1/chat/completions', true);
+            xhr.open('POST', 'http://117.72.163.123:19000/v1/chat/completions', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
 
@@ -958,7 +1008,7 @@ export default {
 
         // 获取测试用例列表
         const fetchTestList = () => {
-            fetch('http://49.235.121.69:19000/test_list')
+            fetch('http://117.72.163.123:19000/test_list')
                 .then(response => response.json())
                 .then(data => {
                     if (data.code === "200") {
@@ -982,7 +1032,7 @@ export default {
 
         // 获取测试日志
         const fetchTestLogs = (test_id) => {
-            fetch(`http://49.235.121.69:19000/test_logs/${test_id}`)
+            fetch(`http://117.72.163.123:19000/test_logs/${test_id}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.code === "200") {
@@ -990,6 +1040,7 @@ export default {
                         logDetails.logs = data.result.logs.chat_log;
                         logDetails.code_files = data.result.logs.code_files;
                         logDetails.images = data.result.logs.images;
+                        logDetails.ignition_logs = data.result.logs.ignition_log;
                         console.log(logDetails.code_files);
                         logDialogVisible.value = true;
                         showToast(`测试日志加载成功`, 'success');
@@ -1098,7 +1149,7 @@ body {
 }
 
 .app-container {
-    max-width: 1800px;
+    width: 100vw;
     margin: 0 auto;
     background: white;
     border-radius: 8px;
@@ -1141,6 +1192,7 @@ body {
     display: flex;
     flex-direction: column;
     gap: 20px;
+    overflow-x: auto;
 }
 
 .card {
