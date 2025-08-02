@@ -90,7 +90,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -98,7 +98,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -115,6 +115,7 @@
                         <el-table-column prop="ActualResult" label="实际结果" min-width="180">
                             <template #default="scope">
                                 <br />
+                                <!--  -->
                                 <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
                                     @click="fetchActualResult(scope.row.Testid, scope.row.ExpectedTestSequences)"
                                     style="padding: 15px">
@@ -287,6 +288,14 @@
                 </el-tab-pane>
             </el-tabs>
         </el-dialog>
+
+        <el-dialog v-model="ActualResultDialogVisible" title="真实结果" width="70%">
+            <el-tabs v-model="ActualResultActiveTab" type="card"
+                style="display: flex; justify-content: center; align-items: center; height: 100%;">
+                <img :src="'data:image/png;base64,' + ActualResultDetails.images"
+                    style="width: 800px; height: 800px; margin-bottom: 10px;" />
+            </el-tabs>
+        </el-dialog>
         <!-- 底部栏 -->
     </div>
 </template>
@@ -336,13 +345,18 @@ export default {
 
         // 查看日志的弹窗相关数据
         const logDialogVisible = ref(false)
+        const ActualResultDialogVisible = ref(false)
         const logActiveTab = ref('logs')
+        const ActualResultActiveTab = ref('logs')
         const activeCodeFile = ref([])
         const logDetails = reactive({
             logs: '',
             ignition_logs: '',
             code_files: [],
             images: []
+        })
+        const ActualResultDetails = reactive({
+            images: ""
         })
 
         // 搜索功能
@@ -918,7 +932,7 @@ export default {
 
                     const lines = newResponseText.split('\n');
                     // console.log(lines)
-                    const thinkFlag = false; // 标志是否有思考提示
+                    var thinkFlag = false; // 标志是否有思考提示
 
                     lines.forEach(line => {
                         if (line.trim() === '') return; // 跳过空行
@@ -935,6 +949,7 @@ export default {
                                     let elapsedTime = 0;
 
                                     const intervalId = setInterval(async () => {
+                                        const index = cases.value.findIndex(c => c.id === id);
                                         try {
                                             const response = await fetch(`http://117.72.163.123:19000/result/${test_id}`);
                                             // const response = await fetch(`http://117.72.163.123:19000/result/test_20250717_235334`);
@@ -942,7 +957,6 @@ export default {
                                             console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
                                             if (data.result !== null) {
                                                 // console.log("Result is not null, stopping polling." + data.result);
-                                                const index = cases.value.findIndex(c => c.id === id);
                                                 if (index !== -1) {
                                                     cases.value[index].Result = data.result;
                                                     cases.value[index].Testid = test_id;
@@ -1101,27 +1115,29 @@ export default {
         }
 
         const fetchActualResult = (test_id, command) => {
+            //test_id = "test_20250802_134624"
             fetch(`http://117.72.163.123:19000/api/crop_by_semantics`, {
-                method: 'POST', 
+                method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ test_id, command }) 
+                body: JSON.stringify({ test_id, command })
             })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.code === "200") {
-                        console.log(data.result);
-                        //todo
-
+                    console.log(data);
+                    if (data.status === "ok") {
+                        ActualResultDetails.images = data.base64;
+                        console.log(ActualResultDetails.images);
+                        ActualResultDialogVisible.value = true;
                         showToast(`实际结果加载成功`, 'success');
                     } else {
-                        showToast('实际结果加载失败', 'error');
+                        showToast('实际结果加载失败1', 'error');
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching test result:', error);
-                    showToast('实际结果加载失败', 'error');
+                    showToast('实际结果加载失败2', 'error');
                 });
         }
         const dbcFileName = ref('')
@@ -1201,6 +1217,7 @@ export default {
             fetchTestLogs,
             fetchActualResult,
             logDialogVisible,
+            ActualResultDialogVisible,
             videoPlayer,
             isStreaming,
             isConnecting,
@@ -1210,8 +1227,10 @@ export default {
             streamStatusClass,
             toggleStream,
             logActiveTab,
+            ActualResultActiveTab,
             activeCodeFile,
             logDetails,
+            ActualResultDetails,
             handleInfoTypeChange
         }
     }
