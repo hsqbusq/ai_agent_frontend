@@ -203,8 +203,10 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <el-tab-pane label="手机设备" name="five">
                                 <div class="video-container">
-                                    <iframe ref="videoPlayer" width=100% height="480" src="" frameborder="0"
-                                        allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>
+                                    <iframe ref="videoPlayer" width=100% height="480"
+                                        :src="getStreamUrl()"
+                                        frameborder="0" allow="autoplay; fullscreen; picture-in-picture"
+                                        allowfullscreen></iframe>
                                 </div>
                             </el-tab-pane>
                         </el-tabs> <!-- 新增设备视图 -->
@@ -318,7 +320,33 @@ export default {
         const handleInfoTypeChange = (value) => {
             showTestKey.value = value !== 'critical';
         };
+        const udid = ref('');
 
+        const fetchUdid = () => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'http://117.72.163.123:19000/adb/devices', true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.onreadystatechange = () => {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.code === "200" && response.result.length > 0) {
+                            udid.value = response.result[0];
+                            udid.value = '23961224697701'
+                        } else {
+                            console.error("No udid found in the response.");
+                        }
+                    } catch (error) {
+                        console.error("Error parsing response:", error);
+                    }
+                }
+            };
+            xhr.send();
+        };
+
+        const getStreamUrl = () => {
+            return `http://localhost:8000/#!action=stream&udid=${udid.value}&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D${udid.value}`;
+        }
 
         const activeName = ref('first')
         const activeDevice = ref('five')
@@ -369,260 +397,7 @@ export default {
             return logs.value
         })
 
-        const videoPlayer = ref(null)
-        const isStreaming = ref(false)
-        const isConnecting = ref(false)
-        const isDisconnecting = ref(false)
-        const streamStatus = ref('disconnected') // disconnected, connecting, connected, error
-        const msePlayer = ref(null)
-        const mediaSource = ref(null)
-        const sourceBuffer = ref(null)
-        const ws = ref(null)
-
-        const deviceUdid = '23961224697701' // 设备UDID
-
-        // 计算属性
-        const streamStatusText = computed(() => {
-            return {
-                disconnected: '未连接',
-                connecting: '连接中...',
-                connected: '已连接',
-                error: '连接错误'
-            }[streamStatus.value]
-        })
-
-        const streamStatusClass = computed(() => {
-            return {
-                disconnected: 'status-disconnected',
-                connecting: 'status-connecting',
-                connected: 'status-connected',
-                error: 'status-error'
-            }[streamStatus.value]
-        })
-
-        // 构建WebSocket URL
-        const buildWebSocketUrl = () => {
-            return `ws://localhost:8000/?action=stream&udid=${deviceUdid}&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D${deviceUdid}`
-            // return `ws://localhost:8000/?action=proxy-adb&remote=tcp%3A8886&udid=${deviceUdid}`
-            // http://localhost:8000/#!action=stream&udid=23961224697701&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D23961224697701
-        }
-
-        // 初始化MediaSource
-        const initMediaSource = () => {
-            return new Promise((resolve, reject) => {
-                if (mediaSource.value) {
-                    URL.revokeObjectURL(videoPlayer.value.src)
-                }
-
-                mediaSource.value = new MediaSource()
-                const objectUrl = URL.createObjectURL(mediaSource.value)
-                videoPlayer.value.src = objectUrl
-
-                mediaSource.value.addEventListener('sourceopen', () => {
-                    console.log('MediaSource ready')
-                    resolve()
-                }, { once: true })
-
-                mediaSource.value.addEventListener('sourceerror', () => {
-                    reject(new Error('MediaSource error'))
-                }, { once: true })
-            })
-        }
-
-        // 初始化SourceBuffer
-        const initSourceBuffer = () => {
-            return new Promise((resolve, reject) => {
-                if (!mediaSource.value || mediaSource.value.readyState !== 'open') {
-                    return reject(new Error('MediaSource not ready'))
-                }
-
-                // 检查浏览器支持的MIME类型
-                const mimeType = 'video/mp4; codecs="avc1.42E01E"'
-                if (!MediaSource.isTypeSupported(mimeType)) {
-                    return reject(new Error(`Unsupported MIME type: ${mimeType}`))
-                }
-
-                sourceBuffer.value = mediaSource.value.addSourceBuffer(mimeType)
-                sourceBuffer.value.mode = 'sequence'
-
-                sourceBuffer.value.addEventListener('updateend', () => {
-                    if (!sourceBuffer.value.updating && mediaSource.value.readyState === 'open') {
-                        // 清理旧的视频数据（保留最近10秒）
-                        if (videoPlayer.value.currentTime > 10) {
-                            try {
-                                sourceBuffer.value.remove(0, videoPlayer.value.currentTime - 10)
-                            } catch (e) {
-                                console.warn('Error removing old segments:', e)
-                            }
-                        }
-                    }
-                })
-
-                sourceBuffer.value.addEventListener('error', () => {
-                    reject(new Error('SourceBuffer error'))
-                })
-
-                resolve()
-            })
-        }
-
-        // 连接WebSocket
-        const connectWebSocket = () => {
-            return new Promise((resolve, reject) => {
-                const wsUrl = buildWebSocketUrl()
-
-                ws.value = new WebSocket(wsUrl)
-                ws.value.binaryType = 'arraybuffer'
-
-                ws.value.onopen = () => {
-                    console.log('WebSocket connected')
-                    streamStatus.value = 'connected'
-                    resolve()
-                }
-
-                ws.value.onmessage = (event) => {
-
-                    if (sourceBuffer.value && !sourceBuffer.value.updating) {
-                        try {
-                            sourceBuffer.value.appendBuffer(event.data)
-                        } catch (e) {
-                            console.error('Error appending buffer:', e)
-                            stopStream()
-                        }
-                    }
-                }
-
-                ws.value.onerror = (error) => {
-                    console.error('WebSocket error:', error)
-                    streamStatus.value = 'error'
-                    reject(error)
-                }
-
-                ws.value.onclose = () => {
-                    console.log('WebSocket closed')
-                    if (streamStatus.value !== 'error') {
-                        streamStatus.value = 'disconnected'
-                    }
-                }
-            })
-        }
-
-        // 启动视频流
-        const startStream = async () => {
-            try {
-                isConnecting.value = true
-                streamStatus.value = 'connecting'
-
-                // 初始化流程
-                await initMediaSource()
-                await initSourceBuffer()
-
-                // 添加SourceBuffer监听
-                sourceBuffer.value.addEventListener('error', (e) => {
-                    console.error('SourceBuffer error:', e)
-                    stopStream()
-                })
-
-                // 连接WebSocket
-                const wsUrl = buildWebSocketUrl()
-                ws.value = new WebSocket(wsUrl)
-                ws.value.binaryType = 'arraybuffer'
-
-                // 添加接收数据统计
-                let bytesReceived = 0
-                const startTime = Date.now()
-
-                ws.value.onmessage = (event) => {
-                    bytesReceived += event.data.byteLength
-
-                    // 实时显示接收速率
-                    const elapsed = (Date.now() - startTime) / 1000
-                    const rate = (bytesReceived / (1024 * elapsed)).toFixed(2)
-                    console.log(`Receiving: ${rate} KB/s`)
-
-                    try {
-                        if (sourceBuffer.value && !sourceBuffer.value.updating) {
-                            sourceBuffer.value.appendBuffer(event.data)
-                        }
-                    } catch (e) {
-                        console.error('Append error:', e)
-                        stopStream()
-                    }
-                }
-
-                await new Promise((resolve, reject) => {
-                    ws.value.onopen = resolve
-                    ws.value.onerror = reject
-                    setTimeout(() => reject(new Error('Connection timeout')), 5000)
-                })
-
-                isStreaming.value = true
-                streamStatus.value = 'connected'
-                ElMessage.success('视频流已启动')
-
-            } catch (error) {
-                console.error('Stream startup failed:', {
-                    error,
-                    mediaSourceState: mediaSource.value?.readyState,
-                    sourceBufferState: sourceBuffer.value?.updating
-                })
-                stopStream()
-                throw error
-            } finally {
-                isConnecting.value = false
-            }
-        }
-
-        // 停止视频流
-        const stopStream = () => {
-            isDisconnecting.value = true
-
-            // 关闭WebSocket
-            if (ws.value) {
-                ws.value.close()
-                ws.value = null
-            }
-
-            // 清理SourceBuffer
-            if (sourceBuffer.value) {
-                try {
-                    if (!sourceBuffer.value.updating) {
-                        sourceBuffer.value.abort()
-                    }
-                } catch (e) {
-                    console.warn('Error aborting source buffer:', e)
-                }
-                sourceBuffer.value = null
-            }
-
-            // 清理MediaSource
-            if (mediaSource.value) {
-                if (mediaSource.value.readyState === 'open') {
-                    mediaSource.value.endOfStream()
-                }
-                URL.revokeObjectURL(videoPlayer.value.src)
-                mediaSource.value = null
-            }
-
-            // 重置视频元素
-            if (videoPlayer.value) {
-                videoPlayer.value.src = ''
-            }
-
-            isStreaming.value = false
-            isDisconnecting.value = false
-            streamStatus.value = 'disconnected'
-        }
-
-        // 切换视频流状态
-        const toggleStream = () => {
-            if (isStreaming.value) {
-                stopStream()
-            } else {
-                startStream()
-            }
-        }
-
+       
         // 组件卸载时清理
         onUnmounted(() => {
             stopStream()
@@ -1153,6 +928,7 @@ export default {
         onMounted(() => {
             setTimeout(() => {
                 fetchTestList();
+                fetchUdid();
             }, 500)
         })
 
@@ -1163,12 +939,13 @@ export default {
 
         return {
             activeName,
+            fetchUdid,
+            getStreamUrl,
+            udid,
             infoType,
             showTestKey,
             showTestidColumn,
             activeDevice,
-            mediaSource,
-            sourceBuffer,
             cases,
             logs,
             searchQuery,
@@ -1218,14 +995,7 @@ export default {
             fetchActualResult,
             logDialogVisible,
             ActualResultDialogVisible,
-            videoPlayer,
-            isStreaming,
-            isConnecting,
-            isDisconnecting,
-            streamStatus,
-            streamStatusText,
-            streamStatusClass,
-            toggleStream,
+           
             logActiveTab,
             ActualResultActiveTab,
             activeCodeFile,
@@ -1458,4 +1228,6 @@ pre {
     gap: 5px;
     /* 调整按钮和文件名之间的间距 */
 }
+
+
 </style>
