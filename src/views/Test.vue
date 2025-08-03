@@ -332,7 +332,7 @@ export default {
                         const response = JSON.parse(xhr.responseText);
                         if (response.code === "200" && response.result.length > 0) {
                             udid.value = response.result[0];
-                            udid.value = '23961224697701'
+                            //udid.value = '23961224697701'
                         } else {
                             console.error("No udid found in the response.");
                         }
