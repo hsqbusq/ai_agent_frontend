@@ -50,10 +50,24 @@
             <div class="main-content">
                 <!-- 测试用例表格 -->
                 <div class="card">
-                    <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange">
+                    <!-- <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange">
                         <el-option label="关键信息" value="critical"></el-option>
                         <el-option label="全部信息" value="all"></el-option>
-                    </el-select>
+                    </el-select> -->
+
+                    <div class="control-container">
+                        <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange"
+                            class="half-width">
+                            <el-option label="关键信息" value="critical"></el-option>
+                            <el-option label="全部信息" value="all"></el-option>
+                        </el-select>
+
+                        <div class="half-width input-wrapper">
+                            <span style="margin-right: 8px;">URL地址：</span>
+                            <el-input v-model="url" placeholder="请输入URL地址" style="flex: 1;"></el-input>
+                        </div>
+                    </div>
+
                     <el-table :data="paginatedCases" class="editable-table" height="450" highlight-current-row
                         @selection-change="handleSelectionChange" style="width: 100%" row-key="id">
                         <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
@@ -302,7 +316,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick ,getCurrentInstance} from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, getCurrentInstance } from 'vue'
 import { ElMessage } from 'element-plus'
 import DeviceView from './DeviceView.vue'
 import * as XLSX from 'xlsx'
@@ -312,6 +326,7 @@ export default {
     },
     setup() {
         const infoType = ref('all'); // 默认值为关键信息
+        const url = ref('');
         const showTestKey = ref(true); // 控制“测试功能点”列的显示
         const showTestidColumn = false;
 
@@ -675,7 +690,7 @@ export default {
             }
 
             selectedRows.value.forEach((row) => {
-                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences}`
+                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} URL地址：${url.value}`
                 // const query = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
                 runTestCase(query, row.id);
             })
@@ -945,6 +960,7 @@ export default {
             getStreamUrl,
             udid,
             infoType,
+            url,
             showTestKey,
             showTestidColumn,
             activeDevice,
@@ -1229,5 +1245,21 @@ pre {
     /* 垂直对齐按钮和文件名 */
     gap: 5px;
     /* 调整按钮和文件名之间的间距 */
+}
+
+.control-container {
+    display: flex;
+    gap: 10px;
+    /* 两个控件之间的间距 */
+}
+
+.half-width {
+    width: 50%;
+    flex-shrink: 0;
+}
+
+.input-wrapper {
+    display: flex;
+    align-items: center;
 }
 </style>
