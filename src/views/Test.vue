@@ -104,7 +104,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -533,9 +533,9 @@ export default {
         }
 
         // 运行测试用例
-        const runTestCase = (query, id) => {
+        const runTestCase = (query, baseurl, id) => {
             executionLogCases.value = []
-            startPollingForDebugResults(query, id);
+            startPollingForDebugResults(query, baseurl, id);
         }
 
         // 运行测试用例
@@ -690,9 +690,10 @@ export default {
             }
 
             selectedRows.value.forEach((row) => {
-                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} URL地址：${url.value}`
-                // const query = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
-                runTestCase(query, row.id);
+                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences}`
+                const baseurl = url.value
+                // const qery = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
+                runTestCase(query, baseurl, row.id);
             })
         }
 
@@ -709,7 +710,7 @@ export default {
         }
 
         let pollingInterval = null;
-        const startPollingForDebugResults = (query, id) => {
+        const startPollingForDebugResults = (query, baseurl, id) => {
             let testIdFound = false; // 添加标志变量
             const xhr = new XMLHttpRequest();
             xhr.open('POST', 'http://117.72.163.123:19000/chat', true);
@@ -812,7 +813,7 @@ export default {
                 console.error("Error in stream:", error); // 调试信息：打印错误信息
             };
 
-            xhr.send(JSON.stringify({ query }));
+            xhr.send(JSON.stringify({ query: query, baseurl: baseurl }));
         }
 
         const startCaseConversion = (row) => {
