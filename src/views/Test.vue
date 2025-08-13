@@ -90,7 +90,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -98,7 +98,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -203,8 +203,7 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <el-tab-pane label="手机设备" name="five">
                                 <div class="video-container">
-                                    <iframe ref="videoPlayer" width=100% height="480"
-                                        :src="getStreamUrl()"
+                                    <iframe ref="videoPlayer" width=100% height="480" :src="getStreamUrl()"
                                         frameborder="0" allow="autoplay; fullscreen; picture-in-picture"
                                         allowfullscreen></iframe>
                                 </div>
@@ -303,7 +302,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick ,getCurrentInstance} from 'vue'
 import { ElMessage } from 'element-plus'
 import DeviceView from './DeviceView.vue'
 import * as XLSX from 'xlsx'
@@ -320,29 +319,33 @@ export default {
         const handleInfoTypeChange = (value) => {
             showTestKey.value = value !== 'critical';
         };
-        const udid = ref('');
+        const { proxy } = getCurrentInstance();
 
-        const fetchUdid = () => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('GET', 'http://117.72.163.123:19000/adb/devices', true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.onreadystatechange = () => {
-                if (xhr.readyState === 4 && xhr.status === 200) {
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        if (response.code === "200" && response.result.length > 0) {
-                            udid.value = response.result[0];
-                            //udid.value = '23961224697701'
-                        } else {
-                            console.error("No udid found in the response.");
-                        }
-                    } catch (error) {
-                        console.error("Error parsing response:", error);
-                    }
-                }
-            };
-            xhr.send();
-        };
+        // 从全局属性中获取 udid
+        const udid = ref(proxy.$udid.value);
+        // const udid = ref('');
+
+        // const fetchUdid = () => {
+        //     const xhr = new XMLHttpRequest();
+        //     xhr.open('GET', 'http://117.72.163.123:19000/adb/devices', true);
+        //     xhr.setRequestHeader('Content-Type', 'application/json');
+        //     xhr.onreadystatechange = () => {
+        //         if (xhr.readyState === 4 && xhr.status === 200) {
+        //             try {
+        //                 const response = JSON.parse(xhr.responseText);
+        //                 if (response.code === "200" && response.result.length > 0) {
+        //                     udid.value = response.result[0];
+        //                     //udid.value = '23961224697701'
+        //                 } else {
+        //                     console.error("No udid found in the response.");
+        //                 }
+        //             } catch (error) {
+        //                 console.error("Error parsing response:", error);
+        //             }
+        //         }
+        //     };
+        //     xhr.send();
+        // };
 
         const getStreamUrl = () => {
             return `http://localhost:8000/#!action=stream&udid=${udid.value}&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D${udid.value}`;
@@ -397,7 +400,7 @@ export default {
             return logs.value
         })
 
-       
+
         // 组件卸载时清理
         onUnmounted(() => {
             stopStream()
@@ -924,11 +927,11 @@ export default {
             showToast('DBC文件选择成功', 'success')
         }
 
+
         // 模拟组件加载
         onMounted(() => {
             setTimeout(() => {
                 fetchTestList();
-                fetchUdid();
             }, 500)
         })
 
@@ -939,7 +942,6 @@ export default {
 
         return {
             activeName,
-            fetchUdid,
             getStreamUrl,
             udid,
             infoType,
@@ -995,7 +997,7 @@ export default {
             fetchActualResult,
             logDialogVisible,
             ActualResultDialogVisible,
-           
+
             logActiveTab,
             ActualResultActiveTab,
             activeCodeFile,
@@ -1228,6 +1230,4 @@ pre {
     gap: 5px;
     /* 调整按钮和文件名之间的间距 */
 }
-
-
 </style>
