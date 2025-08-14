@@ -318,11 +318,9 @@
 <script>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, getCurrentInstance } from 'vue'
 import { ElMessage } from 'element-plus'
-import DeviceView from './DeviceView.vue'
 import * as XLSX from 'xlsx'
 export default {
     components: {
-        DeviceView
     },
     setup() {
         const infoType = ref('all'); // 默认值为关键信息
