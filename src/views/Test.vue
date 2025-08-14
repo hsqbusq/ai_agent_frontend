@@ -336,30 +336,7 @@ export default {
 
         // 从全局属性中获取 udid
         const udid = ref(proxy.$udid.value);
-        // const udid = ref('');
-
-        // const fetchUdid = () => {
-        //     const xhr = new XMLHttpRequest();
-        //     xhr.open('GET', 'http://117.72.163.123:19000/adb/devices', true);
-        //     xhr.setRequestHeader('Content-Type', 'application/json');
-        //     xhr.onreadystatechange = () => {
-        //         if (xhr.readyState === 4 && xhr.status === 200) {
-        //             try {
-        //                 const response = JSON.parse(xhr.responseText);
-        //                 if (response.code === "200" && response.result.length > 0) {
-        //                     udid.value = response.result[0];
-        //                     //udid.value = '23961224697701'
-        //                 } else {
-        //                     console.error("No udid found in the response.");
-        //                 }
-        //             } catch (error) {
-        //                 console.error("Error parsing response:", error);
-        //             }
-        //         }
-        //     };
-        //     xhr.send();
-        // };
-
+        
         const getStreamUrl = () => {
             return `http://localhost:8000/#!action=stream&udid=${udid.value}&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D${udid.value}`;
         }
@@ -711,7 +688,7 @@ export default {
         const startPollingForDebugResults = (query, baseurl, id) => {
             let testIdFound = false; // 添加标志变量
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'http://117.72.163.123:19000/chat', true);
+            xhr.open('POST', '/chat', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
             let lastProcessedLength = 0;
@@ -743,8 +720,7 @@ export default {
                                     const intervalId = setInterval(async () => {
                                         const index = cases.value.findIndex(c => c.id === id);
                                         try {
-                                            const response = await fetch(`http://117.72.163.123:19000/result/${test_id}`);
-                                            // const response = await fetch(`http://117.72.163.123:19000/result/test_20250717_235334`);
+                                            const response = await fetch(`/result/${test_id}`);
                                             const data = await response.json();
                                             console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
                                             if (data.result !== null) {
@@ -825,7 +801,7 @@ export default {
 
         const callApi = (id, input, task, stream) => {
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'http://117.72.163.123:19000/v1/chat/completions', true);
+            xhr.open('POST', '/v1/chat/completions', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
 
@@ -859,7 +835,7 @@ export default {
 
         // 获取测试用例列表
         const fetchTestList = () => {
-            fetch('http://117.72.163.123:19000/test_list')
+            fetch('/test_list')
                 .then(response => response.json())
                 .then(data => {
                     if (data.code === "200") {
@@ -883,7 +859,7 @@ export default {
 
         // 获取测试日志
         const fetchTestLogs = (test_id) => {
-            fetch(`http://117.72.163.123:19000/test_logs/${test_id}`)
+            fetch(`/test_logs/${test_id}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.code === "200") {
@@ -908,7 +884,7 @@ export default {
 
         const fetchActualResult = (test_id, command) => {
             //test_id = "test_20250802_134624"
-            fetch(`http://117.72.163.123:19000/api/crop_by_semantics`, {
+            fetch(`/api/crop_by_semantics`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

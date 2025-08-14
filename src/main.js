@@ -33,7 +33,7 @@ const udid = ref('');
 const fetchUdid = () => {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('GET', 'http://117.72.163.123:19000/adb/devices', true);
+    xhr.open('GET', '/adb/devices', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.onreadystatechange = () => {
       if (xhr.readyState === 4) {
