@@ -688,7 +688,7 @@ export default {
         const startPollingForDebugResults = (query, baseurl, id) => {
             let testIdFound = false; // 添加标志变量
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/chat', true);
+            xhr.open('POST', '/dev-api/chat', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
             let lastProcessedLength = 0;
@@ -720,7 +720,7 @@ export default {
                                     const intervalId = setInterval(async () => {
                                         const index = cases.value.findIndex(c => c.id === id);
                                         try {
-                                            const response = await fetch(`/result/${test_id}`);
+                                            const response = await fetch(`/dev-api/result/${test_id}`);
                                             const data = await response.json();
                                             console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
                                             if (data.result !== null) {
@@ -801,7 +801,7 @@ export default {
 
         const callApi = (id, input, task, stream) => {
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/v1/chat/completions', true);
+            xhr.open('POST', '/dev-api/v1/chat/completions', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
 
@@ -835,7 +835,7 @@ export default {
 
         // 获取测试用例列表
         const fetchTestList = () => {
-            fetch('/test_list')
+            fetch('/dev-api/test_list')
                 .then(response => response.json())
                 .then(data => {
                     if (data.code === "200") {
@@ -859,7 +859,7 @@ export default {
 
         // 获取测试日志
         const fetchTestLogs = (test_id) => {
-            fetch(`/test_logs/${test_id}`)
+            fetch(`/dev-api/test_logs/${test_id}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.code === "200") {
@@ -884,7 +884,7 @@ export default {
 
         const fetchActualResult = (test_id, command) => {
             //test_id = "test_20250802_134624"
-            fetch(`/api/crop_by_semantics`, {
+            fetch(`/dev-api/api/crop_by_semantics`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'

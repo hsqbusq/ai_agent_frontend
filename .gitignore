@@ -3,6 +3,7 @@ node_modules
 .pnp
 .pnp.js
 
+.github/*
 # 日志
 logs
 *.log
