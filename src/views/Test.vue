@@ -138,8 +138,8 @@
                                 </el-button>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
-                        </el-table-column>
+                        <!-- <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
+                        </el-table-column> -->
                         <el-table-column prop="Selected" label="是否选中" min-width="120" v-if="showTestKey">
                         </el-table-column>
                         <!-- <el-table-column prop="TestResult" label="测试结果" min-width="120" v-if="showTestKey">
@@ -345,6 +345,8 @@ export default {
         const activeDevice = ref('five')
         // 测试用例数据
         const cases = ref([])
+
+        const reslutCases = ref([])
 
         // 日志数据
         const logs = ref([])
@@ -572,23 +574,35 @@ export default {
             fileInput.value.click()
         }
 
+        const fetchActualResultForExcel = async (test_id, command) => {
+            try {
+                fetch(`/dev-api/api/crop_by_semantics`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ test_id, command })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data);
+                        if (data.status === "ok") {
+                            reslutCases.value.slice(-1)[0].ActualResult = data.base64;
+                        } else {
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching test result:', error);
+                    });
+            } catch (error) {
+                console.error(`Testid${caseItem.Testid}的case真实结果失败`, error);
+                showToast(`Testid${caseItem.Testid}的case真实结果失败`, 'error');
+            }
+        }
+
         const exportTestReport = () => {
             // 获取表头
             const headers = Object.keys(cases.value[0]);
-
-            const reslutCases = ref([])
-
-            for (const caseItem of cases.value) {
-                if (caseItem.Result !== undefined) {
-                    reslutCases.value.push(caseItem);
-                }
-            }
-
-            if (reslutCases.value.length === 0) {
-                showToast('没有可导出的数据', 'warning')
-                return
-            }   
-            
             // 将cases数组转换为二维数组，适用于Excel
             const data = [
                 headers, // 表头
@@ -629,7 +643,6 @@ export default {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         }
-
         const selectDbcFile = () => {
             dbcFileInput.value.click()
             showToast('请选择DBC文件', 'info')
@@ -787,6 +800,8 @@ export default {
                                                 if (index !== -1) {
                                                     cases.value[index].Result = data.result;
                                                     cases.value[index].Testid = test_id;
+                                                    reslutCases.value.push(cases.value[index]);
+                                                    fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences); 
                                                 }
                                                 fetchTestList(); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
@@ -999,6 +1014,7 @@ export default {
             showTestidColumn,
             activeDevice,
             cases,
+            reslutCases,
             logs,
             searchQuery,
             filteredCases,
