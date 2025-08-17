@@ -16,7 +16,7 @@
                     <el-button type="primary" size="small" @click="showToast('导出用例')" style="padding: 15px">
                         <img src="../assets/03.svg" alt="" style="width: 14px;height: 14px" /> 导出测试用例
                     </el-button>
-                    <el-button type="primary" size="small" @click="showToast('导出测试报告')" style="padding: 15px">
+                    <el-button type="primary" size="small" @click="exportTestReport" style="padding: 15px">
                         <img src="../assets/04.svg" alt="" style="width: 14px;height: 14px" /> 导出测试报告
                     </el-button>
                     <el-button type="primary" size="small" @click="showToast('Python代码生成')" style="padding: 15px">
@@ -104,7 +104,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -336,7 +336,7 @@ export default {
 
         // 从全局属性中获取 udid
         const udid = ref(proxy.$udid.value);
-        
+
         const getStreamUrl = () => {
             return `http://localhost:8000/#!action=stream&udid=${udid.value}&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D${udid.value}`;
         }
@@ -571,6 +571,62 @@ export default {
         const importXlsmFile = () => {
             fileInput.value.click()
         }
+
+        const exportTestReport = () => {
+
+            // 筛选出Result不为undefined的元素
+            const filteredCases = cases.value.filter(caseItem => caseItem.result !== undefined);
+
+            if (filteredCases.length === 0) {
+                showToast('没有测试数据可以导出', 'warning');
+                return;
+            }
+
+
+            // 获取表头
+            const headers = Object.keys(filteredCases[0]);
+
+            // 将cases数组转换为二维数组，适用于Excel
+            const data = [
+                headers, // 表头
+                ...filteredCases.map(caseItem => headers.map(header => caseItem[header]))
+            ];
+
+            // 创建一个工作簿
+            const workbook = XLSX.utils.book_new();
+
+            // 创建一个工作表
+            const worksheet = XLSX.utils.aoa_to_sheet(data);
+
+            // 将工作表添加到工作簿
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Test Report');
+
+            // 生成Excel文件
+            const excelBuffer = XLSX.write(workbook, {
+                bookType: 'xlsx',
+                type: 'array'
+            });
+
+            // 创建一个Blob对象
+            const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+
+            // 创建一个URL指向Blob对象
+            const url = window.URL.createObjectURL(blob);
+
+            // 创建一个a元素，用于下载文件
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'test_report.xlsx';
+
+            // 将a元素添加到DOM中，然后触发点击事件
+            document.body.appendChild(a);
+            a.click();
+
+            // 移除a元素并释放URL
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
         const selectDbcFile = () => {
             dbcFileInput.value.click()
             showToast('请选择DBC文件', 'info')
@@ -979,6 +1035,7 @@ export default {
             fileInput,
             dbcFileInput,
             importXlsmFile,
+            exportTestReport,
             handleFileUpload,
             startDebugging,
             caseConversion,
