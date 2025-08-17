@@ -104,7 +104,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -573,23 +573,26 @@ export default {
         }
 
         const exportTestReport = () => {
+            // 获取表头
+            const headers = Object.keys(cases.value[0]);
 
-            // 筛选出Result不为undefined的元素
-            const filteredCases = cases.value.filter(caseItem => caseItem.result !== undefined);
+            const reslutCases = ref([])
 
-            if (filteredCases.length === 0) {
-                showToast('没有测试数据可以导出', 'warning');
-                return;
+            for (const caseItem of cases.value) {
+                if (caseItem.Result !== undefined) {
+                    reslutCases.value.push(caseItem);
+                }
             }
 
-
-            // 获取表头
-            const headers = Object.keys(filteredCases[0]);
-
+            if (reslutCases.value.length === 0) {
+                showToast('没有可导出的数据', 'warning')
+                return
+            }   
+            
             // 将cases数组转换为二维数组，适用于Excel
             const data = [
                 headers, // 表头
-                ...filteredCases.map(caseItem => headers.map(header => caseItem[header]))
+                ...reslutCases.value.map(caseItem => headers.map(header => caseItem[header]))
             ];
 
             // 创建一个工作簿
