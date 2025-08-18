@@ -104,7 +104,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -138,8 +138,8 @@
                                 </el-button>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
-                        </el-table-column>
+                        <!-- <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
+                        </el-table-column> -->
                         <el-table-column prop="Selected" label="是否选中" min-width="120" v-if="showTestKey">
                         </el-table-column>
                         <!-- <el-table-column prop="TestResult" label="测试结果" min-width="120" v-if="showTestKey">
@@ -345,6 +345,8 @@ export default {
         const activeDevice = ref('five')
         // 测试用例数据
         const cases = ref([])
+
+        const reslutCases = ref([])
 
         // 日志数据
         const logs = ref([])
@@ -572,25 +574,39 @@ export default {
             fileInput.value.click()
         }
 
-        const exportTestReport = () => {
-
-            // 筛选出Result不为undefined的元素
-
-            const filteredCases = cases.value.filter(caseItem => caseItem.Result !== undefined);
-
-            if (filteredCases.length === 0) {
-                showToast('没有测试数据可以导出', 'warning');
-                return;
+        const fetchActualResultForExcel = async (test_id, command) => {
+            try {
+                fetch(`/dev-api/api/crop_by_semantics`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ test_id, command })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data);
+                        if (data.status === "ok") {
+                            reslutCases.value.slice(-1)[0].ActualResult = data.base64;
+                        } else {
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching test result:', error);
+                    });
+            } catch (error) {
+                console.error(`Testid${caseItem.Testid}的case真实结果失败`, error);
+                showToast(`Testid${caseItem.Testid}的case真实结果失败`, 'error');
             }
+        }
 
-
+        const exportTestReport = () => {
             // 获取表头
-            const headers = Object.keys(filteredCases[0]);
-
+            const headers = Object.keys(cases.value[0]);
             // 将cases数组转换为二维数组，适用于Excel
             const data = [
                 headers, // 表头
-                ...filteredCases.map(caseItem => headers.map(header => caseItem[header]))
+                ...reslutCases.value.map(caseItem => headers.map(header => caseItem[header]))
             ];
 
             // 创建一个工作簿
@@ -627,7 +643,6 @@ export default {
             document.body.removeChild(a);
             window.URL.revokeObjectURL(url);
         }
-
         const selectDbcFile = () => {
             dbcFileInput.value.click()
             showToast('请选择DBC文件', 'info')
@@ -785,6 +800,8 @@ export default {
                                                 if (index !== -1) {
                                                     cases.value[index].Result = data.result;
                                                     cases.value[index].Testid = test_id;
+                                                    reslutCases.value.push(cases.value[index]);
+                                                    fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences); 
                                                 }
                                                 fetchTestList(); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
@@ -997,6 +1014,7 @@ export default {
             showTestidColumn,
             activeDevice,
             cases,
+            reslutCases,
             logs,
             searchQuery,
             filteredCases,
