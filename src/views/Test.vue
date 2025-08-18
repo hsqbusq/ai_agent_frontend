@@ -575,7 +575,8 @@ export default {
         const exportTestReport = () => {
 
             // 筛选出Result不为undefined的元素
-            const filteredCases = cases.value.filter(caseItem => caseItem.result !== undefined);
+
+            const filteredCases = cases.value.filter(caseItem => caseItem.Result !== undefined);
 
             if (filteredCases.length === 0) {
                 showToast('没有测试数据可以导出', 'warning');
@@ -721,7 +722,7 @@ export default {
             }
 
             selectedRows.value.forEach((row) => {
-                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences}`
+                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedResult}`
                 const baseurl = url.value
                 // const qery = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
                 runTestCase(query, baseurl, row.id);
