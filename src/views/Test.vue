@@ -104,7 +104,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -217,42 +217,26 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <el-tab-pane label="手机设备" name="five">
                                 <div class="video-container">
-                                    <iframe 
-                                        ref="videoPlayer" 
-                                        width="100%" 
-                                        height="480" 
-                                        
-                                        frameborder="0" 
-                                        allow="autoplay; fullscreen; picture-in-picture"
-                                        allowfullscreen>
+                                    <iframe ref="videoPlayer" width="100%" height="480" frameborder="0"
+                                        allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
                                     <div class="device-controls">
-                                        <el-button 
-                                            type="primary" 
-                                            @click="connectDeviceStream('mobile')"
+                                        <el-button type="primary" @click="connectDeviceStream('mobile')"
                                             style="margin-top: 10px;">
                                             连接视频流
                                         </el-button>
                                     </div>
                                 </div>
                             </el-tab-pane>
-                            
+
                             <!-- 新增仪表设备标签页 -->
                             <el-tab-pane label="仪表设备" name="six">
                                 <div class="video-container">
-                                    <iframe 
-                                        ref="instrumentVideoPlayer" 
-                                        width="100%" 
-                                        height="480" 
-                                        
-                                        frameborder="0" 
-                                        allow="autoplay; fullscreen; picture-in-picture"
-                                        allowfullscreen>
+                                    <iframe ref="instrumentVideoPlayer" width="100%" height="480" frameborder="0"
+                                        allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
                                     <div class="device-controls">
-                                        <el-button 
-                                            type="primary" 
-                                            @click="connectDeviceStream('instrument')"
+                                        <el-button type="primary" @click="connectDeviceStream('instrument')"
                                             style="margin-top: 10px;">
                                             连接视频流
                                         </el-button>
@@ -386,7 +370,21 @@ export default {
         const activeName = ref('first')
         const activeDevice = ref('five')
         // 测试用例数据
-        const cases = ref([])
+        const cases = ref([
+            {
+                id: '001',
+                InitTestSequences: '1、Switch-2-ON-KL30, 2、Switch-1-ON-KL15,3、Switch-3-ON-ACC, 4、Pwr-1-SupplyPower-13.5,5、CAN-Sig-FLZCU 9-FLZCU 9 PowerMode-2',
+                ActionTestSequences: '1.CAN Sig-FLZCU31-RHTurnlightSts-1' 
+                +'2.Wait-1000',
+                ExpectedTestSequences: '1Capture-Pattemn-右转向灯亮',
+            },
+            {
+                id: '002',
+                InitTestSequences: '安卓测试 进入设置',
+                ActionTestSequences: '安卓测试 进入设置',
+                ExpectedTestSequences: '页面正常显示',
+            }
+        ])
 
         const reslutCases = ref([])
 
@@ -496,6 +494,7 @@ export default {
                 // 更新手机设备视频流URL
                 // 这里可以根据需要修改URL格式
                 const mobileUrl = `${url.value}/camera/video?name=UGREEN`;
+                console.log(mobileUrl)
                 // 刷新iframe
                 if (videoPlayer.value) {
                     videoPlayer.value.src = mobileUrl;
@@ -508,7 +507,8 @@ export default {
                     return;
                 }
                 // 更新仪表设备视频流URL
-                const instrumentUrl = `${url.value}/camera/video?name=UGREEN`;
+                const instrumentUrl = `${url.value}/adb/video`;
+                console.log(instrumentUrl);
                 instrumentStreamUrl.value = instrumentUrl;
                 // 刷新iframe
                 if (instrumentVideoPlayer.value) {
@@ -693,21 +693,21 @@ export default {
                 // 检查是否有 base64 图片字段（假设字段名为 image）
                 const base64Image = caseItem.ActualResult;
                 caseItem.ActualResult = ""
-                    const base64Data = base64Image;
-                    const imageBuffer = Buffer.from(base64Data, 'base64');
+                const base64Data = base64Image;
+                const imageBuffer = Buffer.from(base64Data, 'base64');
 
-                    const imageId = workbook.addImage({
-                        buffer: imageBuffer,
-                        extension: 'png' // 可根据实际类型调整
-                    });
+                const imageId = workbook.addImage({
+                    buffer: imageBuffer,
+                    extension: 'png' // 可根据实际类型调整
+                });
 
-                    // 插入图片到对应单元格（假设 image 字段在最后一列）
-                    const colIndex = headers.indexOf('ActualResult');
-                    worksheet.addImage(imageId, {
-                        tl: { col: colIndex, row: i + 1 }, // 第1行是表头
-                        ext: { width: 100, height: 100 }
-                    });
-                
+                // 插入图片到对应单元格（假设 image 字段在最后一列）
+                const colIndex = headers.indexOf('ActualResult');
+                worksheet.addImage(imageId, {
+                    tl: { col: colIndex, row: i + 1 }, // 第1行是表头
+                    ext: { width: 100, height: 100 }
+                });
+
             }
 
             // 调整列宽
@@ -810,7 +810,7 @@ export default {
 
         // 开始调试功能
         const startDebugging = () => {
-            executionLogs.value  = []
+            executionLogs.value = []
             if (selectedRows.value.length === 0) {
                 showToast('请先选择要调试的测试用例', 'warning')
                 return
@@ -881,7 +881,7 @@ export default {
                                                     cases.value[index].Result = data.result;
                                                     cases.value[index].Testid = test_id;
                                                     reslutCases.value.push(cases.value[index]);
-                                                    fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences); 
+                                                    fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences);
                                                 }
                                                 fetchTestList(); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
