@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",
+    "buffer": "^6.0.3",
     "element-plus": "^2.10.3",
+    "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
     "markdown-it": "^14.1.0",
     "vue": "^3.3.4",

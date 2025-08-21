@@ -217,9 +217,46 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <el-tab-pane label="手机设备" name="five">
                                 <div class="video-container">
-                                    <iframe ref="videoPlayer" width=100% height="480" :src="getStreamUrl()"
-                                        frameborder="0" allow="autoplay; fullscreen; picture-in-picture"
-                                        allowfullscreen></iframe>
+                                    <iframe 
+                                        ref="videoPlayer" 
+                                        width="100%" 
+                                        height="480" 
+                                        
+                                        frameborder="0" 
+                                        allow="autoplay; fullscreen; picture-in-picture"
+                                        allowfullscreen>
+                                    </iframe>
+                                    <div class="device-controls">
+                                        <el-button 
+                                            type="primary" 
+                                            @click="connectDeviceStream('mobile')"
+                                            style="margin-top: 10px;">
+                                            连接视频流
+                                        </el-button>
+                                    </div>
+                                </div>
+                            </el-tab-pane>
+                            
+                            <!-- 新增仪表设备标签页 -->
+                            <el-tab-pane label="仪表设备" name="six">
+                                <div class="video-container">
+                                    <iframe 
+                                        ref="instrumentVideoPlayer" 
+                                        width="100%" 
+                                        height="480" 
+                                        
+                                        frameborder="0" 
+                                        allow="autoplay; fullscreen; picture-in-picture"
+                                        allowfullscreen>
+                                    </iframe>
+                                    <div class="device-controls">
+                                        <el-button 
+                                            type="primary" 
+                                            @click="connectDeviceStream('instrument')"
+                                            style="margin-top: 10px;">
+                                            连接视频流
+                                        </el-button>
+                                    </div>
                                 </div>
                             </el-tab-pane>
                         </el-tabs> <!-- 新增设备视图 -->
@@ -319,6 +356,11 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, getCurrentInstance } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { Buffer } from 'buffer';
+
+window.Buffer = Buffer;
 export default {
     components: {
     },
@@ -337,9 +379,9 @@ export default {
         // 从全局属性中获取 udid
         const udid = ref(proxy.$udid.value);
 
-        const getStreamUrl = () => {
-            return `http://localhost:8000/#!action=stream&udid=${udid.value}&player=mse&ws=ws%3A%2F%2Flocalhost%3A8000%2F%3Faction%3Dproxy-adb%26remote%3Dtcp%253A8886%26udid%3D${udid.value}`;
-        }
+        const instrumentStreamUrl = ref('http://172.23.96.54:8000/camera/video?name=UGREEN');
+        const videoPlayer = ref(null);
+        const instrumentVideoPlayer = ref(null);
 
         const activeName = ref('first')
         const activeDevice = ref('five')
@@ -444,7 +486,37 @@ export default {
                 offset: 60
             })
         }
-
+        const connectDeviceStream = (deviceType) => {
+            if (deviceType === 'mobile') {
+                // 手机设备连接逻辑
+                if (!url.value) {
+                    showToast('请先输入URL地址', 'warning');
+                    return;
+                }
+                // 更新手机设备视频流URL
+                // 这里可以根据需要修改URL格式
+                const mobileUrl = `${url.value}/camera/video?name=UGREEN`;
+                // 刷新iframe
+                if (videoPlayer.value) {
+                    videoPlayer.value.src = mobileUrl;
+                }
+                showToast('手机视频流已连接', 'success');
+            } else if (deviceType === 'instrument') {
+                // 仪表设备连接逻辑
+                if (!url.value) {
+                    showToast('请先输入URL地址', 'warning');
+                    return;
+                }
+                // 更新仪表设备视频流URL
+                const instrumentUrl = `${url.value}/camera/video?name=UGREEN`;
+                instrumentStreamUrl.value = instrumentUrl;
+                // 刷新iframe
+                if (instrumentVideoPlayer.value) {
+                    instrumentVideoPlayer.value.src = instrumentUrl;
+                }
+                showToast('仪表视频流已连接', 'success');
+            }
+        };
         // 自动保存用例
         const autoSave = (row) => {
             showToast(`用例 ${row.id} 已自动保存`, 'info')
@@ -600,49 +672,56 @@ export default {
             }
         }
 
-        const exportTestReport = () => {
+        const exportTestReport = async () => {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Test Report');
+
             // 获取表头
             const headers = Object.keys(cases.value[0]);
-            // 将cases数组转换为二维数组，适用于Excel
-            const data = [
-                headers, // 表头
-                ...reslutCases.value.map(caseItem => headers.map(header => caseItem[header]))
-            ];
 
-            // 创建一个工作簿
-            const workbook = XLSX.utils.book_new();
+            // 添加表头
+            worksheet.addRow(headers);
 
-            // 创建一个工作表
-            const worksheet = XLSX.utils.aoa_to_sheet(data);
+            // 处理数据行
+            for (let i = 0; i < reslutCases.value.length; i++) {
+                const caseItem = reslutCases.value[i];
+                const row = headers.map(header => caseItem[header]);
+                console.log(caseItem)
+                // 添加数据行
+                worksheet.addRow(row);
 
-            // 将工作表添加到工作簿
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Test Report');
+                // 检查是否有 base64 图片字段（假设字段名为 image）
+                const base64Image = caseItem.ActualResult;
+                caseItem.ActualResult = ""
+                    const base64Data = base64Image;
+                    const imageBuffer = Buffer.from(base64Data, 'base64');
 
-            // 生成Excel文件
-            const excelBuffer = XLSX.write(workbook, {
-                bookType: 'xlsx',
-                type: 'array'
+                    const imageId = workbook.addImage({
+                        buffer: imageBuffer,
+                        extension: 'png' // 可根据实际类型调整
+                    });
+
+                    // 插入图片到对应单元格（假设 image 字段在最后一列）
+                    const colIndex = headers.indexOf('ActualResult');
+                    worksheet.addImage(imageId, {
+                        tl: { col: colIndex, row: i + 1 }, // 第1行是表头
+                        ext: { width: 100, height: 100 }
+                    });
+                
+            }
+
+            // 调整列宽
+            headers.forEach((_, i) => {
+                worksheet.getColumn(i + 1).width = 20;
             });
 
-            // 创建一个Blob对象
-            const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-
-            // 创建一个URL指向Blob对象
-            const url = window.URL.createObjectURL(blob);
-
-            // 创建一个a元素，用于下载文件
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'test_report.xlsx';
-
-            // 将a元素添加到DOM中，然后触发点击事件
-            document.body.appendChild(a);
-            a.click();
-
-            // 移除a元素并释放URL
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
-        }
+            // 导出 Excel
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            saveAs(blob, 'test_report.xlsx');
+        };
         const selectDbcFile = () => {
             dbcFileInput.value.click()
             showToast('请选择DBC文件', 'info')
@@ -731,13 +810,14 @@ export default {
 
         // 开始调试功能
         const startDebugging = () => {
+            executionLogs.value  = []
             if (selectedRows.value.length === 0) {
                 showToast('请先选择要调试的测试用例', 'warning')
                 return
             }
 
             selectedRows.value.forEach((row) => {
-                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedResult}`
+                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`
                 const baseurl = url.value
                 // const qery = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
                 runTestCase(query, baseurl, row.id);
@@ -1006,7 +1086,6 @@ export default {
 
         return {
             activeName,
-            getStreamUrl,
             udid,
             infoType,
             url,
@@ -1050,6 +1129,10 @@ export default {
             handlePageChange1,
             handlePageChange2,
             handleDbcFileUpload,
+            videoPlayer,
+            instrumentStreamUrl,
+            instrumentVideoPlayer,
+            connectDeviceStream,
             dbcFileName,
             fileInput,
             dbcFileInput,
