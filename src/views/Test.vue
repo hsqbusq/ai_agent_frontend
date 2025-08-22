@@ -13,14 +13,14 @@
                     <el-button type="primary" size="small" @click="importXlsmFile" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 导入用例
                     </el-button>
-                    <el-button type="primary" size="small" @click="showToast('导出用例')" style="padding: 15px">
+                    <!-- <el-button type="primary" size="small" @click="showToast('导出用例')" style="padding: 15px">
                         <img src="../assets/03.svg" alt="" style="width: 14px;height: 14px" /> 导出测试用例
-                    </el-button>
+                    </el-button> -->
                     <el-button type="primary" size="small" @click="exportTestReport" style="padding: 15px">
                         <img src="../assets/04.svg" alt="" style="width: 14px;height: 14px" /> 导出测试报告
                     </el-button>
-                    <el-button type="primary" size="small" @click="showToast('Python代码生成')" style="padding: 15px">
-                        <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> Python代码生成
+                    <el-button type="primary" size="small" @click="generateKnowledgeGraph" style="padding: 15px">
+                        <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 形成知识图谱
                     </el-button>
                     <el-button type="primary" size="small" @click="caseConversion" style="padding: 15px">
                         <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px" /> 序列化用例转化
@@ -104,7 +104,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -250,7 +250,7 @@
 
         </div>
 
-        <!-- 新增的弹窗组件 -->
+        <!-- 新增测试用例弹窗组件 -->
         <el-dialog v-model="dialogVisible" title="新增测试用例" width="50%">
             <el-form :model="newCase" label-width="120px">
                 <el-form-item label="测试功能点">
@@ -279,6 +279,46 @@
                 <span class="dialog-footer">
                     <el-button @click="dialogVisible = false">取消</el-button>
                     <el-button type="primary" @click="confirmAddTestCase">确定</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
+        <!-- 知识图谱弹窗组件 -->
+        <el-dialog v-model="generateKnowledgeGraphDialogVisible" title="知识图谱" width="50%">
+            <el-form label-width="150px">
+                <el-form-item label="测试项目地址">
+                    <el-input v-model="baseurl" placeholder="请输入测试项目地址"></el-input>
+                </el-form-item>
+                <el-form-item label="测试设备序列号">
+                    <el-input v-model="serial" placeholder="请输入测试设备序列号" :default-value="''"></el-input>
+                </el-form-item>
+                <el-form-item label="测试应用包名">
+                    <el-input v-model="packageName" placeholder="请输入测试应用包名"
+                        :default-value="'com.desaysv.setting'"></el-input>
+                </el-form-item>
+                <el-form-item label="主导航栏id">
+                    <el-input v-model="resourceid" placeholder="请输入主导航栏id"
+                        :default-value="'com.desaysv.setting:id/layout_navigation'"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="generateKnowledgeGraphDialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="sendGenerateKnowledgeGraphRequest">发送请求</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
+        <!-- 知识图谱形成日志弹窗组件 -->
+        <el-dialog v-model="generateKnowledgeGraphLogDiagVisible" title="知识图谱日志" width="50%">
+            <el-tabs v-model="logActiveTab" type="card" label-width="150px">
+                <el-tab-pane label="日志" name="logs">
+                    <pre style="text-align: left;">{{generateKnowledgeGraphLog.logs}}</pre>
+                </el-tab-pane>
+            </el-tabs>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="generateKnowledgeGraphLogDiagVisible = false">取消</el-button>
                 </span>
             </template>
         </el-dialog>
@@ -337,7 +377,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick, getCurrentInstance } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick, getCurrentInstance, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs';
@@ -374,8 +414,8 @@ export default {
             {
                 id: '001',
                 InitTestSequences: '1、Switch-2-ON-KL30, 2、Switch-1-ON-KL15,3、Switch-3-ON-ACC, 4、Pwr-1-SupplyPower-13.5,5、CAN-Sig-FLZCU 9-FLZCU 9 PowerMode-2',
-                ActionTestSequences: '1.CAN Sig-FLZCU31-RHTurnlightSts-1' 
-                +'2.Wait-1000',
+                ActionTestSequences: '1.CAN Sig-FLZCU31-RHTurnlightSts-1'
+                    + '2.Wait-1000',
                 ExpectedTestSequences: '1Capture-Pattemn-右转向灯亮',
             },
             {
@@ -405,6 +445,7 @@ export default {
             ActionTestSequences: '',
             ExpectedTestSequences: ''
         })
+
 
         // 查看日志的弹窗相关数据
         const logDialogVisible = ref(false)
@@ -493,7 +534,7 @@ export default {
                 }
                 // 更新手机设备视频流URL
                 // 这里可以根据需要修改URL格式
-                const mobileUrl = `${url.value}/camera/video?name=UGREEN`;
+                const mobileUrl = `${url.value}/adb/video`;
                 console.log(mobileUrl)
                 // 刷新iframe
                 if (videoPlayer.value) {
@@ -507,7 +548,7 @@ export default {
                     return;
                 }
                 // 更新仪表设备视频流URL
-                const instrumentUrl = `${url.value}/adb/video`;
+                const instrumentUrl = `${url.value}/camera/video?name=UGREEN`;
                 console.log(instrumentUrl);
                 instrumentStreamUrl.value = instrumentUrl;
                 // 刷新iframe
@@ -721,7 +762,161 @@ export default {
                 type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
             });
             saveAs(blob, 'test_report.xlsx');
+        }
+        // 知识图谱相关数据
+        const generateKnowledgeGraphDialogVisible = ref(false)
+        const generateKnowledgeGraphLogDiagVisible = ref(false)
+        //const generateKnowledgeGraphLog = ref('sadfasdf')
+        const generateKnowledgeGraphLog = reactive({
+            logs: ''
+        })
+        const baseurl = 'http://172.23.96.54:8000/'
+        const serial = ''
+        const packageName = 'com.desaysv.setting'
+        const resourceid = 'com.desaysv.setting:id/layout_navigation'
+
+
+
+        const IsSendingKnowledgeGraphRequest = ref(false)
+
+        const generateKnowledgeGraph = async () => {
+            if (!IsSendingKnowledgeGraphRequest.value) {
+                generateKnowledgeGraphDialogVisible.value = true
+            } else {
+                generateKnowledgeGraphLogDiagVisible.value = true
+                fetchgenerateKnowledgeGraphLog()
+            }
+        }
+
+        const fetchgenerateKnowledgeGraphLog = async () => {
+            const interval = 5 * 1000; // 5 秒
+
+            const poll = async () => {
+                try {
+                    const response = await fetch(`/dev-api/adb/autotest`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            package: packageName,
+                            baseurl: baseurl,
+                            serial: serial,
+                            resource_id: resourceid
+                        })
+                    });
+
+                    if (response.ok) {
+                        const clonedResponse = response.clone();
+                        let data = '';
+                        try {
+                            data = await response.json();
+                        } catch (jsonError) {
+                            //  console.error('JSON 解析失败:', jsonError);
+                            data = await clonedResponse.text();
+                        }
+
+                        console.log(data);
+                        generateKnowledgeGraphLog.logs = data; // 更新响应式变量的值
+                    } else {
+                        clearInterval(pollInterval);
+                        IsSendingKnowledgeGraphRequest.value = false;
+                        showToast('接口调用失败', 'error');
+                    }
+                } catch (error) {
+                    clearInterval(pollInterval);
+                    IsSendingKnowledgeGraphRequest.value = false;
+                    console.error('接口调用失败:', error);
+                    showToast('接口调用失败', 'error');
+                }
+            };
+
+            await poll();
+
+            const pollInterval = setInterval(poll, interval); // 每隔 5 秒执行一次 poll 函数
+
+            // 监听弹窗的可见性，如果弹窗关闭则停止轮询
+            const stopPollingWhenDialogClosed = watch(generateKnowledgeGraphLogDiagVisible, (newVal) => {
+                if (!newVal) {
+                    clearInterval(pollInterval);
+                }
+            });
         };
+
+        const sendGenerateKnowledgeGraphRequest = async () => {
+            // 调用接口 dev-api/adb/autotest
+            IsSendingKnowledgeGraphRequest.value = true;
+            generateKnowledgeGraphDialogVisible.value = false;
+
+            const maxPollingTime = 45 * 60 * 1000;
+            const interval = 30 * 1000;
+
+            const poll = async () => {
+                try {
+                    const response = await fetch(`/dev-api/adb/autotest`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            package: packageName,
+                            baseurl: baseurl,
+                            serial: serial,
+                            resource_id: resourceid
+                        })
+                    });
+
+                    if (response.ok) {
+                        const clonedResponse = response.clone();
+                        let data = '';
+                        try {
+                            data = await response.json();
+                        } catch (jsonError) {
+                            //  console.error('JSON 解析失败:', jsonError);
+                            data = await clonedResponse.text();
+                        }
+
+                        console.log(data);
+                        if (typeof data === 'string' && data.includes('[Done]')) {
+                            clearInterval(pollInterval1);
+                            IsSendingKnowledgeGraphRequest.value = false;
+                            showToast('知识图谱生成成功', 'success');
+                        } else if (typeof data === 'string' && data.includes('[Error]')) {
+                            clearInterval(pollInterval1);
+                            IsSendingKnowledgeGraphRequest.value = false;
+                            showToast('知识图谱生成失败,请检测日志', 'error');
+                        } else {
+                            showToast('知识图谱生成中,请稍后...', 'info');
+                        }
+                    } else {
+                        clearInterval(pollInterval1);
+                        IsSendingKnowledgeGraphRequest.value = false;
+                        showToast('接口调用失败', 'error');
+                    }
+                } catch (error) {
+                    clearInterval(pollInterval1);
+                    IsSendingKnowledgeGraphRequest.value = false;
+                    console.error('接口调用失败:', error);
+                    showToast('接口调用失败', 'error');
+                }
+            };
+
+            const pollInterval1 = setInterval(poll, interval);
+
+            await poll();
+
+            // 确保在最大轮询时间后停止轮询
+            setTimeout(() => {
+                clearInterval(pollInterval1);
+                if (IsSendingKnowledgeGraphRequest.value) {
+                    IsSendingKnowledgeGraphRequest.value = false;
+                    showToast('知识图谱生成超时', 'warning');
+                }
+            }, maxPollingTime);
+        };
+
+
+
         const selectDbcFile = () => {
             dbcFileInput.value.click()
             showToast('请选择DBC文件', 'info')
@@ -1113,6 +1308,14 @@ export default {
             activeStep,
             dialogVisible,
             newCase,
+            generateKnowledgeGraphDialogVisible,
+            generateKnowledgeGraphLogDiagVisible,
+            generateKnowledgeGraphLog,
+            sendGenerateKnowledgeGraphRequest,
+            baseurl,
+            serial,
+            packageName,
+            resourceid,
             selectedRows,
             selectDbcFile,
             showToast,
@@ -1138,6 +1341,7 @@ export default {
             dbcFileInput,
             importXlsmFile,
             exportTestReport,
+            generateKnowledgeGraph,
             handleFileUpload,
             startDebugging,
             caseConversion,
