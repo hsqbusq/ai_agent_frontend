@@ -421,7 +421,7 @@ export default {
             {
                 id: '002',
                 InitTestSequences: '安卓测试 进入设置',
-                ActionTestSequences: '安卓测试 进入设置',
+                ActionTestSequences: '进入车辆设置',
                 ExpectedTestSequences: '页面正常显示',
             }
         ])
