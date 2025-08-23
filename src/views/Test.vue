@@ -413,8 +413,8 @@ export default {
         const cases = ref([
             {
                 id: '001',
-                InitTestSequences: '1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2',
-                ActionTestSequences: '1.CAN-Sig-FLZCU_31-RHTurnlightSts-1',
+                InitTestSequences: "1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2",
+                ActionTestSequences: '1.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0x140',
                 ExpectedTestSequences: '1.Vision-Pattern-车速21',
             },
             {
