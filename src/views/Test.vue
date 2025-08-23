@@ -413,10 +413,9 @@ export default {
         const cases = ref([
             {
                 id: '001',
-                InitTestSequences: '1、Switch-2-ON-KL30, 2、Switch-1-ON-KL15,3、Switch-3-ON-ACC, 4、Pwr-1-SupplyPower-13.5,5、CAN-Sig-FLZCU 9-FLZCU 9 PowerMode-2',
-                ActionTestSequences: '1.CAN Sig-FLZCU31-RHTurnlightSts-1'
-                    + '2.Wait-1000',
-                ExpectedTestSequences: '1Capture-Pattemn-右转向灯亮',
+                InitTestSequences: '1.Switch-2-ON-KL30 \n 2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n 4.Pwr-1-SupplyPower-13.5\n5.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2',
+                ActionTestSequences: '1.CAN-Sig-FLZCU_31-RHTurnlightSts-1',
+                ExpectedTestSequences: '1.Capture-Pattern-右转向灯亮',
             },
             {
                 id: '002',
