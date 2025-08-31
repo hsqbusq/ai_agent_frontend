@@ -7,6 +7,9 @@
                     <el-button type="primary" size="small" @click="startDebugging" style="padding: 15px">
                         <img src="../assets/01.svg" alt="" style="width: 14px;height: 14px" /> 开始调试
                     </el-button>
+                    <el-button type="primary" size="small" @click="stopDebugging" style="padding: 15px">
+                        <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 停止调试
+                    </el-button>
                     <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 增加用例
                     </el-button>
@@ -175,7 +178,7 @@
                 <div style="display: flex">
                     <div class="card" style="flex: 5;padding: 10px">
                         <el-tabs v-model="activeName" type="card">
-                            <el-tab-pane label="Yolo11日志" name="first">
+                            <el-tab-pane label="过往测试记录" name="first">
                                 <el-table :data="logCases" class="logs-table" height="440" style="width: 100%">
                                     <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
                                     <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
@@ -313,7 +316,7 @@
         <el-dialog v-model="generateKnowledgeGraphLogDiagVisible" title="知识图谱日志" width="50%">
             <el-tabs v-model="logActiveTab" type="card" label-width="150px">
                 <el-tab-pane label="日志" name="logs">
-                    <pre style="text-align: left;">{{generateKnowledgeGraphLog.logs}}</pre>
+                    <pre style="text-align: left;">{{ generateKnowledgeGraphLog.logs }}</pre>
                 </el-tab-pane>
             </el-tabs>
             <template #footer>
@@ -383,6 +386,7 @@ import * as XLSX from 'xlsx'
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
+import { result } from 'lodash';
 
 window.Buffer = Buffer;
 export default {
@@ -390,7 +394,7 @@ export default {
     },
     setup() {
         const infoType = ref('all'); // 默认值为关键信息
-        const url = ref('http://172.23.96.54:8000');
+        const url = ref('');
         const showTestKey = ref(true); // 控制“测试功能点”列的显示
         const showTestidColumn = false;
 
@@ -413,15 +417,55 @@ export default {
         const cases = ref([
             {
                 id: '001',
+                TestCaseID: '',
+                SyRDIDFSRD: '',
+                Auto_testID: '',
+                TSR: '',
+                CasePriority: '',
+                TestMethod: '',
+                TestStrategy: '',
+                DesignMethod: '',
+                TestKey: '',
+                Initial_Condition: '',
+                Action: '',
+                Expected_Result: '',
                 InitTestSequences: "1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2",
                 ActionTestSequences: '1.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0x140',
                 ExpectedTestSequences: '1.Vision-Pattern-车速21',
+                Result: undefined,
+                ActualResult: '',
+                Selected: '',
+                PRNo: '',
+                TestLogs: '',
+                Numberoftests: '',
+                TestDate: '',
+                Remark: '',
             },
             {
                 id: '002',
+                TestCaseID: '',
+                SyRDIDFSRD: '',
+                Auto_testID: '',
+                TSR: '',
+                CasePriority: '',
+                TestMethod: '',
+                TestStrategy: '',
+                DesignMethod: '',
+                TestKey: '',
+                Initial_Condition: '',
+                Action: '',
+                Expected_Result: '',
                 InitTestSequences: '安卓测试 进入设置',
                 ActionTestSequences: '进入车辆设置',
                 ExpectedTestSequences: '页面正常显示',
+                Result: undefined,
+                ActualResult: '',
+                Selected: '',
+                PRNo: '',
+                TestLogs: '',
+                Numberoftests: '',
+                TestDate: '',
+                Remark: '',
             }
         ])
 
@@ -713,55 +757,50 @@ export default {
         }
 
         const exportTestReport = async () => {
-            const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet('Test Report');
+            // 创建一个HTML字符串
+            let htmlContent = '<html><head><title>Test Report</title><style>table { width: 100%; border-collapse: collapse; } table, th, td { border: 1px solid black; padding: 8px; text-align: left; }</style></head><body>';
+            htmlContent += '<table>';
 
             // 获取表头
             const headers = Object.keys(cases.value[0]);
 
-            // 添加表头
-            worksheet.addRow(headers);
+            console.log(headers);
+
+            // 添加表头行
+            htmlContent += '<tr>';
+            headers.forEach(header => {
+                htmlContent += `<th>${header}</th>`;
+            });
+            htmlContent += '</tr>';
 
             // 处理数据行
             for (let i = 0; i < reslutCases.value.length; i++) {
                 const caseItem = reslutCases.value[i];
-                const row = headers.map(header => caseItem[header]);
-                console.log(caseItem)
-                // 添加数据行
-                worksheet.addRow(row);
-
-                // 检查是否有 base64 图片字段（假设字段名为 image）
-                const base64Image = caseItem.ActualResult;
-                caseItem.ActualResult = ""
-                const base64Data = base64Image;
-                const imageBuffer = Buffer.from(base64Data, 'base64');
-
-                const imageId = workbook.addImage({
-                    buffer: imageBuffer,
-                    extension: 'png' // 可根据实际类型调整
+                htmlContent += '<tr>';
+                headers.forEach(header => {
+                    if (header === 'ActualResult' && caseItem[header].includes('data:image/png;base64,')) {
+                        // 假设实际结果包含base64图片
+                        const base64Image = caseItem[header].replace('data:image/png;base64,', '');
+                        htmlContent += `<td><img src="data:image/png;base64,${base64Image}" width="100" height="100"></td>`;
+                    } else {
+                        htmlContent += `<td>${caseItem[header]}</td>`;
+                    }
                 });
-
-                // 插入图片到对应单元格（假设 image 字段在最后一列）
-                const colIndex = headers.indexOf('ActualResult');
-                worksheet.addImage(imageId, {
-                    tl: { col: colIndex, row: i + 1 }, // 第1行是表头
-                    ext: { width: 100, height: 100 }
-                });
-
+                htmlContent += '</tr>';
             }
 
-            // 调整列宽
-            headers.forEach((_, i) => {
-                worksheet.getColumn(i + 1).width = 20;
+            htmlContent += '</table></body></html>';
+
+            // 创建一个Blob对象
+            const blob = new Blob([htmlContent], {
+                type: 'text/html'
             });
 
-            // 导出 Excel
-            const buffer = await workbook.xlsx.writeBuffer();
-            const blob = new Blob([buffer], {
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            });
-            saveAs(blob, 'test_report.xlsx');
+            // 使用FileSaver.js保存文件
+            saveAs(blob, 'test_report.html');
         }
+
+
         // 知识图谱相关数据
         const generateKnowledgeGraphDialogVisible = ref(false)
         const generateKnowledgeGraphLogDiagVisible = ref(false)
@@ -1030,8 +1069,24 @@ export default {
             })
         }
 
+        const isDebugRunning = ref(false)
+
+        const stopDebugging = () => {
+            isDebugRunning.value = false;
+            executionLogs.value = [];
+            showToast('调试已停止', 'info');
+        }
+
         let pollingInterval = null;
         const startPollingForDebugResults = (query, baseurl, id) => {
+            showToast('发送调试请求成功，日志将在下方测试执行日志展示！', 'success');
+            executionLogs.value.push({
+                id: 1,
+                time: new Date().toISOString().slice(0, 19).replace('T', ' '),
+                message: `开始调试，请等待！`,
+            });
+            isDebugRunning.value = true;
+
             let testIdFound = false; // 添加标志变量
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/dev-api/chat', true);
@@ -1039,7 +1094,7 @@ export default {
             xhr.setRequestHeader('Accept', 'text/event-stream');
             let lastProcessedLength = 0;
             xhr.onreadystatechange = () => {
-                if (xhr.readyState === 3) {
+                if (xhr.readyState === 3 && isDebugRunning.value) {
                     // 获取新接收到的部分响应数据
                     const newResponseText = xhr.responseText.slice(lastProcessedLength);
                     console.log("Received new response text:", newResponseText);
@@ -1114,7 +1169,7 @@ export default {
                         console.log("Received line:", line);
                         try {
                             executionLogs.value.push({
-                                id: executionLogs.value.length + 1,
+                                id: executionLogs.value.length + 2,
                                 time: new Date().toISOString().slice(0, 19).replace('T', ' '),
                                 message: `${line}`,
                             });
@@ -1124,6 +1179,8 @@ export default {
                     });
                     // 更新已处理的数据位置
                     lastProcessedLength = xhr.responseText.length;
+                } else if (!isDebugRunning.value) {
+                    return;
                 }
             };
 
@@ -1279,6 +1336,7 @@ export default {
         })
 
         return {
+            isDebugRunning,
             activeName,
             udid,
             infoType,
@@ -1350,7 +1408,7 @@ export default {
             fetchActualResult,
             logDialogVisible,
             ActualResultDialogVisible,
-
+            stopDebugging,
             logActiveTab,
             ActualResultActiveTab,
             activeCodeFile,
