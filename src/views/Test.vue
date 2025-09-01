@@ -394,7 +394,7 @@ export default {
     },
     setup() {
         const infoType = ref('all'); // 默认值为关键信息
-        const url = ref('');
+        const url = ref('http://172.23.96.54:8000');
         const showTestKey = ref(true); // 控制“测试功能点”列的显示
         const showTestidColumn = false;
 
@@ -778,9 +778,9 @@ export default {
                 const caseItem = reslutCases.value[i];
                 htmlContent += '<tr>';
                 headers.forEach(header => {
-                    if (header === 'ActualResult' && caseItem[header].includes('data:image/png;base64,')) {
+                    if (header === 'ActualResult') {
                         // 假设实际结果包含base64图片
-                        const base64Image = caseItem[header].replace('data:image/png;base64,', '');
+                        const base64Image = caseItem[header];
                         htmlContent += `<td><img src="data:image/png;base64,${base64Image}" width="100" height="100"></td>`;
                     } else {
                         htmlContent += `<td>${caseItem[header]}</td>`;
