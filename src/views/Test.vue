@@ -641,12 +641,12 @@ export default {
 
         // 删除测试用例
         const deleteTestCase = () => {
-            if (selectedRows.value.length === 0) {
+            if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要删除的测试用例', 'warning')
                 return
             }
 
-            selectedRows.value.forEach((row) => {
+            selectedRowsAll.value.forEach((row) => {
                 const index = cases.value.findIndex(c => c.id === row.id)
                 if (index !== -1) {
                     cases.value.splice(index, 1)
@@ -675,11 +675,9 @@ export default {
 
         // 选中的行
         const selectedRowsAll = ref([]);
-        const selectedRows = ref([]);
 
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
-            selectedRows.value = selection;
 
             // 更新所有页面的选择状态
             selection.forEach((row) => {
@@ -1396,7 +1394,6 @@ export default {
             serial,
             packageName,
             resourceid,
-            selectedRows,
             selectedRowsAll,
             selectDbcFile,
             showToast,
