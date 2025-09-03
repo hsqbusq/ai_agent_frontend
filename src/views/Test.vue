@@ -777,6 +777,20 @@ export default {
             let htmlContent = '<html><head><title>Test Report</title><style>table { width: 100%; border-collapse: collapse; } table, th, td { border: 1px solid black; padding: 8px; text-align: left; }</style></head><body>';
             htmlContent += '<table>';
 
+            reslutCases.value.sort((a, b) => a.id - b.id);
+
+            // 计算统计信息
+            const totalCases = reslutCases.value.length;
+            const passCases = reslutCases.value.filter(caseItem => caseItem.Result.toLowerCase() === 'pass').length;
+            const failCases = totalCases - passCases;
+
+            // 添加统计信息行
+            htmlContent += '<tr>';
+            htmlContent += `<th>测试案例总数: ${totalCases}</th>`;
+            htmlContent += `<th>PASS案例数: ${passCases}</th>`;
+            htmlContent += `<th>FAIL案例数: ${failCases}</th>`;
+            htmlContent += '</tr>';
+
             // 获取表头
             const headers = Object.keys(cases.value[0]);
 
@@ -1324,12 +1338,12 @@ export default {
                         ActualResultDialogVisible.value = true;
                         showToast(`实际结果加载成功`, 'success');
                     } else {
-                        showToast('实际结果加载失败1', 'error');
+                        showToast('暂无实际结果图片', 'error');
                     }
                 })
                 .catch(error => {
                     console.error('Error fetching test result:', error);
-                    showToast('实际结果加载失败2', 'error');
+                    showToast('实际结果加载失败', 'error');
                 });
         }
         const dbcFileName = ref('')
