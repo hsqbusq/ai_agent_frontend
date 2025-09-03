@@ -5,10 +5,10 @@
             <div class="header-left">
                 <div class="nav-buttons">
                     <el-button type="primary" size="small" @click="startDebugging" style="padding: 15px">
-                        <img src="../assets/01.svg" alt="" style="width: 14px;height: 14px" /> 开始调试
+                        <img src="../assets/01.svg" alt="" style="width: 14px;height: 14px" /> 开始测试
                     </el-button>
                     <el-button type="primary" size="small" @click="stopDebugging" style="padding: 15px">
-                        <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 停止调试
+                        <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 停止测试
                     </el-button>
                     <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 增加用例
@@ -51,28 +51,21 @@
         <!-- 主内容区 -->
         <div class="content-layout">
             <div class="main-content">
-                <!-- 测试用例表格 -->
                 <div class="card">
-                    <!-- <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange">
-                        <el-option label="关键信息" value="critical"></el-option>
-                        <el-option label="全部信息" value="all"></el-option>
-                    </el-select> -->
-
                     <div class="control-container">
                         <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange"
                             class="half-width">
                             <el-option label="关键信息" value="critical"></el-option>
                             <el-option label="全部信息" value="all"></el-option>
                         </el-select>
-
                         <div class="half-width input-wrapper">
                             <span style="margin-right: 8px;">URL地址：</span>
                             <el-input v-model="url" placeholder="请输入URL地址" style="flex: 1;"></el-input>
                         </div>
                     </div>
-
-                    <el-table :data="paginatedCases" class="editable-table" height="450" highlight-current-row
-                        @selection-change="handleSelectionChange" style="width: 100%" row-key="id">
+                    <el-table ref="caseTable" :data="paginatedCases" class="editable-table" height="450"
+                        highlight-current-row @selection-change="handleSelectionChange" style="width: 100%"
+                        row-key="id">
                         <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
                         <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
                         <el-table-column prop="TestCaseID" label="测试用例ID" min-width="120"
@@ -107,7 +100,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -115,7 +108,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -195,10 +188,10 @@
                                 </el-table>
                                 <div style="display: flex;align-items: center">
                                     <div>
-                                        每页{{ pageSize1 }}条，共{{ logs.length }}条
+                                        每页{{ pageSize1 }}条，共{{ logs_total }}条
                                     </div>
                                     <div class="pagination-container">
-                                        <el-pagination background layout="prev, pager, next" :total="logs.length"
+                                        <el-pagination background layout="prev, pager, next" :total="logs_total"
                                             :page-size="pageSize1" :current-page="currentPage1"
                                             @current-change="handlePageChange1">
                                         </el-pagination>
@@ -218,7 +211,7 @@
                     </div>
                     <div class="card" style="flex: 5;padding: 10px;">
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
-                            <el-tab-pane label="手机设备" name="five">
+                            <el-tab-pane label="车机设备" name="five">
                                 <div class="video-container">
                                     <iframe ref="videoPlayer" width="100%" height="480" frameborder="0"
                                         allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
@@ -383,10 +376,8 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, getCurrentInstance, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as XLSX from 'xlsx'
-import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
-import { result } from 'lodash';
 
 window.Buffer = Buffer;
 export default {
@@ -473,6 +464,7 @@ export default {
 
         // 日志数据
         const logs = ref([])
+        const logs_total = ref(0)
 
         // 测试执行日志数据
         const executionLogs = ref([])
@@ -523,10 +515,11 @@ export default {
         })
         // 分页设置
         const currentPage = ref(1)
+        const changePage = ref(false)
         const pageSize = ref(8)
 
         const currentPage1 = ref(1)
-        const pageSize1 = ref(8)
+        const pageSize1 = ref(10)
 
         const currentPage2 = ref(1)
         const pageSize2 = ref(8)
@@ -539,9 +532,7 @@ export default {
         })
 
         const logCases = computed(() => {
-            const start = (currentPage1.value - 1) * pageSize1.value
-            const end = start + pageSize1.value
-            return filteredLogCases.value.slice(start, end)
+            return filteredLogCases.value
         })
 
         const executionLogCases = computed(() => {
@@ -683,39 +674,66 @@ export default {
         }
 
         // 选中的行
+        const selectedRowsAll = ref([]);
         const selectedRows = ref([]);
 
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
-            console.log('Selection changed: ', selection);
             selectedRows.value = selection;
 
-            // 移除所有行的高亮
-            const tableRows = document.querySelectorAll('.el-table__row');
-            tableRows.forEach((el) => {
-                el.classList.remove('highlight');
-                el.removeAttribute('data-id');
-            });
-
-            // 高亮选中的行
+            // 更新所有页面的选择状态
             selection.forEach((row) => {
-                const currentRow = document.querySelector(`.el-table__row[data-row-key='${row.id}']`);
-                if (currentRow) {
-                    currentRow.classList.add('highlight');
-                    currentRow.setAttribute('data-id', row.id);
+                if (!selectedRowsAll.value.some(r => r.id === row.id)) {
+                    selectedRowsAll.value.push(row);
                 }
             });
 
+            // 移除不再选中的行
+            if (selection.length == 0) {
+                if (changePage.value) {
+                    changePage.value = false
+                } else {
+                    let newSelectedRowsAll = [];
+                    selectedRowsAll.value.forEach((row) => {
+                        if (!paginatedCases.value.some(r => r.id === row.id)) {
+                            newSelectedRowsAll.push(row);
+                        }
+                    });
+                    selectedRowsAll.value = newSelectedRowsAll;
+                }
+            } else {
+                if (!changePage.value) {
+                    let newSelectedRowsAll = [];
+                    selectedRowsAll.value.forEach((row) => {
+                        if (paginatedCases.value.some(r => r.id === row.id) && selection.some(r => r.id === row.id)) {
+                            newSelectedRowsAll.push(row);
+                        } else if (!paginatedCases.value.some(r => r.id === row.id)) {
+                            newSelectedRowsAll.push(row);
+                        }
+                    });
+                    selectedRowsAll.value = newSelectedRowsAll;
+                }
+            }
         };
 
         // 分页变化处理
         const handlePageChange = (newPage) => {
             currentPage.value = newPage
+            changePage.value = true
             showToast(`切换到第 ${newPage} 页`, 'info')
+            nextTick(() => {
+                paginatedCases.value.forEach(row => {
+                    changePage.value = true
+                    const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
+                    console.log(isSelected)
+                    proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
+                });
+                changePage.value = false
+            });
         }
 
         const handlePageChange1 = (newPage) => {
-            currentPage1.value = newPage
+            fetchTestList(newPage)
             showToast(`切换到第 ${newPage} 页`, 'info')
         }
 
@@ -781,7 +799,7 @@ export default {
                     if (header === 'ActualResult') {
                         // 假设实际结果包含base64图片
                         const base64Image = caseItem[header];
-                        htmlContent += `<td><img src="data:image/png;base64,${base64Image}" width="100" height="100"></td>`;
+                        htmlContent += `<td><a href="data:image/png;base64,${base64Image}" download="result_image.png"><img src="data:image/png;base64,${base64Image}" width="100" height="100"></a></td>`;
                     } else {
                         htmlContent += `<td>${caseItem[header]}</td>`;
                     }
@@ -1044,12 +1062,12 @@ export default {
         // 开始调试功能
         const startDebugging = () => {
             executionLogs.value = []
-            if (selectedRows.value.length === 0) {
+            if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要调试的测试用例', 'warning')
                 return
             }
 
-            selectedRows.value.forEach((row) => {
+            selectedRowsAll.value.forEach((row) => {
                 const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`
                 const baseurl = url.value
                 // const qery = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
@@ -1059,12 +1077,12 @@ export default {
 
         // 开始序列号用例转化
         const caseConversion = () => {
-            if (selectedRows.value.length === 0) {
+            if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要转换的测试用例', 'warning')
                 return
             }
 
-            selectedRows.value.forEach((row) => {
+            selectedRowsAll.value.forEach((row) => {
                 runCaseConversion(row);
             })
         }
@@ -1132,7 +1150,7 @@ export default {
                                                     reslutCases.value.push(cases.value[index]);
                                                     fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences);
                                                 }
-                                                fetchTestList(); // 刷新测试用例列表
+                                                fetchTestList(1); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
                                             }
                                         } catch (error) {
@@ -1146,7 +1164,7 @@ export default {
                                             console.log("超时未获取测试结果");
                                             cases.value[index].Result = '超时未获取测试结果';
                                             cases.value[index].Testid = test_id;
-                                            fetchTestList(); // 刷新测试用例列表    
+                                            fetchTestList(1); // 刷新测试用例列表    
                                             clearInterval(intervalId); // 停止轮询
                                         }
                                     }, interval);
@@ -1239,8 +1257,8 @@ export default {
         }
 
         // 获取测试用例列表
-        const fetchTestList = () => {
-            fetch('/dev-api/test_list')
+        const fetchTestList = (page) => {
+            fetch(`/dev-api/test_list?page=${page}&page_size=10`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.code === "200") {
@@ -1250,6 +1268,9 @@ export default {
                             message: item.query,
                         }));
                         logs.value = testCases;
+                        logs_total.value = data.result.total;
+                        currentPage1.value = data.result.page;
+                        pageSize1.value = data.result.page_size;
                         showToast('测试用例列表加载成功', 'success');
                     } else {
                         showToast('测试用例列表加载失败', 'error');
@@ -1326,7 +1347,7 @@ export default {
         // 模拟组件加载
         onMounted(() => {
             setTimeout(() => {
-                fetchTestList();
+                fetchTestList(1);
             }, 500)
         })
 
@@ -1347,6 +1368,7 @@ export default {
             cases,
             reslutCases,
             logs,
+            logs_total,
             searchQuery,
             filteredCases,
             logCases,
@@ -1355,6 +1377,7 @@ export default {
             filteredLogCases,
             paginatedCases,
             currentPage,
+            changePage,
             pageSize,
             currentPage1,
             pageSize1,
@@ -1374,6 +1397,7 @@ export default {
             packageName,
             resourceid,
             selectedRows,
+            selectedRowsAll,
             selectDbcFile,
             showToast,
             autoSave,
