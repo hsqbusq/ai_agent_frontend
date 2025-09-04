@@ -199,13 +199,15 @@
                                 </div>
                             </el-tab-pane>
                             <el-tab-pane label="测试执行日志" name="third">
-                                <el-select v-model="selectedCase" placeholder="请选择测试用例" style="margin-bottom: 20px;" @change="printInfo">
+                                <el-select v-model="selectedCase" placeholder="请选择测试用例" style="margin-bottom: 20px;"
+                                    @change="printInfo">
                                     <el-option v-for="testCase in debugRows" :key="testCase.id"
-                                        :label="`${testCase.id} - ${testCase.ExpectedTestSequences}`" :value="testCase.id">
+                                        :label="`${testCase.id} - ${testCase.ExpectedTestSequences}`"
+                                        :value="testCase.id">
                                     </el-option>
                                 </el-select>
                                 <div v-if="selectedCase">
-                                    <div class="table-title">测试用例 {{ selectedCase}}</div>
+                                    <div class="table-title">测试用例 {{ selectedCase }}</div>
                                     <el-table :data="filteredExecutionLogs" class="logs-table" height="440"
                                         style="width: 100%">
                                         <el-table-column prop="log_id" label="序号" width="80"
@@ -678,7 +680,13 @@ export default {
 
         // 运行测试用例
         const runTestCase = (query, baseurl, id) => {
-            startPollingForDebugResults(query, baseurl, id);
+            return new Promise((resolve, reject) => {
+                try {
+                    startPollingForDebugResults(query, baseurl, id, resolve, reject);
+                } catch (error) {
+                    reject(error);
+                }
+            });
         }
 
         // 运行测试用例
@@ -696,7 +704,7 @@ export default {
         const selectedRowsAll = ref([]);
         const debugRows = ref([]);
         const selectedCase = ref(null);
-        const printInfo = () =>{
+        const printInfo = () => {
             console.log(selectedCase.value)
         }
 
@@ -1097,18 +1105,21 @@ export default {
         }
 
         // 开始调试功能
-        const startDebugging = () => {
+        const startDebugging = async () => {
             if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要调试的测试用例', 'warning')
                 return
             }
             debugRows.value = [...new Set([...debugRows.value, ...selectedRowsAll.value])];
 
-            selectedRowsAll.value.forEach((row) => {
-                const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`
-                const baseurl = url.value
-                runTestCase(query, baseurl, row.id);
-            })
+            for (const row of selectedRowsAll.value) {
+                try {
+                    const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
+                    const baseurl = url.value;
+                    await runTestCase(query, baseurl, row.id);
+                } catch (error) {
+                    showToast(`测试用例${row.id}调试失败`, 'error');
+            }
         }
 
         // 开始序列号用例转化
@@ -1131,7 +1142,7 @@ export default {
         }
 
         let pollingInterval = null;
-        const startPollingForDebugResults = (query, baseurl, id) => {
+        const startPollingForDebugResults = (query, baseurl, id, resolve, reject) => {
             showToast('发送调试请求成功，日志将在下方测试执行日志展示！', 'success');
             executionLogs.value[id] = [];
             executionLogs.value[id].push({
@@ -1147,15 +1158,13 @@ export default {
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.setRequestHeader('Accept', 'text/event-stream');
             let lastProcessedLength = 0;
+
             xhr.onreadystatechange = () => {
                 if (xhr.readyState === 3 && isDebugRunning.value) {
                     // 获取新接收到的部分响应数据
                     const newResponseText = xhr.responseText.slice(lastProcessedLength);
-                    //console.log("Received new response text:", newResponseText);
-
 
                     const lines = newResponseText.split('\n');
-                    // console.log(lines)
                     var thinkFlag = false; // 标志是否有思考提示
 
                     lines.forEach(line => {
@@ -1165,11 +1174,10 @@ export default {
                         if (!testIdFound) {
                             if (match) {
                                 const test_id = match[1];
-                                //console.log("Found test_id:", test_id); // 调试信息：打印找到的测试用例ID
                                 testIdFound = true;
                                 const pollForResult = async () => {
-                                    const maxPollingTime = 300000; //   300s
-                                    const interval = 5000; //   5s
+                                    const maxPollingTime = 300000; // 300s
+                                    const interval = 5000; // 5s
                                     let elapsedTime = 0;
 
                                     const intervalId = setInterval(async () => {
@@ -1177,9 +1185,7 @@ export default {
                                         try {
                                             const response = await fetch(`/dev-api/result/${test_id}`);
                                             const data = await response.json();
-                                            // console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
                                             if (data.result !== null) {
-                                                // console.log("Result is not null, stopping polling." + data.result);
                                                 if (index !== -1) {
                                                     cases.value[index].Result = data.result;
                                                     cases.value[index].Testid = test_id;
@@ -1188,20 +1194,26 @@ export default {
                                                 }
                                                 fetchTestList(1); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
+                                                resolve(data); // 完成请求，调用 resolve
                                             }
                                         } catch (error) {
-                                            cases.value[index].Result = '获取测试结果失败';
-                                            cases.value[index].Testid = test_id;
+                                            if (index !== -1) {
+                                                cases.value[index].Result = '获取测试结果失败';
+                                                cases.value[index].Testid = test_id;
+                                            }
                                             console.error("Error fetching result:", error);
+                                            reject(error); // 失败请求，调用 reject
                                         }
 
                                         elapsedTime += interval;
                                         if (elapsedTime >= maxPollingTime) {
-                                            //console.log("超时未获取测试结果");
-                                            cases.value[index].Result = '超时未获取测试结果';
-                                            cases.value[index].Testid = test_id;
+                                            if (index !== -1) {
+                                                cases.value[index].Result = '超时未获取测试结果';
+                                                cases.value[index].Testid = test_id;
+                                            }
                                             fetchTestList(1); // 刷新测试用例列表    
                                             clearInterval(intervalId); // 停止轮询
+                                            reject(new Error('超时未获取测试结果')); // 超时请求，调用 reject
                                         }
                                     }, interval);
                                 };
@@ -1220,7 +1232,6 @@ export default {
                             return;
                         }
                         if (thinkFlag) return;
-                        //console.log("Received line:", line);
                         try {
                             executionLogs.value[id].push({
                                 log_id: executionLogs.value[id].length + 1,
@@ -1239,15 +1250,21 @@ export default {
             };
 
             xhr.onload = () => {
-                //console.log("Stream ended"); // 调试信息：打印流结束信息
+                isDebugRunning.value = false;
+                showToast('调试已停止', 'info');
+                resolve(null); // 如果流正常结束，调用 resolve
             };
 
             xhr.onerror = (error) => {
-                console.error("Error in stream:", error); // 调试信息：打印错误信息
+                console.error("Error in stream:", error);
+                isDebugRunning.value = false;
+                showToast('调试请求失败', 'error');
+                reject(error); // 如果流发生错误，调用 reject
             };
 
             xhr.send(JSON.stringify({ query: query, baseurl: baseurl }));
         }
+
 
         const startCaseConversion = (row) => {
             // 第一次调用
