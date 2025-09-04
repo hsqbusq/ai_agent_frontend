@@ -199,11 +199,30 @@
                                 </div>
                             </el-tab-pane>
                             <el-tab-pane label="测试执行日志" name="third">
-                                <el-table :data="executionLogs" class="logs-table" height="440" style="width: 100%">
+                                <el-select v-model="selectedCase" placeholder="请选择测试用例" style="margin-bottom: 20px;" @change="printInfo">
+                                    <el-option v-for="testCase in debugRows" :key="testCase.id"
+                                        :label="`${testCase.id} - ${testCase.ExpectedTestSequences}`" :value="testCase.id">
+                                    </el-option>
+                                </el-select>
+                                <div v-if="selectedCase">
+                                    <div class="table-title">测试用例 {{ selectedCase}}</div>
+                                    <el-table :data="filteredExecutionLogs" class="logs-table" height="440"
+                                        style="width: 100%">
+                                        <el-table-column prop="log_id" label="序号" width="80"
+                                            align="center"></el-table-column>
+                                        <el-table-column prop="time" label="时间" min-width="160"
+                                            sortable></el-table-column>
+                                        <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
+                                    </el-table>
+                                </div>
+                                <div v-else>
+                                    请选择一个测试用例以查看其执行日志。
+                                </div>
+                                <!-- <el-table :data="executionLogs" class="logs-table" height="440" style="width: 100%">
                                     <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
                                     <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
                                     <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
-                                </el-table>
+                                </el-table> -->
                             </el-tab-pane>
                         </el-tabs>
 
@@ -467,7 +486,15 @@ export default {
         const logs_total = ref(0)
 
         // 测试执行日志数据
-        const executionLogs = ref([])
+        const executionLogs = ref({})
+
+        const filteredExecutionLogs = computed(() => {
+            // console.log(selectedCase.value.id)
+            // console.log(JSON.stringify(executionLogs[selectedCase.value.id]))
+            const filterlogs = executionLogs.value[selectedCase.value] || [];
+            // console.log("11111111111:" + filterlogs)
+            return filterlogs;
+        })
 
         // 新增的弹窗相关数据
         const dialogVisible = ref(false)
@@ -535,11 +562,7 @@ export default {
             return filteredLogCases.value
         })
 
-        const executionLogCases = computed(() => {
-            const start = (currentPage2.value - 1) * pageSize2.value
-            const end = start + pageSize2.value
-            return executionLogs.value.slice(start, end)
-        })
+
 
         // 日志设置
         const logSettings = reactive({
@@ -569,7 +592,7 @@ export default {
                 // 更新手机设备视频流URL
                 // 这里可以根据需要修改URL格式
                 const mobileUrl = `${url.value}/adb/video`;
-                console.log(mobileUrl)
+                //console.log(mobileUrl)
                 // 刷新iframe
                 if (videoPlayer.value) {
                     videoPlayer.value.src = mobileUrl;
@@ -583,7 +606,7 @@ export default {
                 }
                 // 更新仪表设备视频流URL
                 const instrumentUrl = `${url.value}/camera/video?name=UGREEN`;
-                console.log(instrumentUrl);
+                //console.log(instrumentUrl);
                 instrumentStreamUrl.value = instrumentUrl;
                 // 刷新iframe
                 if (instrumentVideoPlayer.value) {
@@ -658,7 +681,6 @@ export default {
 
         // 运行测试用例
         const runTestCase = (query, baseurl, id) => {
-            executionLogCases.value = []
             startPollingForDebugResults(query, baseurl, id);
         }
 
@@ -675,6 +697,11 @@ export default {
 
         // 选中的行
         const selectedRowsAll = ref([]);
+        const debugRows = ref([]);
+        const selectedCase = ref(null);
+        const printInfo = () =>{
+            console.log(selectedCase.value)
+        }
 
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
@@ -723,7 +750,7 @@ export default {
                 paginatedCases.value.forEach(row => {
                     changePage.value = true
                     const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
-                    console.log(isSelected)
+                    //console.log(isSelected)
                     proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
                 });
                 changePage.value = false
@@ -757,7 +784,7 @@ export default {
                 })
                     .then(response => response.json())
                     .then(data => {
-                        console.log(data);
+                        //console.log(data);
                         if (data.status === "ok") {
                             reslutCases.value.slice(-1)[0].ActualResult = data.base64;
                         } else {
@@ -794,7 +821,7 @@ export default {
             // 获取表头
             const headers = Object.keys(cases.value[0]);
 
-            console.log(headers);
+            //console.log(headers);
 
             // 添加表头行
             htmlContent += '<tr>';
@@ -885,7 +912,7 @@ export default {
                             data = await clonedResponse.text();
                         }
 
-                        console.log(data);
+                        //console.log(data);
                         generateKnowledgeGraphLog.logs = data; // 更新响应式变量的值
                     } else {
                         clearInterval(pollInterval);
@@ -945,7 +972,7 @@ export default {
                             data = await clonedResponse.text();
                         }
 
-                        console.log(data);
+                        //console.log(data);
                         if (typeof data === 'string' && data.includes('[Done]')) {
                             clearInterval(pollInterval1);
                             IsSendingKnowledgeGraphRequest.value = false;
@@ -1033,7 +1060,7 @@ export default {
                         const sheetName = workbook.SheetNames[i]
                         const worksheet = workbook.Sheets[sheetName]
                         const json = XLSX.utils.sheet_to_json(worksheet, { range: 6 })
-                        console.log(json)
+                        //console.log(json)
                         json.forEach((row) => {
                             const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
                             cases.value.push({
@@ -1074,16 +1101,15 @@ export default {
 
         // 开始调试功能
         const startDebugging = () => {
-            executionLogs.value = []
             if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要调试的测试用例', 'warning')
                 return
             }
+            debugRows.value = [...new Set([...debugRows.value, ...selectedRowsAll.value])];
 
             selectedRowsAll.value.forEach((row) => {
                 const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`
                 const baseurl = url.value
-                // const qery = `前提条件:4.Pwr-1-SupplyPower-13 预期结果：远光灯开启`
                 runTestCase(query, baseurl, row.id);
             })
         }
@@ -1104,15 +1130,15 @@ export default {
 
         const stopDebugging = () => {
             isDebugRunning.value = false;
-            executionLogs.value = [];
             showToast('调试已停止', 'info');
         }
 
         let pollingInterval = null;
         const startPollingForDebugResults = (query, baseurl, id) => {
             showToast('发送调试请求成功，日志将在下方测试执行日志展示！', 'success');
-            executionLogs.value.push({
-                id: 1,
+            executionLogs.value[id] = [];
+            executionLogs.value[id].push({
+                log_id: 1,
                 time: new Date().toISOString().slice(0, 19).replace('T', ' '),
                 message: `开始调试，请等待！`,
             });
@@ -1128,7 +1154,7 @@ export default {
                 if (xhr.readyState === 3 && isDebugRunning.value) {
                     // 获取新接收到的部分响应数据
                     const newResponseText = xhr.responseText.slice(lastProcessedLength);
-                    console.log("Received new response text:", newResponseText);
+                    //console.log("Received new response text:", newResponseText);
 
 
                     const lines = newResponseText.split('\n');
@@ -1142,7 +1168,7 @@ export default {
                         if (!testIdFound) {
                             if (match) {
                                 const test_id = match[1];
-                                console.log("Found test_id:", test_id); // 调试信息：打印找到的测试用例ID
+                                //console.log("Found test_id:", test_id); // 调试信息：打印找到的测试用例ID
                                 testIdFound = true;
                                 const pollForResult = async () => {
                                     const maxPollingTime = 300000; //   300s
@@ -1154,7 +1180,7 @@ export default {
                                         try {
                                             const response = await fetch(`/dev-api/result/${test_id}`);
                                             const data = await response.json();
-                                            console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
+                                            // console.log("Received result data:", data); // 调试信息：打印接收到的结果数据
                                             if (data.result !== null) {
                                                 // console.log("Result is not null, stopping polling." + data.result);
                                                 if (index !== -1) {
@@ -1174,7 +1200,7 @@ export default {
 
                                         elapsedTime += interval;
                                         if (elapsedTime >= maxPollingTime) {
-                                            console.log("超时未获取测试结果");
+                                            //console.log("超时未获取测试结果");
                                             cases.value[index].Result = '超时未获取测试结果';
                                             cases.value[index].Testid = test_id;
                                             fetchTestList(1); // 刷新测试用例列表    
@@ -1197,10 +1223,10 @@ export default {
                             return;
                         }
                         if (thinkFlag) return;
-                        console.log("Received line:", line);
+                        //console.log("Received line:", line);
                         try {
-                            executionLogs.value.push({
-                                id: executionLogs.value.length + 2,
+                            executionLogs.value[id].push({
+                                log_id: executionLogs.value[id].length + 1,
                                 time: new Date().toISOString().slice(0, 19).replace('T', ' '),
                                 message: `${line}`,
                             });
@@ -1216,7 +1242,7 @@ export default {
             };
 
             xhr.onload = () => {
-                console.log("Stream ended"); // 调试信息：打印流结束信息
+                //console.log("Stream ended"); // 调试信息：打印流结束信息
             };
 
             xhr.onerror = (error) => {
@@ -1308,7 +1334,7 @@ export default {
                         logDetails.images = data.result.logs.images;
                         logDetails.ignition_logs = data.result.logs.ignition_log;
                         logDetails.json_files = data.result.logs.json_files;
-                        console.log(logDetails.code_files);
+                        //console.log(logDetails.code_files);
                         logDialogVisible.value = true;
                         showToast(`测试日志加载成功`, 'success');
                     } else {
@@ -1332,10 +1358,10 @@ export default {
             })
                 .then(response => response.json())
                 .then(data => {
-                    console.log(data);
+                    //console.log(data);
                     if (data.status === "ok") {
                         ActualResultDetails.images = data.base64;
-                        console.log(ActualResultDetails.images);
+                        //console.log(ActualResultDetails.images);
                         ActualResultDialogVisible.value = true;
                         showToast(`实际结果加载成功`, 'success');
                     } else {
@@ -1386,7 +1412,7 @@ export default {
             filteredCases,
             logCases,
             executionLogs,
-            executionLogCases,
+            filteredExecutionLogs,
             filteredLogCases,
             paginatedCases,
             currentPage,
@@ -1410,6 +1436,9 @@ export default {
             packageName,
             resourceid,
             selectedRowsAll,
+            debugRows,
+            selectedCase,
+            printInfo,
             selectDbcFile,
             showToast,
             autoSave,
