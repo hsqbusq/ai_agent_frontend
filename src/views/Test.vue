@@ -1119,6 +1119,7 @@ export default {
                     await runTestCase(query, baseurl, row.id);
                 } catch (error) {
                     showToast(`测试用例${row.id}调试失败`, 'error');
+                }
             }
         }
 
