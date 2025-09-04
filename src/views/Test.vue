@@ -100,7 +100,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -108,7 +108,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -1110,10 +1110,13 @@ export default {
                 showToast('请先选择要调试的测试用例', 'warning')
                 return
             }
-            debugRows.value = [...new Set([...debugRows.value, ...selectedRowsAll.value])];
+
 
             for (const row of selectedRowsAll.value) {
                 try {
+                    if (!debugRows.value.some(dr => dr.id === row.id)) {
+                        debugRows.value.push(row);
+                    }
                     const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
                     const baseurl = url.value;
                     await runTestCase(query, baseurl, row.id);
