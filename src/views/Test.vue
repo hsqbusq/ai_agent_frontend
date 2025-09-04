@@ -489,10 +489,7 @@ export default {
         const executionLogs = ref({})
 
         const filteredExecutionLogs = computed(() => {
-            // console.log(selectedCase.value.id)
-            // console.log(JSON.stringify(executionLogs[selectedCase.value.id]))
             const filterlogs = executionLogs.value[selectedCase.value] || [];
-            // console.log("11111111111:" + filterlogs)
             return filterlogs;
         })
 
