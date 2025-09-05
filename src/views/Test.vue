@@ -100,7 +100,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -108,7 +108,7 @@
                                 <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                     @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                 <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
+                                    }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -208,8 +208,8 @@
                                 </el-select>
                                 <div v-if="selectedCase">
                                     <div class="table-title">测试用例 {{ selectedCase }}</div>
-                                    <el-table :data="filteredExecutionLogs" class="logs-table" height="440"
-                                        style="width: 100%">
+                                    <el-table :data="filteredExecutionLogs" class="logs-table execution-logs-table"
+                                        max-height="440" style="width: 100%" ref="executionLogsTable">
                                         <el-table-column prop="log_id" label="序号" width="80"
                                             align="center"></el-table-column>
                                         <el-table-column prop="time" label="时间" min-width="160"
@@ -405,6 +405,8 @@ export default {
     components: {
     },
     setup() {
+
+        const selectedCase = ref('');
         const infoType = ref('all'); // 默认值为关键信息
         const url = ref('http://172.23.96.54:8000');
         const showTestKey = ref(true); // 控制“测试功能点”列的显示
@@ -494,6 +496,22 @@ export default {
             const filterlogs = executionLogs.value[selectedCase.value] || [];
             return filterlogs;
         })
+
+        const executionLogsTable = ref(null)
+
+        watch(filteredExecutionLogs, async () => {
+            await nextTick();
+            const tableRef = executionLogsTable.value;
+            if (tableRef) {
+                const bodyWrapper = tableRef.$el.querySelector('.el-scrollbar__wrap');
+                if (bodyWrapper) {
+                    bodyWrapper.scrollTo({
+                        top: bodyWrapper.scrollHeight,
+                        behavior: 'smooth'
+                    });
+                }
+            }
+        }, { deep: true });
 
         // 新增的弹窗相关数据
         const dialogVisible = ref(false)
@@ -703,7 +721,6 @@ export default {
         // 选中的行
         const selectedRowsAll = ref([]);
         const debugRows = ref([]);
-        const selectedCase = ref(null);
         const printInfo = () => {
             console.log(selectedCase.value)
         }
@@ -1104,27 +1121,41 @@ export default {
             }
         }
 
-        // 开始调试功能
         const startDebugging = async () => {
             if (selectedRowsAll.value.length === 0) {
-                showToast('请先选择要调试的测试用例', 'warning')
-                return
+                showToast('请先选择要调试的测试用例', 'warning');
+                return;
             }
+            activeName.value = 'third';
+            isDebugRunning.value = true;
+            debugRows.value = [];
 
-
-            for (const row of selectedRowsAll.value) {
+            let index = 0;
+            while (index < selectedRowsAll.value.length && isDebugRunning.value) {
+                const row = selectedRowsAll.value[index];
+                console.log(`开始调试用例${row.id}`);
+                console.log(selectedRowsAll.value);
+                console.log(selectedRowsAll.value.length);
                 try {
                     if (!debugRows.value.some(dr => dr.id === row.id)) {
                         debugRows.value.push(row);
                     }
+                    console.log(debugRows.value);
+                    selectedCase.value = row.id;
+                    console.log(selectedCase.value);
                     const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
                     const baseurl = url.value;
+
                     await runTestCase(query, baseurl, row.id);
                 } catch (error) {
                     showToast(`测试用例${row.id}调试失败`, 'error');
                 }
+
+                index++;
             }
-        }
+
+            isDebugRunning.value = false;
+        };
 
         // 开始序列号用例转化
         const caseConversion = () => {
@@ -1142,10 +1173,14 @@ export default {
 
         const stopDebugging = () => {
             isDebugRunning.value = false;
+            debugRows.value = [];
+            selectedCase.value = '';
+            stopPolling();
+            executionLogs.value = {};
             showToast('调试已停止', 'info');
         }
 
-        let pollingInterval = null;
+        const pollingIntervals = {};
         const startPollingForDebugResults = (query, baseurl, id, resolve, reject) => {
             showToast('发送调试请求成功，日志将在下方测试执行日志展示！', 'success');
             executionLogs.value[id] = [];
@@ -1154,7 +1189,6 @@ export default {
                 time: new Date().toISOString().slice(0, 19).replace('T', ' '),
                 message: `开始调试，请等待！`,
             });
-            isDebugRunning.value = true;
 
             let testIdFound = false; // 添加标志变量
             const xhr = new XMLHttpRequest();
@@ -1217,13 +1251,15 @@ export default {
                                             }
                                             fetchTestList(1); // 刷新测试用例列表    
                                             clearInterval(intervalId); // 停止轮询
-                                            reject(new Error('超时未获取测试结果')); // 超时请求，调用 reject
+                                            reject(new Error('超时未获取测试结果'));
                                         }
                                     }, interval);
+
+                                    pollingIntervals[test_id] = intervalId;
                                 };
 
                                 pollForResult(); // 启动轮询
-                                return; // 找到 test_id 后停止处理当前迭代
+                                return;
                             }
                         }
                         if (testIdFound && match) return;
@@ -1254,16 +1290,14 @@ export default {
             };
 
             xhr.onload = () => {
-                isDebugRunning.value = false;
-                showToast('调试已停止', 'info');
-                resolve(null); // 如果流正常结束，调用 resolve
+                showToast(`测试用例${id}已停止`, 'info');
+                resolve(null);
             };
 
             xhr.onerror = (error) => {
                 console.error("Error in stream:", error);
-                isDebugRunning.value = false;
-                showToast('调试请求失败', 'error');
-                reject(error); // 如果流发生错误，调用 reject
+                showToast(`测试用例${id}已停止`, 'error');
+                reject(error);
             };
 
             xhr.send(JSON.stringify({ query: query, baseurl: baseurl }));
@@ -1308,10 +1342,13 @@ export default {
             xhr.send(JSON.stringify({ input, task, stream }));
         }
 
-        // 停止轮询
+        // 停止所有轮询
         const stopPolling = () => {
-            if (pollingInterval) clearInterval(pollingInterval);
-        }
+            Object.keys(pollingIntervals).forEach(test_id => {
+                clearInterval(pollingIntervals[test_id]);
+                delete pollingIntervals[test_id]; // 清除引用
+            });
+        };
 
         // 获取测试用例列表
         const fetchTestList = (page) => {
@@ -1422,6 +1459,7 @@ export default {
             showTestKey,
             showTestidColumn,
             activeDevice,
+            pollingIntervals,
             cases,
             reslutCases,
             logs,
@@ -1431,6 +1469,7 @@ export default {
             logCases,
             executionLogs,
             filteredExecutionLogs,
+            executionLogsTable,
             filteredLogCases,
             paginatedCases,
             currentPage,
@@ -1526,6 +1565,7 @@ body {
     overflow: hidden;
 }
 
+
 .header {
     background: linear-gradient(to right, #1e4976, #2c6a9e);
     color: white;
@@ -1572,7 +1612,9 @@ body {
     overflow: hidden;
 }
 
-
+:deep(.el-tabs__content) {
+    overflow: auto !important;
+}
 
 .editable-table .el-table__row td {
     padding: 8px 0;
