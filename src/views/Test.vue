@@ -560,7 +560,7 @@ export default {
         // 分页设置
         const currentPage = ref(1)
         const changePage = ref(false)
-        const pageSize = ref(8)
+        const pageSize = ref(20)
 
         const currentPage1 = ref(1)
         const pageSize1 = ref(10)
@@ -734,7 +734,14 @@ export default {
                     selectedRowsAll.value.push(row);
                 }
             });
-
+            if (isDebugRunning.value){
+                paginatedCases.value.forEach(row => {
+                    const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
+                    //console.log(isSelected)
+                    proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
+                });
+                return;
+            }
             // 移除不再选中的行
             if (selection.length == 0) {
                 if (changePage.value) {
@@ -1152,6 +1159,10 @@ export default {
                 }
 
                 index++;
+                console.log(selectedRowsAll.value.length)
+                console.log(`结束调试用例${row.id}`);
+                console.log(index);
+                console.log(isDebugRunning.value);
             }
 
             isDebugRunning.value = false;
@@ -1290,13 +1301,13 @@ export default {
             };
 
             xhr.onload = () => {
-                showToast(`测试用例${id}已停止`, 'info');
+                showToast(`测试用例${id}已停止1`, 'info');
                 resolve(null);
             };
 
             xhr.onerror = (error) => {
                 console.error("Error in stream:", error);
-                showToast(`测试用例${id}已停止`, 'error');
+                showToast(`测试用例${id}已停止2`, 'error');
                 reject(error);
             };
 
