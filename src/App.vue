@@ -1,11 +1,10 @@
 <template>
   <div>
-    <Test/>
+    <router-view></router-view>
   </div>
 </template>
 
 <script setup>
-import Test from './views/Test.vue'
 </script>
 
 <style>
