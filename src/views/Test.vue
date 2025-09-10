@@ -96,7 +96,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -104,7 +104,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -455,7 +455,7 @@ export default {
         const activeName = ref('first')
         const activeDevice = ref('five')
         // 测试用例数据
-        const cases = ref([
+        const cases = ref(JSON.parse(localStorage.getItem('cases')) ||[
             {
                 id: '001',
                 TestCaseID: '',
@@ -509,6 +509,10 @@ export default {
                 Remark: '',
             }
         ])
+
+        watch(cases, (newCases) => {
+            localStorage.setItem('cases', JSON.stringify(newCases))
+        }, { deep: true })
 
         const reslutCases = ref([])
 
@@ -761,7 +765,7 @@ export default {
         }
 
         const selectRowsHandle = () => {
-            let newSelectedRowsAll = [];    
+            let newSelectedRowsAll = [];
             const start = cases.value.findIndex(caseItem => caseItem.id === startId.value);
             const end = cases.value.findIndex(caseItem => caseItem.id === endId.value);
             console.log(start, end)
@@ -817,7 +821,7 @@ export default {
                     selectedRowsAll.value = newSelectedRowsAll;
                 }
             } else {
-                if (!changePage.value ) {
+                if (!changePage.value) {
                     let newSelectedRowsAll = [];
                     selectedRowsAll.value.forEach((row) => {
                         if (paginatedCases.value.some(r => r.id === row.id) && selection.some(r => r.id === row.id)) {
