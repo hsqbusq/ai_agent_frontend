@@ -53,6 +53,7 @@
             <div class="main-content">
                 <div class="card">
                     <div class="control-container">
+                        <el-button @click="selectRows">选择测试用例</el-button>
                         <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange"
                             class="half-width">
                             <el-option label="关键信息" value="critical"></el-option>
@@ -63,103 +64,108 @@
                             <el-input v-model="url" placeholder="请输入URL地址" style="flex: 1;"></el-input>
                         </div>
                     </div>
-                    <el-table ref="caseTable" :data="paginatedCases" class="editable-table" height="450"
-                        highlight-current-row @selection-change="handleSelectionChange" style="width: 100%"
-                        row-key="id">
-                        <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
-                        <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
-                        <el-table-column prop="TestCaseID" label="测试用例ID" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="SyRDIDFSRD" label="SyRD/FSRD ID" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="Auto_testID" label="自动测试ID" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="TSR" label="TSR" min-width="120" v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="CasePriority" label="用例优先级" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="TestMethod" label="测试方法" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="TestStrategy" label="测试策略" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="DesignMethod" label="设计方法" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="TestKey" label="测试功能点" min-width="120"
-                            v-if="showTestKey"></el-table-column>
-                        <el-table-column prop="Initial_Condition" label="初始条件" min-width="200"></el-table-column>
-                        <el-table-column prop="Action" label="动作" min-width="180"></el-table-column>
-                        <el-table-column prop="Expected_Result" label="预期结果" min-width="180"></el-table-column>
-                        <el-table-column prop="InitTestSequences" label="初始条件序列" min-width="180">
-                            <template #default="scope">
-                                <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
-                                    @blur="scope.row.editing = false" type="textarea" autosize></el-input>
-                                <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences }}</span>
-                            </template>
-                        </el-table-column>
-                        <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
-                            <template #default="scope">
-                                <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
-                                    @blur="scope.row.editing = false" type="textarea" autosize></el-input>
-                                <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                }}</span>
-                            </template>
-                        </el-table-column>
-                        <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
-                            <template #default="scope">
-                                <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
-                                    @blur="scope.row.editing = false" type="textarea" autosize></el-input>
-                                <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                }}</span>
-                            </template>
-                        </el-table-column>
-                        <el-table-column prop="Result" label="测试结果" min-width="180">
-                            <template #default="scope">
-                                <span>{{ scope.row.Result }}</span>
-                                <br />
-                                <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
-                                    @click="fetchTestLogs(scope.row.Testid)" style="padding: 15px">
-                                    <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
-                                    查看
-                                </el-button>
-                            </template>
-                        </el-table-column>
-                        <el-table-column prop="ActualResult" label="实际结果" min-width="180">
-                            <template #default="scope">
-                                <br />
-                                <!--  -->
-                                <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
-                                    @click="fetchActualResult(scope.row.Testid, scope.row.ExpectedTestSequences)"
-                                    style="padding: 15px">
-                                    <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
-                                    查看
-                                </el-button>
-                            </template>
-                        </el-table-column>
-                        <!-- <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
+                    <div>
+                        <el-table ref="caseTable" :data="paginatedCases" class="editable-table" height="450"
+                            highlight-current-row @selection-change="handleSelectionChange" style="width: 100%"
+                            row-key="id">
+                            <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
+                            <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
+                            <el-table-column prop="TestCaseID" label="测试用例ID" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="SyRDIDFSRD" label="SyRD/FSRD ID" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="Auto_testID" label="自动测试ID" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="TSR" label="TSR" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="CasePriority" label="用例优先级" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="TestMethod" label="测试方法" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="TestStrategy" label="测试策略" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="DesignMethod" label="设计方法" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="TestKey" label="测试功能点" min-width="120"
+                                v-if="showTestKey"></el-table-column>
+                            <el-table-column prop="Initial_Condition" label="初始条件" min-width="200"></el-table-column>
+                            <el-table-column prop="Action" label="动作" min-width="180"></el-table-column>
+                            <el-table-column prop="Expected_Result" label="预期结果" min-width="180"></el-table-column>
+                            <el-table-column prop="InitTestSequences" label="初始条件序列" min-width="180">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
+                                        @blur="scope.row.editing = false" type="textarea" autosize></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
+                                        }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
+                                        @blur="scope.row.editing = false" type="textarea" autosize></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
+                                        }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
+                                        @blur="scope.row.editing = false" type="textarea" autosize></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
+                                        }}</span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="Result" label="测试结果" min-width="180">
+                                <template #default="scope">
+                                    <span>{{ scope.row.Result }}</span>
+                                    <br />
+                                    <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
+                                        @click="fetchTestLogs(scope.row.Testid)" style="padding: 15px">
+                                        <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
+                                        查看
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="ActualResult" label="实际结果" min-width="180">
+                                <template #default="scope">
+                                    <br />
+                                    <!--  -->
+                                    <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
+                                        @click="fetchActualResult(scope.row.Testid, scope.row.ExpectedTestSequences)"
+                                        style="padding: 15px">
+                                        <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
+                                        查看
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                            <!-- <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
                         </el-table-column> -->
-                        <el-table-column prop="Selected" label="是否选中" min-width="120" v-if="showTestKey">
-                        </el-table-column>
-                        <!-- <el-table-column prop="TestResult" label="测试结果" min-width="120" v-if="showTestKey">
+                            <el-table-column prop="Selected" label="是否选中" min-width="120" v-if="showTestKey">
+                            </el-table-column>
+                            <!-- <el-table-column prop="TestResult" label="测试结果" min-width="120" v-if="showTestKey">
                         </el-table-column> -->
 
-                        <el-table-column prop="PRNo" label="PR号" min-width="120" v-if="showTestKey">
-                        </el-table-column>
-                        <el-table-column prop="TestLogs" label="测试日志" min-width="120" v-if="showTestKey">
-                        </el-table-column>
-                        <el-table-column prop="Numberoftests" label="测试次数" min-width="120" v-if="showTestKey">
-                        </el-table-column>
-                        <el-table-column prop="TestDate" label="测试日期" min-width="120" v-if="showTestKey">
-                        </el-table-column>
-                        <el-table-column prop="Remark" label="备注" min-width="120" v-if="showTestKey">
-                        </el-table-column>
-                        <el-table-column label="Testid" v-if="showTestidColumn"> </el-table-column>
-                        <!-- <el-table-column label="查看" min-width="260">
+                            <el-table-column prop="PRNo" label="PR号" min-width="120" v-if="showTestKey">
+                            </el-table-column>
+                            <el-table-column prop="TestLogs" label="测试日志" min-width="120" v-if="showTestKey">
+                            </el-table-column>
+                            <el-table-column prop="Numberoftests" label="测试次数" min-width="120" v-if="showTestKey">
+                            </el-table-column>
+                            <el-table-column prop="TestDate" label="测试日期" min-width="120" v-if="showTestKey">
+                            </el-table-column>
+                            <el-table-column prop="Remark" label="备注" min-width="120" v-if="showTestKey">
+                            </el-table-column>
+                            <el-table-column label="Testid" v-if="showTestidColumn"> </el-table-column>
+                            <!-- <el-table-column label="查看" min-width="260">
                             <el-button type="primary" size="small" @click="fetchTestLogs(row.id)" style="padding: 15px"
                                 v-if="scope.row.Result !== null">
                                 <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
                                 查看
                             </el-button>
                         </el-table-column> -->
-                    </el-table>
+                        </el-table>
+                    </div>
+
                     <div class="pagination-container">
                         <el-pagination background layout="prev, pager, next" :total="cases.length" :page-size="pageSize"
                             :current-page="currentPage" @current-change="handlePageChange">
@@ -380,6 +386,27 @@
                     </el-collapse>
                 </el-tab-pane>
             </el-tabs>
+        </el-dialog>
+
+        <el-dialog v-model="selectRowsdialogVisible" title="选择测试用例" width="20%">
+            <div class="centered-inputs">
+                <el-select v-model="startId" placeholder="请选择起始ID" style="width: 100px;">
+                    <el-option v-for="item in cases" :key="item.id" :label="item.id" :value="item.id">
+                    </el-option>
+                </el-select>
+                <span>---</span>
+                <el-select v-model="endId" placeholder="请选择结束ID" style="width: 100px;">
+                    <el-option v-for="item in cases" :key="item.id" :label="item.id" :value="item.id">
+                    </el-option>
+                </el-select>
+            </div>
+
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="selectRowsdialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="selectRowsHandle">确定</el-button>
+                </span>
+            </template>
         </el-dialog>
 
         <el-dialog v-model="ActualResultDialogVisible" title="真实结果" width="70%">
@@ -725,6 +752,40 @@ export default {
             console.log(selectedCase.value)
         }
 
+        const selectRowsdialogVisible = ref(false)
+        const startId = ref('')
+        const endId = ref('')
+
+        const selectRows = () => {
+            selectRowsdialogVisible.value = true
+        }
+
+        const selectRowsHandle = () => {
+            let newSelectedRowsAll = [];    
+            const start = cases.value.findIndex(caseItem => caseItem.id === startId.value);
+            const end = cases.value.findIndex(caseItem => caseItem.id === endId.value);
+            console.log(start, end)
+            if (start === -1 || end === -1) {
+                showToast('请选择有效的测试用例', 'warning');
+                return;
+            }
+            if (start > end) {
+                showToast('起始测试用例不能大于终止测试用例', 'warning');
+                return;
+            }
+            for (let i = start; i <= end; i++) {
+                newSelectedRowsAll.push(cases.value[i]);
+            }
+            selectedRowsAll.value = newSelectedRowsAll;
+            selectRowsdialogVisible.value = false;
+            changePage.value = true
+            paginatedCases.value.forEach(row => {
+                const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
+                proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
+            });
+            changePage.value = false
+        }
+
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
 
@@ -734,7 +795,7 @@ export default {
                     selectedRowsAll.value.push(row);
                 }
             });
-            if (isDebugRunning.value){
+            if (isDebugRunning.value) {
                 paginatedCases.value.forEach(row => {
                     const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
                     //console.log(isSelected)
@@ -756,7 +817,7 @@ export default {
                     selectedRowsAll.value = newSelectedRowsAll;
                 }
             } else {
-                if (!changePage.value) {
+                if (!changePage.value ) {
                     let newSelectedRowsAll = [];
                     selectedRowsAll.value.forEach((row) => {
                         if (paginatedCases.value.some(r => r.id === row.id) && selection.some(r => r.id === row.id)) {
@@ -775,6 +836,7 @@ export default {
             currentPage.value = newPage
             changePage.value = true
             showToast(`切换到第 ${newPage} 页`, 'info')
+            console.log(selectedRowsAll.value)
             nextTick(() => {
                 paginatedCases.value.forEach(row => {
                     changePage.value = true
@@ -1547,7 +1609,12 @@ export default {
             activeCodeFile,
             logDetails,
             ActualResultDetails,
-            handleInfoTypeChange
+            handleInfoTypeChange,
+            selectRows,
+            selectRowsdialogVisible,
+            selectRowsHandle,
+            startId,
+            endId
         }
     }
 }
@@ -1792,5 +1859,15 @@ pre {
 .input-wrapper {
     display: flex;
     align-items: center;
+}
+
+.centered-inputs {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.centered-inputs span {
+    margin: 0 8px;
 }
 </style>
