@@ -1195,6 +1195,7 @@ export default {
 
         const handleFileUpload = (event) => {
             cases.value = []
+            casesTable.value = []
             const file = event.target.files[0]
             if (file && file.type === 'application/vnd.ms-excel.sheet.macroEnabled.12') {
                 showToast(`正在导入文件: ${file.name}`, 'info')
