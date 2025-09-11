@@ -455,7 +455,7 @@ export default {
         const activeName = ref('first')
         const activeDevice = ref('five')
         // 测试用例数据
-        const cases = ref(JSON.parse(localStorage.getItem('cases')) ||[
+        const cases = ref(JSON.parse(localStorage.getItem('cases')) || [
             {
                 id: '001',
                 TestCaseID: '',
@@ -712,6 +712,7 @@ export default {
 
         // 删除测试用例
         const deleteTestCase = () => {
+
             if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要删除的测试用例', 'warning')
                 return
@@ -723,6 +724,7 @@ export default {
                     cases.value.splice(index, 1)
                 }
             })
+            selectedRowsAll.value = []
 
             showToast('测试用例已删除', 'success')
         }
@@ -793,7 +795,6 @@ export default {
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
 
-            // 更新所有页面的选择状态
             selection.forEach((row) => {
                 if (!selectedRowsAll.value.some(r => r.id === row.id)) {
                     selectedRowsAll.value.push(row);
@@ -802,7 +803,6 @@ export default {
             if (isDebugRunning.value) {
                 paginatedCases.value.forEach(row => {
                     const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
-                    //console.log(isSelected)
                     proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
                 });
                 return;
