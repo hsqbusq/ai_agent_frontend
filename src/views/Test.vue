@@ -473,7 +473,6 @@ export default {
                 InitTestSequences: "1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2",
                 ActionTestSequences: '1.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0x140',
                 ExpectedTestSequences: '1.Vision-Pattern-车速21',
-                Result: undefined,
                 ActualResult: '',
                 Selected: '',
                 PRNo: '',
@@ -481,6 +480,7 @@ export default {
                 Numberoftests: '',
                 TestDate: '',
                 Remark: '',
+                Result: undefined,
             },
             {
                 id: '002',
@@ -499,7 +499,6 @@ export default {
                 InitTestSequences: '安卓测试 进入设置',
                 ActionTestSequences: '进入车辆设置',
                 ExpectedTestSequences: '页面正常显示',
-                Result: undefined,
                 ActualResult: '',
                 Selected: '',
                 PRNo: '',
@@ -507,6 +506,7 @@ export default {
                 Numberoftests: '',
                 TestDate: '',
                 Remark: '',
+                Result: undefined,
             }
         ])
 
@@ -895,10 +895,24 @@ export default {
         }
 
         const exportTestReport = async () => {
+
+            // 轮询所有cases的执行结果
+            cases.value.forEach((row) => {
+                // 判断case.value.Result是否空
+                if (row.Result === undefined || row.Result === '') {
+
+                } else {
+                    reslutCases.value.push(row);
+                    fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences);
+                }
+            })
+
+            console.log(reslutCases.value)
+
             // 创建一个HTML字符串
             let htmlContent = '<html><head><title>Test Report</title><style>table { width: 100%; border-collapse: collapse; } table, th, td { border: 1px solid black; padding: 8px; text-align: left; }</style></head><body>';
             htmlContent += '<table>';
-
+            console.log(reslutCases.value)
             reslutCases.value.sort((a, b) => a.id - b.id);
 
             // 计算统计信息
@@ -913,10 +927,37 @@ export default {
             htmlContent += `<th>FAIL案例数: ${failCases}</th>`;
             htmlContent += '</tr>';
 
-            // 获取表头
-            const headers = Object.keys(cases.value[0]);
+            let headerCase = {
+                id: '',
+                TestCaseID: '',
+                SyRDIDFSRD: '',
+                Auto_testID: '',
+                TSR: '',
+                CasePriority: '',
+                TestMethod: '',
+                TestStrategy: '',
+                DesignMethod: '',
+                TestKey: '',
+                Initial_Condition: '',
+                Action: '',
+                Expected_Result: '',
+                InitTestSequences: "",
+                ActionTestSequences: '',
+                ExpectedTestSequences: '',
+                Result: undefined,
+                ActualResult: '',
+                Selected: '',
+                PRNo: '',
+                TestLogs: '',
+                Numberoftests: '',
+                TestDate: '',
+                Remark: '',
+            };
 
-            //console.log(headers);
+            // 获取表头
+            const headers = Object.keys(headerCase);
+
+            console.log(headers);
 
             // 添加表头行
             htmlContent += '<tr>';
@@ -936,7 +977,8 @@ export default {
                     } else if (header === 'Testid') {
 
                     } else {
-                        htmlContent += `<td>${caseItem[header]}</td>`;
+                        const value = caseItem[header] !== undefined ? caseItem[header] : '';
+                        htmlContent += `<td>${value}</td>`;
                     }
                 });
                 htmlContent += '</tr>';
@@ -1304,8 +1346,8 @@ export default {
                                                 if (index !== -1) {
                                                     cases.value[index].Result = data.result;
                                                     cases.value[index].Testid = test_id;
-                                                    reslutCases.value.push(cases.value[index]);
-                                                    fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences);
+                                                    // reslutCases.value.push(cases.value[index]);
+                                                    // fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences);
                                                 }
                                                 fetchTestList(1); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
