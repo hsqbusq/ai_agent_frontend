@@ -96,7 +96,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -104,7 +104,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -388,7 +388,7 @@
             </el-tabs>
         </el-dialog>
 
-        <el-dialog v-model="selectRowsdialogVisible" title="选择测试用例" width="20%">
+        <!-- <el-dialog v-model="selectRowsdialogVisible" title="选择测试用例" width="20%">
             <div class="centered-inputs">
                 <el-select v-model="startId" placeholder="请选择起始ID" style="width: 100px;">
                     <el-option v-for="item in cases" :key="item.id" :label="item.id" :value="item.id">
@@ -401,6 +401,21 @@
                 </el-select>
             </div>
 
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="selectRowsdialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="selectRowsHandle">确定</el-button>
+                </span>
+            </template>
+        </el-dialog> -->
+
+        <el-dialog v-model="selectRowsdialogVisible" title="选择测试用例" width="320px">
+            <!-- 起始 -->
+            <div style="margin-bottom:12px">起始 ID</div>
+            <el-select-v2 v-model="startId" :options="caseIdOptions" filterable clearable style="width:100%" />
+            <!-- 结束 -->
+            <div style="margin:12px 0">结束 ID</div>
+            <el-select-v2 v-model="endId" :options="caseIdOptions" filterable clearable style="width:100%" />
             <template #footer>
                 <span class="dialog-footer">
                     <el-button @click="selectRowsdialogVisible = false">取消</el-button>
@@ -765,6 +780,11 @@ export default {
         const selectRows = () => {
             selectRowsdialogVisible.value = true
         }
+
+        // 计算属性，只跑一次
+        const caseIdOptions = computed(() =>
+            cases.value.map(item => ({ value: item.id, label: item.id }))
+        );
 
         const selectRowsHandle = () => {
             let newSelectedRowsAll = [];
@@ -1659,6 +1679,7 @@ export default {
             selectRows,
             selectRowsdialogVisible,
             selectRowsHandle,
+            caseIdOptions,
             startId,
             endId
         }
