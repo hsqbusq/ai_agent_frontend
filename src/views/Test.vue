@@ -1737,6 +1737,11 @@ body {
 
 
 .header {
+    position: fixed;        /* 固定定位 */
+    top: 0;                 /* 贴在顶部 */
+    left: 0;
+    width: 100%;            /* 占满宽度 */
+    z-index: 1000;          /* 确保在最上层 */
     background: linear-gradient(to right, #1e4976, #2c6a9e);
     color: white;
     padding: 0 15px;
@@ -1765,6 +1770,7 @@ body {
 .content-layout {
     display: grid;
     gap: 20px;
+    margin-top: 55px; /* 等于 header 的高度 */
     padding: 20px;
 }
 
