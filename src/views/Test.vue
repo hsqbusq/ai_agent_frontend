@@ -96,7 +96,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -104,7 +104,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -388,28 +388,14 @@
             </el-tabs>
         </el-dialog>
 
-        <!-- <el-dialog v-model="selectRowsdialogVisible" title="选择测试用例" width="20%">
-            <div class="centered-inputs">
-                <el-select v-model="startId" placeholder="请选择起始ID" style="width: 100px;">
-                    <el-option v-for="item in cases" :key="item.id" :label="item.id" :value="item.id">
-                    </el-option>
-                </el-select>
-                <span>---</span>
-                <el-select v-model="endId" placeholder="请选择结束ID" style="width: 100px;">
-                    <el-option v-for="item in cases" :key="item.id" :label="item.id" :value="item.id">
-                    </el-option>
-                </el-select>
-            </div>
-
-            <template #footer>
-                <span class="dialog-footer">
-                    <el-button @click="selectRowsdialogVisible = false">取消</el-button>
-                    <el-button type="primary" @click="selectRowsHandle">确定</el-button>
-                </span>
-            </template>
-        </el-dialog> -->
-
         <el-dialog v-model="selectRowsdialogVisible" title="选择测试用例" width="320px">
+            <!-- 工作表选择 -->
+            <div style="margin-bottom:12px">选择工作表</div>
+            <el-select v-model="selectedSheet" placeholder="请选择工作表" style="width:100%; margin-bottom: 12px;"
+                @change="handleSheetChange">
+                <el-option v-for="sheet in casesTable" :key="sheet.sheetName"
+                    :label="`${sheet.sheetName} (${sheet.length} 条)`" :value="sheet.sheetName" />
+            </el-select>
             <!-- 起始 -->
             <div style="margin-bottom:12px">起始 ID</div>
             <el-select-v2 v-model="startId" :options="caseIdOptions" filterable clearable style="width:100%" />
@@ -449,6 +435,7 @@ export default {
     setup() {
 
         const selectedCase = ref('');
+        const selectedSheet = ref('')
         const infoType = ref('all'); // 默认值为关键信息
         const url = ref('http://172.23.96.54:8000');
         const showTestKey = ref(true); // 控制“测试功能点”列的显示
@@ -524,6 +511,12 @@ export default {
                 Result: undefined,
             }
         ])
+
+        const casesTable = ref(JSON.parse(localStorage.getItem('casesTable')) || [])
+
+        watch(casesTable, (newCasesTable) => {
+            localStorage.setItem('casesTable', JSON.stringify(newCasesTable))
+        }, { deep: true })
 
         watch(cases, (newCases) => {
             localStorage.setItem('cases', JSON.stringify(newCases))
@@ -781,13 +774,21 @@ export default {
             selectRowsdialogVisible.value = true
         }
 
+        const handleSheetChange = (sheetName) => {
+            const sheet = casesTable.value.find(s => s.sheetName === sheetName)
+            if (sheet) {
+                startId.value = cases.value[sheet.start].id
+                endId.value = cases.value[sheet.end].id
+            }
+        }
+
         // 计算属性，只跑一次
         const caseIdOptions = computed(() =>
             cases.value.map(item => ({ value: item.id, label: item.id }))
         );
 
         const selectRowsHandle = () => {
-            let newSelectedRowsAll = [];
+            const newSelectedRowsAll1 = [];
             const start = cases.value.findIndex(caseItem => caseItem.id === startId.value);
             const end = cases.value.findIndex(caseItem => caseItem.id === endId.value);
             console.log(start, end)
@@ -800,9 +801,20 @@ export default {
                 return;
             }
             for (let i = start; i <= end; i++) {
-                newSelectedRowsAll.push(cases.value[i]);
+                newSelectedRowsAll1.push(cases.value[i]);
             }
-            selectedRowsAll.value = newSelectedRowsAll;
+            
+            changePage.value = true
+            paginatedCases.value.forEach(row => {
+                selectedRowsAll.value = []
+                const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
+                proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
+            });
+            changePage.value = false
+            console.log(selectedRowsAll.value)
+            newSelectedRowsAll1.forEach(row => {
+                selectedRowsAll.value.push(row);
+            })
             selectRowsdialogVisible.value = false;
             changePage.value = true
             paginatedCases.value.forEach(row => {
@@ -827,6 +839,7 @@ export default {
                 });
                 return;
             }
+
             // 移除不再选中的行
             if (selection.length == 0) {
                 if (changePage.value) {
@@ -1176,6 +1189,7 @@ export default {
         }
 
         const handleFileUpload = (event) => {
+            cases.value = []
             const file = event.target.files[0]
             if (file && file.type === 'application/vnd.ms-excel.sheet.macroEnabled.12') {
                 showToast(`正在导入文件: ${file.name}`, 'info')
@@ -1212,12 +1226,20 @@ export default {
                     // 获取工作表数量
                     const sheetCount = workbook.SheetNames.length
 
+                    let start = 0;
                     // 遍历所有工作表
                     for (let i = 1; i < sheetCount - 1; i++) {
                         const sheetName = workbook.SheetNames[i]
                         const worksheet = workbook.Sheets[sheetName]
                         const json = XLSX.utils.sheet_to_json(worksheet, { range: 6 })
-                        //console.log(json)
+                        const length = json.length
+                        casesTable.value.push({
+                            sheetName: sheetName,
+                            start: start,
+                            end: start + length - 1,
+                            length: length
+                        })
+                        start = start + length;
                         json.forEach((row) => {
                             const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
                             cases.value.push({
@@ -1600,6 +1622,7 @@ export default {
             activeDevice,
             pollingIntervals,
             cases,
+            casesTable,
             reslutCases,
             logs,
             logs_total,
@@ -1634,6 +1657,7 @@ export default {
             selectedRowsAll,
             debugRows,
             selectedCase,
+            selectedSheet,
             printInfo,
             selectDbcFile,
             showToast,
@@ -1678,6 +1702,7 @@ export default {
             handleInfoTypeChange,
             selectRows,
             selectRowsdialogVisible,
+            handleSheetChange,
             selectRowsHandle,
             caseIdOptions,
             startId,
