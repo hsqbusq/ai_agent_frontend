@@ -775,6 +775,11 @@ export default {
         }
 
         const handleSheetChange = (sheetName) => {
+            if (sheetName === '全选') {
+                startId.value = cases.value[0]?.id || '';
+                endId.value = cases.value[cases.value.length - 1]?.id || '';
+                return;
+            }
             const sheet = casesTable.value.find(s => s.sheetName === sheetName)
             if (sheet) {
                 startId.value = cases.value[sheet.start].id
@@ -803,7 +808,7 @@ export default {
             for (let i = start; i <= end; i++) {
                 newSelectedRowsAll1.push(cases.value[i]);
             }
-            
+
             changePage.value = true
             paginatedCases.value.forEach(row => {
                 selectedRowsAll.value = []
@@ -1227,6 +1232,7 @@ export default {
                     const sheetCount = workbook.SheetNames.length
 
                     let start = 0;
+                    
                     // 遍历所有工作表
                     for (let i = 1; i < sheetCount - 1; i++) {
                         const sheetName = workbook.SheetNames[i]
@@ -1270,6 +1276,12 @@ export default {
                             })
                         })
                     }
+                    casesTable.value.unshift({
+                        sheetName: '全选',
+                        start: 0,
+                        end: cases.value.length - 1,
+                        length: cases.value.length
+                    })
                     showToast(`文件导入完成: ${file.name}`, 'success')
                 }
                 reader.readAsArrayBuffer(file)
@@ -1737,11 +1749,15 @@ body {
 
 
 .header {
-    position: fixed;        /* 固定定位 */
-    top: 0;                 /* 贴在顶部 */
+    position: fixed;
+    /* 固定定位 */
+    top: 0;
+    /* 贴在顶部 */
     left: 0;
-    width: 100%;            /* 占满宽度 */
-    z-index: 1000;          /* 确保在最上层 */
+    width: 100%;
+    /* 占满宽度 */
+    z-index: 1000;
+    /* 确保在最上层 */
     background: linear-gradient(to right, #1e4976, #2c6a9e);
     color: white;
     padding: 0 15px;
@@ -1770,7 +1786,8 @@ body {
 .content-layout {
     display: grid;
     gap: 20px;
-    margin-top: 55px; /* 等于 header 的高度 */
+    margin-top: 55px;
+    /* 等于 header 的高度 */
     padding: 20px;
 }
 
