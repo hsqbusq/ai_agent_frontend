@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <title>{{TITLE}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        }
+
+        body {
+            background: #f5f7fa;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        h1 {
+            flex: 0 0 auto;
+            padding: 20px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 28px;
+        }
+
+        .summary {
+            flex: 0 0 auto;
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            padding: 0 20px 20px;
+        }
+
+        .summary div {
+            text-align: center;
+            background: #fff;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+        }
+
+        .summary .label {
+            font-size: 14px;
+            color: #909399;
+            margin-bottom: 4px;
+        }
+
+        .summary .value {
+            font-size: 32px;
+            font-weight: 600;
+        }
+
+        .summary .total {
+            color: #409EFF;
+        }
+
+        .summary .pass {
+            color: #67C23A;
+        }
+
+        .summary .fail {
+            color: #F56C6C;
+        }
+
+        /* 关键：表格区域横向 + 纵向滚动，页面本身无滚动条 */
+        .table-box {
+            flex: 1 1 auto;
+            overflow: auto;
+            /* 既横向又纵向 */
+            padding: 0 20px 20px;
+        }
+
+        table {
+            table-layout: fixed;
+            /* 强制平均分配列宽 */
+            width: 100%;
+            /* 撑满容器 */
+            min-width: max-content;
+            /* 内容再宽也能撑开 */
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: #fafafa;
+            font-weight: 500;
+            color: #606266;
+            z-index: 1;
+        }
+
+        th,
+        td {
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 13px;
+            border-bottom: 1px solid #eee;
+            word-break: break-word;
+            /* 长单词换行 */
+        }
+
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        img {
+            max-width: 120px;
+            border-radius: 4px;
+        }
+
+        .empty-img {
+            color: #C0C4CC;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>{{TITLE}}</h1>
+    <div class="summary">
+        <div>
+            <div class="label">测试总数</div>
+            <div class="value total">{{TOTAL}}</div>
+        </div>
+        <div>
+            <div class="label">通过数</div>
+            <div class="value pass">{{PASS}}</div>
+        </div>
+        <div>
+            <div class="label">失败数</div>
+            <div class="value fail">{{FAIL}}</div>
+        </div>
+    </div>
+
+    <table cellspacing="0">
+        <thead>
+            <tr>
+                <th>id</th>
+                <th>TestCaseID</th>
+                <th>SyRDIDFSRD</th>
+                <th>Auto_testID</th>
+                <th>TSR</th>
+                <th>CasePriority</th>
+                <th>TestMethod</th>
+                <th>TestStrategy</th>
+                <th>DesignMethod</th>
+                <th>TestKey</th>
+                <th>Initial_Condition</th>
+                <th>Action</th>
+                <th>Expected_Result</th>
+                <th>InitTestSequences</th>
+                <th>ActionTestSequences</th>
+                <th>ExpectedTestSequences</th>
+                <th>Result</th>
+                <th>ActualResult</th>
+                <th>Selected</th>
+                <th>PRNo</th>
+                <th>TestLogs</th>
+                <th>Numberoftests</th>
+                <th>TestDate</th>
+                <th>Remark</th>
+            </tr>
+        </thead>
+        <tbody>{{ROWS}}</tbody>
+    </table>
+</body>
+
+</html>

@@ -14,16 +14,16 @@ export default defineConfig({
     Binary() as Plugin,
   ],
   base: '/', // 设置为您的 GitHub 仓库名
+  assetsInclude: ['**/*.html'],   // ← 新增
 
   server: {
     port: 3000,
     proxy: {
       '/dev-api': {
-        target: 'http://117.72.163.123:19000', 
-        changeOrigin: true,              
+        target: 'http://117.72.163.123:19000',
+        changeOrigin: true,
         rewrite: (path) => path.replace(/^\/dev-api/, '')
       },
     }
   }
 });
-

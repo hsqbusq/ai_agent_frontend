@@ -96,7 +96,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -104,7 +104,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -427,6 +427,8 @@ import { ElMessage } from 'element-plus'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
+import reportTpl from './report-template.html?raw'
+
 
 window.Buffer = Buffer;
 export default {
@@ -932,9 +934,107 @@ export default {
             }
         }
 
-        const exportTestReport = async () => {
+        // const exportTestReport = async () => {
 
-            // 轮询所有cases的执行结果
+        //     // 轮询所有cases的执行结果
+        //     cases.value.forEach((row) => {
+        //         // 判断case.value.Result是否空
+        //         if (row.Result === undefined || row.Result === '') {
+
+        //         } else {
+        //             reslutCases.value.push(row);
+        //             fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences);
+        //         }
+        //     })
+
+        //     console.log(reslutCases.value)
+
+        //     // 创建一个HTML字符串
+        //     let htmlContent = '<html><head><title>Test Report</title><style>table { width: 100%; border-collapse: collapse; } table, th, td { border: 1px solid black; padding: 8px; text-align: left; }</style></head><body>';
+        //     htmlContent += '<table>';
+        //     console.log(reslutCases.value)
+        //     reslutCases.value.sort((a, b) => a.id - b.id);
+
+        //     // 计算统计信息
+        //     const totalCases = reslutCases.value.length;
+        //     const passCases = reslutCases.value.filter(caseItem => caseItem.Result.toLowerCase() === 'pass').length;
+        //     const failCases = totalCases - passCases;
+
+        //     // 添加统计信息行
+        //     htmlContent += '<tr>';
+        //     htmlContent += `<th>测试案例总数: ${totalCases}</th>`;
+        //     htmlContent += `<th>PASS案例数: ${passCases}</th>`;
+        //     htmlContent += `<th>FAIL案例数: ${failCases}</th>`;
+        //     htmlContent += '</tr>';
+
+        //     let headerCase = {
+        //         id: '',
+        //         TestCaseID: '',
+        //         SyRDIDFSRD: '',
+        //         Auto_testID: '',
+        //         TSR: '',
+        //         CasePriority: '',
+        //         TestMethod: '',
+        //         TestStrategy: '',
+        //         DesignMethod: '',
+        //         TestKey: '',
+        //         Initial_Condition: '',
+        //         Action: '',
+        //         Expected_Result: '',
+        //         InitTestSequences: "",
+        //         ActionTestSequences: '',
+        //         ExpectedTestSequences: '',
+        //         Result: undefined,
+        //         ActualResult: '',
+        //         Selected: '',
+        //         PRNo: '',
+        //         TestLogs: '',
+        //         Numberoftests: '',
+        //         TestDate: '',
+        //         Remark: '',
+        //     };
+
+        //     // 获取表头
+        //     const headers = Object.keys(headerCase);
+
+        //     console.log(headers);
+
+        //     // 添加表头行
+        //     htmlContent += '<tr>';
+        //     headers.forEach(header => {
+        //         htmlContent += `<th>${header}</th>`;
+        //     });
+        //     htmlContent += '</tr>';
+
+        //     // 处理数据行
+        //     for (let i = 0; i < reslutCases.value.length; i++) {
+        //         const caseItem = reslutCases.value[i];
+        //         htmlContent += '<tr>';
+        //         headers.forEach(header => {
+        //             if (header === 'ActualResult') {
+        //                 const base64Image = caseItem[header];
+        //                 htmlContent += `<td><a href="data:image/png;base64,${base64Image}" download="result_image.png"><img src="data:image/png;base64,${base64Image}" width="100" height="100"></a></td>`;
+        //             } else if (header === 'Testid') {
+
+        //             } else {
+        //                 const value = caseItem[header] !== undefined ? caseItem[header] : '';
+        //                 htmlContent += `<td>${value}</td>`;
+        //             }
+        //         });
+        //         htmlContent += '</tr>';
+        //     }
+
+        //     htmlContent += '</table></body></html>';
+
+        //     // 创建一个Blob对象
+        //     const blob = new Blob([htmlContent], {
+        //         type: 'text/html'
+        //     });
+
+        //     // 使用FileSaver.js保存文件
+        //     saveAs(blob, 'test_report.html');
+        // }
+        const exportTestReport = async () => {
             cases.value.forEach((row) => {
                 // 判断case.value.Result是否空
                 if (row.Result === undefined || row.Result === '') {
@@ -944,95 +1044,56 @@ export default {
                     fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences);
                 }
             })
+            const list = reslutCases.value;
+            const total = list.length;
+            const pass = list.filter(c => /pass/i.test(c.Result)).length;
+            const fail = total - pass;
 
-            console.log(reslutCases.value)
+            const rowsHtml = list.map(c => `
+                <tr>
+                    <td>${c.id}</td>
+                    <td>${c.TestCaseID ?? ''}</td>
+                    <td>${c.SyRDIDFSRD ?? ''}</td>
+                    <td>${c.Auto_testID ?? ''}</td>
+                    <td>${c.TSR ?? ''}</td>
+                    <td>${c.CasePriority ?? ''}</td>
+                    <td>${c.TestMethod ?? ''}</td>
+                    <td>${c.TestStrategy ?? ''}</td>
+                    <td>${c.DesignMethod ?? ''}</td>
+                    <td>${c.TestKey ?? ''}</td>
+                    <td>${c.Initial_Condition ?? ''}</td>
+                    <td>${c.Action ?? ''}</td>
+                    <td>${c.Expected_Result ?? ''}</td>
+                    <td>${c.InitTestSequences ?? ''}</td>
+                    <td>${c.ActionTestSequences ?? ''}</td>
+                    <td>${c.ExpectedTestSequences ?? ''}</td>
+                    <td style="background:${/pass/i.test(c.Result) ? '#d4f8d4' : '#ffe1e1'};font-weight:600;">
+                        ${c.Result ?? ''}
+                    </td>
+                    <td>${c.ActualResult
+                        ? `<img src="data:image/png;base64,${c.ActualResult}"/>`
+                        : '<span class="empty-img">暂无图片</span>'}
+                    </td>
+                    <td>${c.Selected ?? ''}</td>
+                    <td>${c.PRNo ?? ''}</td>
+                    <td>${c.TestLogs ?? ''}</td>
+                    <td>${c.Numberoftests ?? ''}</td>
+                    <td>${c.TestDate ?? ''}</td>
+                    <td>${c.Remark ?? ''}</td>
+                </tr>`).join('');
 
-            // 创建一个HTML字符串
-            let htmlContent = '<html><head><title>Test Report</title><style>table { width: 100%; border-collapse: collapse; } table, th, td { border: 1px solid black; padding: 8px; text-align: left; }</style></head><body>';
-            htmlContent += '<table>';
-            console.log(reslutCases.value)
-            reslutCases.value.sort((a, b) => a.id - b.id);
+            const html = reportTpl
+                .replaceAll('{{TITLE}}', '自动化测试报告')
+                .replace('{{TOTAL}}', total)
+                .replace('{{PASS}}', pass)
+                .replace('{{FAIL}}', fail)
+                .replace('{{ROWS}}', rowsHtml);
 
-            // 计算统计信息
-            const totalCases = reslutCases.value.length;
-            const passCases = reslutCases.value.filter(caseItem => caseItem.Result.toLowerCase() === 'pass').length;
-            const failCases = totalCases - passCases;
-
-            // 添加统计信息行
-            htmlContent += '<tr>';
-            htmlContent += `<th>测试案例总数: ${totalCases}</th>`;
-            htmlContent += `<th>PASS案例数: ${passCases}</th>`;
-            htmlContent += `<th>FAIL案例数: ${failCases}</th>`;
-            htmlContent += '</tr>';
-
-            let headerCase = {
-                id: '',
-                TestCaseID: '',
-                SyRDIDFSRD: '',
-                Auto_testID: '',
-                TSR: '',
-                CasePriority: '',
-                TestMethod: '',
-                TestStrategy: '',
-                DesignMethod: '',
-                TestKey: '',
-                Initial_Condition: '',
-                Action: '',
-                Expected_Result: '',
-                InitTestSequences: "",
-                ActionTestSequences: '',
-                ExpectedTestSequences: '',
-                Result: undefined,
-                ActualResult: '',
-                Selected: '',
-                PRNo: '',
-                TestLogs: '',
-                Numberoftests: '',
-                TestDate: '',
-                Remark: '',
-            };
-
-            // 获取表头
-            const headers = Object.keys(headerCase);
-
-            console.log(headers);
-
-            // 添加表头行
-            htmlContent += '<tr>';
-            headers.forEach(header => {
-                htmlContent += `<th>${header}</th>`;
-            });
-            htmlContent += '</tr>';
-
-            // 处理数据行
-            for (let i = 0; i < reslutCases.value.length; i++) {
-                const caseItem = reslutCases.value[i];
-                htmlContent += '<tr>';
-                headers.forEach(header => {
-                    if (header === 'ActualResult') {
-                        const base64Image = caseItem[header];
-                        htmlContent += `<td><a href="data:image/png;base64,${base64Image}" download="result_image.png"><img src="data:image/png;base64,${base64Image}" width="100" height="100"></a></td>`;
-                    } else if (header === 'Testid') {
-
-                    } else {
-                        const value = caseItem[header] !== undefined ? caseItem[header] : '';
-                        htmlContent += `<td>${value}</td>`;
-                    }
-                });
-                htmlContent += '</tr>';
-            }
-
-            htmlContent += '</table></body></html>';
-
-            // 创建一个Blob对象
-            const blob = new Blob([htmlContent], {
-                type: 'text/html'
-            });
-
-            // 使用FileSaver.js保存文件
-            saveAs(blob, 'test_report.html');
-        }
-
+            const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+            const timeStamp = new Date().toLocaleString('zh-CN', { hour12: false })
+                .replace(/[/: ]/g, '')
+            saveAs(blob, `TestReport_${timeStamp}.html`)
+        };
 
         // 知识图谱相关数据
         const generateKnowledgeGraphDialogVisible = ref(false)
@@ -1233,7 +1294,7 @@ export default {
                     const sheetCount = workbook.SheetNames.length
 
                     let start = 0;
-                    
+
                     // 遍历所有工作表
                     for (let i = 1; i < sheetCount - 1; i++) {
                         const sheetName = workbook.SheetNames[i]
