@@ -96,7 +96,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -104,7 +104,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -112,7 +112,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -1049,6 +1049,9 @@ export default {
             const pass = list.filter(c => /pass/i.test(c.Result)).length;
             const fail = total - pass;
 
+            const clip = (val) => `<td class="td-clip" title="${(val ?? '')
+                .replace(/"/g, '&quot;')}">${val ?? ''}</td>`;
+
             const rowsHtml = list.map(c => `
                 <tr>
                     <td>${c.id}</td>
@@ -1061,18 +1064,18 @@ export default {
                     <td>${c.TestStrategy ?? ''}</td>
                     <td>${c.DesignMethod ?? ''}</td>
                     <td>${c.TestKey ?? ''}</td>
-                    <td>${c.Initial_Condition ?? ''}</td>
-                    <td>${c.Action ?? ''}</td>
-                    <td>${c.Expected_Result ?? ''}</td>
-                    <td>${c.InitTestSequences ?? ''}</td>
-                    <td>${c.ActionTestSequences ?? ''}</td>
-                    <td>${c.ExpectedTestSequences ?? ''}</td>
+                    ${clip(c.Initial_Condition)}
+                    ${clip(c.Action)}
+                    ${clip(c.Expected_Result)}
+                    ${clip(c.InitTestSequences)}
+                    ${clip(c.ActionTestSequences)}
+                    <td>${c.ExpectedTestSequences}</td>
                     <td style="background:${/pass/i.test(c.Result) ? '#d4f8d4' : '#ffe1e1'};font-weight:600;">
                         ${c.Result ?? ''}
                     </td>
                     <td>${c.ActualResult
-                        ? `<img src="data:image/png;base64,${c.ActualResult}"/>`
-                        : '<span class="empty-img">暂无图片</span>'}
+                    ? `<img src="data:image/png;base64,${c.ActualResult}"/>`
+                    : '<span class="empty-img">暂无图片</span>'}
                     </td>
                     <td>${c.Selected ?? ''}</td>
                     <td>${c.PRNo ?? ''}</td>

@@ -67,21 +67,16 @@
             color: #F56C6C;
         }
 
-        /* 关键：表格区域横向 + 纵向滚动，页面本身无滚动条 */
         .table-box {
             flex: 1 1 auto;
             overflow: auto;
-            /* 既横向又纵向 */
             padding: 0 20px 20px;
         }
 
         table {
             table-layout: fixed;
-            /* 强制平均分配列宽 */
             width: 100%;
-            /* 撑满容器 */
             min-width: max-content;
-            /* 内容再宽也能撑开 */
             background: #fff;
             border-radius: 6px;
             box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
@@ -103,7 +98,34 @@
             font-size: 13px;
             border-bottom: 1px solid #eee;
             word-break: break-word;
-            /* 长单词换行 */
+        }
+
+        .td-clip {
+            max-width: 180px;
+            /* 想再窄就调 120~150 */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            position: relative;
+            /* 给 ::after 定位用 */
+        }
+
+        .td-clip[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            left: 0;
+            top: 100%;
+            z-index: 10;
+            background: #333;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            max-width: 400px;
+            word-break: break-all;
+            font-size: 12px;
+            margin-top: 4px;
         }
 
         tr:nth-child(even) {
