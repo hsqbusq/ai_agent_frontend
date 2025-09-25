@@ -14,6 +14,7 @@ export default defineConfig({
     Binary() as Plugin,
   ],
   base: '/', // 设置为您的 GitHub 仓库名
+  assetsInclude: ['**/*.html'],   // ← 新增
 
   server: {
     port: 3000,

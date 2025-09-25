@@ -1547,8 +1547,12 @@ export default {
             callApi(row.id, row.Initial_Condition, 'A', false);
             // 第二次调用
             callApi(row.id, row.Action, 'B', false);
-            // 第三次调用
-            callApi(row.id, row.Expected_Result, 'C', false);
+
+            const index = cases.value.findIndex(c => c.id === row.id);
+            cases.value[index].ExpectedTestSequences = row.Expected_Result;
+
+            // // 第三次调用
+            // callApi(row.id, row.Expected_Result, 'C', false);
         }
 
         const callApi = (id, input, task, stream) => {
@@ -1569,11 +1573,11 @@ export default {
                         const index = cases.value.findIndex(c => c.id === id);
                         cases.value[index].ActionTestSequences = content;
                     }
-                    if (task === 'C') {
-                        const index = cases.value.findIndex(c => c.id === id);
-                        cases.value[index].ExpectedTestSequences = content;
+                    // if (task === 'C') {
+                    //     const index = cases.value.findIndex(c => c.id === id);
+                    //     cases.value[index].ExpectedTestSequences = content;
 
-                    }
+                    // }
                 }
             };
 
