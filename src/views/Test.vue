@@ -1424,7 +1424,15 @@ export default {
             executionLogs.value[id] = [];
             executionLogs.value[id].push({
                 log_id: 1,
-                 time: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+                 time: new Date().toLocaleString('zh-CN', {
+  hour12: false,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit'
+}).replace(/\//g, '-'),
                 message: `开始调试，请等待！`,
             });
 
@@ -1513,7 +1521,15 @@ export default {
                         try {
                             executionLogs.value[id].push({
                                 log_id: executionLogs.value[id].length + 1,
-                                 time: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+                                time: new Date().toLocaleString('zh-CN', {
+  hour12: false,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit'
+}).replace(/\//g, '-'),
                                 message: `${line}`,
                             });
                         } catch (parseError) {
