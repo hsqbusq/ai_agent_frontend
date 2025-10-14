@@ -21,3 +21,7 @@ HEALTHCHECK --interval=30s --timeout=3s \
 
 EXPOSE 80
 CMD ["sh", "-c", "envsubst '${PROXY_TARGET}' < /etc/nginx/templates/nginx.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
+
+
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
