@@ -4,43 +4,54 @@
         <div class="header">
             <div class="header-left">
                 <div class="nav-buttons">
-                    <el-button type="primary" size="small" @click="startDebugging" style="padding: 15px">
-                        <img src="../assets/01.svg" alt="" style="width: 14px;height: 14px" /> 开始测试
-                    </el-button>
-                    <el-button type="primary" size="small" @click="stopDebugging" style="padding: 15px">
-                        <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 停止测试
-                    </el-button>
-                    <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
-                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 增加用例
-                    </el-button>
-                    <el-button type="primary" size="small" @click="importXlsmFile" style="padding: 15px">
-                        <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 导入用例
-                    </el-button>
-                    <!-- <el-button type="primary" size="small" @click="showToast('导出用例')" style="padding: 15px">
+                    <div class="nav-left">
+                        <el-button type="primary" size="small" @click="startDebugging" style="padding: 15px">
+                            <img src="../assets/01.svg" alt="" style="width: 14px;height: 14px" /> 开始测试
+                        </el-button>
+                        <el-button type="primary" size="small" @click="stopDebugging" style="padding: 15px">
+                            <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 停止测试
+                        </el-button>
+                        <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
+                            <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 增加用例
+                        </el-button>
+                        <el-button type="primary" size="small" @click="importXlsmFile" style="padding: 15px">
+                            <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 导入用例
+                        </el-button>
+                        <!-- <el-button type="primary" size="small" @click="showToast('导出用例')" style="padding: 15px">
                         <img src="../assets/03.svg" alt="" style="width: 14px;height: 14px" /> 导出测试用例
                     </el-button> -->
-                    <el-button type="primary" size="small" @click="exportTestReport" style="padding: 15px">
-                        <img src="../assets/04.svg" alt="" style="width: 14px;height: 14px" /> 导出测试报告
-                    </el-button>
-                    <el-button type="primary" size="small" @click="generateKnowledgeGraph" style="padding: 15px">
-                        <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 形成知识图谱
-                    </el-button>
-                    <el-button type="primary" size="small" @click="caseConversion" style="padding: 15px">
-                        <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px" /> 序列化用例转化
-                    </el-button>
-                    <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
-                        <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
-                    </el-button>
-                    <!-- <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
+                        <el-button type="primary" size="small" @click="exportTestReport" style="padding: 15px">
+                            <img src="../assets/04.svg" alt="" style="width: 14px;height: 14px" /> 导出测试报告
+                        </el-button>
+                        <el-button type="primary" size="small" @click="generateKnowledgeGraph" style="padding: 15px">
+                            <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 形成知识图谱
+                        </el-button>
+                        <el-button type="primary" size="small" @click="caseConversion" style="padding: 15px">
+                            <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px" /> 序列化用例转化
+                        </el-button>
+                        <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
+                            <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
+                        </el-button>
+                        <!-- <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
                     <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span> -->
-                    <div class="file-button-group">
-                        <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
-                            <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取DBC
-                        </el-button>
-                        <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span>
+                        <div class="file-button-group">
+                            <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
+                                <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取DBC
+                            </el-button>
+                            <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span>
+                        </div>
                     </div>
+
+                    <div class="nav-right">
+
+                        <el-select v-model="currentLang" placeholder="选择语言" style="width: 120px; margin-left: 12px">
+                            <el-option v-for="item in langOptions" :key="item.value" :label="item.label"
+                                :value="item.label" />
+                        </el-select>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -428,7 +439,7 @@ import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
 import reportTpl from './report-template.html?raw'
-
+import langOptionsJson from './langOptions.json'
 
 window.Buffer = Buffer;
 export default {
@@ -442,7 +453,8 @@ export default {
         const url = ref('http://172.23.96.54:8000');
         const showTestKey = ref(true); // 控制“测试功能点”列的显示
         const showTestidColumn = false;
-
+        const currentLang = ref('中文')
+        const langOptions = ref(langOptionsJson)
 
         const handleInfoTypeChange = (value) => {
             showTestKey.value = value !== 'critical';
@@ -523,6 +535,18 @@ export default {
         watch(cases, (newCases) => {
             localStorage.setItem('cases', JSON.stringify(newCases))
         }, { deep: true })
+
+        fetch(`/dev-api/api/set-lang?lang=ch`, {
+            method: 'POST'
+        })
+
+        watch(currentLang, val => {
+            var value = langOptions.value.find(item => item.label === val).value
+            fetch(`/dev-api/api/set-lang?lang=${value}`, {
+                method: 'POST'
+            })
+            showToast(`已切换到 ${val}`, 'info')
+        })
 
         const reslutCases = ref([])
 
@@ -934,106 +958,7 @@ export default {
             }
         }
 
-        // const exportTestReport = async () => {
 
-        //     // 轮询所有cases的执行结果
-        //     cases.value.forEach((row) => {
-        //         // 判断case.value.Result是否空
-        //         if (row.Result === undefined || row.Result === '') {
-
-        //         } else {
-        //             reslutCases.value.push(row);
-        //             fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences);
-        //         }
-        //     })
-
-        //     console.log(reslutCases.value)
-
-        //     // 创建一个HTML字符串
-        //     let htmlContent = '<html><head><title>Test Report</title><style>table { width: 100%; border-collapse: collapse; } table, th, td { border: 1px solid black; padding: 8px; text-align: left; }</style></head><body>';
-        //     htmlContent += '<table>';
-        //     console.log(reslutCases.value)
-        //     reslutCases.value.sort((a, b) => a.id - b.id);
-
-        //     // 计算统计信息
-        //     const totalCases = reslutCases.value.length;
-        //     const passCases = reslutCases.value.filter(caseItem => caseItem.Result.toLowerCase() === 'pass').length;
-        //     const failCases = totalCases - passCases;
-
-        //     // 添加统计信息行
-        //     htmlContent += '<tr>';
-        //     htmlContent += `<th>测试案例总数: ${totalCases}</th>`;
-        //     htmlContent += `<th>PASS案例数: ${passCases}</th>`;
-        //     htmlContent += `<th>FAIL案例数: ${failCases}</th>`;
-        //     htmlContent += '</tr>';
-
-        //     let headerCase = {
-        //         id: '',
-        //         TestCaseID: '',
-        //         SyRDIDFSRD: '',
-        //         Auto_testID: '',
-        //         TSR: '',
-        //         CasePriority: '',
-        //         TestMethod: '',
-        //         TestStrategy: '',
-        //         DesignMethod: '',
-        //         TestKey: '',
-        //         Initial_Condition: '',
-        //         Action: '',
-        //         Expected_Result: '',
-        //         InitTestSequences: "",
-        //         ActionTestSequences: '',
-        //         ExpectedTestSequences: '',
-        //         Result: undefined,
-        //         ActualResult: '',
-        //         Selected: '',
-        //         PRNo: '',
-        //         TestLogs: '',
-        //         Numberoftests: '',
-        //         TestDate: '',
-        //         Remark: '',
-        //     };
-
-        //     // 获取表头
-        //     const headers = Object.keys(headerCase);
-
-        //     console.log(headers);
-
-        //     // 添加表头行
-        //     htmlContent += '<tr>';
-        //     headers.forEach(header => {
-        //         htmlContent += `<th>${header}</th>`;
-        //     });
-        //     htmlContent += '</tr>';
-
-        //     // 处理数据行
-        //     for (let i = 0; i < reslutCases.value.length; i++) {
-        //         const caseItem = reslutCases.value[i];
-        //         htmlContent += '<tr>';
-        //         headers.forEach(header => {
-        //             if (header === 'ActualResult') {
-        //                 const base64Image = caseItem[header];
-        //                 htmlContent += `<td><a href="data:image/png;base64,${base64Image}" download="result_image.png"><img src="data:image/png;base64,${base64Image}" width="100" height="100"></a></td>`;
-        //             } else if (header === 'Testid') {
-
-        //             } else {
-        //                 const value = caseItem[header] !== undefined ? caseItem[header] : '';
-        //                 htmlContent += `<td>${value}</td>`;
-        //             }
-        //         });
-        //         htmlContent += '</tr>';
-        //     }
-
-        //     htmlContent += '</table></body></html>';
-
-        //     // 创建一个Blob对象
-        //     const blob = new Blob([htmlContent], {
-        //         type: 'text/html'
-        //     });
-
-        //     // 使用FileSaver.js保存文件
-        //     saveAs(blob, 'test_report.html');
-        // }
         const exportTestReport = async () => {
             cases.value.forEach((row) => {
                 // 判断case.value.Result是否空
@@ -1424,15 +1349,15 @@ export default {
             executionLogs.value[id] = [];
             executionLogs.value[id].push({
                 log_id: 1,
-                 time: new Date().toLocaleString('zh-CN', {
-  hour12: false,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit'
-}).replace(/\//g, '-'),
+                time: new Date().toLocaleString('zh-CN', {
+                    hour12: false,
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                }).replace(/\//g, '-'),
                 message: `开始调试，请等待！`,
             });
 
@@ -1522,14 +1447,14 @@ export default {
                             executionLogs.value[id].push({
                                 log_id: executionLogs.value[id].length + 1,
                                 time: new Date().toLocaleString('zh-CN', {
-  hour12: false,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit'
-}).replace(/\//g, '-'),
+                                    hour12: false,
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                    second: '2-digit'
+                                }).replace(/\//g, '-'),
                                 message: `${line}`,
                             });
                         } catch (parseError) {
@@ -1709,6 +1634,8 @@ export default {
         })
 
         return {
+            currentLang,
+            langOptions,
             isDebugRunning,
             activeName,
             udid,
@@ -1863,8 +1790,21 @@ body {
 
 .nav-buttons {
     display: flex;
+    justify-content: space-between;
+    /* 关键 */
+    align-items: center;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+.nav-left {
+    display: flex;
+    gap: 8px;
+}
+
+.nav-right {
+    margin-left: auto;
+    /* 或者 flex: 1 + text-align: right; 也可以 */
 }
 
 
