@@ -1487,7 +1487,7 @@ export default {
             // 第一次调用
             callApi(row.id, row.Initial_Condition, 'A', false);
             // 第二次调用
-            callApi(row.id, row.Action, 'B', false);
+            callApi(row.id, row.Action, 'A', false);
 
             const index = cases.value.findIndex(c => c.id === row.id);
             cases.value[index].ExpectedTestSequences = row.Expected_Result;
