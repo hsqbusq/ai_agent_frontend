@@ -1485,9 +1485,9 @@ export default {
 
         const startCaseConversion = (row) => {
             // 第一次调用
-            callApi(row.id, row.Initial_Condition, 'A', false);
+            callApi(row.id, row.Initial_Condition, 'A', false, 'A');
             // 第二次调用
-            callApi(row.id, row.Action, 'A', false);
+            callApi(row.id, row.Action, 'A', false,'B');
 
             const index = cases.value.findIndex(c => c.id === row.id);
             cases.value[index].ExpectedTestSequences = row.Expected_Result;
@@ -1496,7 +1496,7 @@ export default {
             // callApi(row.id, row.Expected_Result, 'C', false);
         }
 
-        const callApi = (id, input, task, stream) => {
+        const callApi = (id, input, task, stream, step) => {
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/dev-api/v1/chat/completions', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
@@ -1506,11 +1506,11 @@ export default {
                 if (xhr.readyState === 3) {
                     const response = JSON.parse(xhr.responseText);
                     const content = response.choices[0].message.content;
-                    if (task === 'A') {
+                    if (step === 'A') {
                         const index = cases.value.findIndex(c => c.id === id);
                         cases.value[index].InitTestSequences = content;
                     }
-                    if (task === 'B') {
+                    if (step === 'B') {
                         const index = cases.value.findIndex(c => c.id === id);
                         cases.value[index].ActionTestSequences = content;
                     }
