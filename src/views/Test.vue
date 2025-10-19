@@ -107,7 +107,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -115,7 +115,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -123,7 +123,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -440,6 +440,7 @@ import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
 import reportTpl from './report-template.html?raw'
 import langOptionsJson from './langOptions.json'
+import { config } from 'exceljs';
 
 window.Buffer = Buffer;
 export default {
@@ -1487,7 +1488,7 @@ export default {
             // 第一次调用
             callApi(row.id, row.Initial_Condition, 'A', false, 'A');
             // 第二次调用
-            callApi(row.id, row.Action, 'A', false,'B');
+            callApi(row.id, row.Action, 'A', false, 'B');
 
             const index = cases.value.findIndex(c => c.id === row.id);
             cases.value[index].ExpectedTestSequences = row.Expected_Result;
@@ -1521,8 +1522,8 @@ export default {
                     // }
                 }
             };
-
-            xhr.send(JSON.stringify({ input, task, stream }));
+            const dbc = dbcFileName.value.name;
+            xhr.send(JSON.stringify({ input, task, stream, dbc }));
         }
 
         // 停止所有轮询
@@ -1585,6 +1586,8 @@ export default {
                 });
         }
 
+        const dbcFileName = ref('')
+
         const fetchActualResult = (test_id, command) => {
             //test_id = "test_20250802_134624"
             fetch(`/dev-api/api/crop_by_semantics`, {
@@ -1611,11 +1614,12 @@ export default {
                     showToast('实际结果加载失败', 'error');
                 });
         }
-        const dbcFileName = ref('')
+
         const handleDbcFileUpload = (event) => {
             const file = event.target.files[0];
             if (file) {
                 dbcFileName.value = file;
+                console.log(dbcFileName.value)
             }
             showToast('DBC文件选择成功', 'success')
         }
@@ -1639,6 +1643,7 @@ export default {
             isDebugRunning,
             activeName,
             udid,
+            dbcFileName,
             infoType,
             url,
             showTestKey,
