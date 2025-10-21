@@ -540,9 +540,9 @@ export default {
             localStorage.setItem('cases', JSON.stringify(newCases))
         }, { deep: true })
 
-        fetch(`/dev-api/api/set-lang?lang=ch`, {
-            method: 'POST'
-        })
+        // fetch(`/dev-api/api/set-lang?lang=ch`, {
+        //     method: 'POST'
+        // })
 
         watch(currentLang, val => {
             // var value = langOptions.value.find(item => item.label === val).value
