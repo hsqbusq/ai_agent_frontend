@@ -40,7 +40,10 @@
                             <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
                                 <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取DBC
                             </el-button>
-                            <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span>
+                            <el-tooltip v-if="dbcFileName" :content="dbcFileName.name" placement="top">
+                                <span class="file-name">已选择：{{ dbcFileName.name }}</span>
+                            </el-tooltip>
+                            <!-- <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span> -->
                         </div>
                     </div>
 
@@ -542,10 +545,10 @@ export default {
         })
 
         watch(currentLang, val => {
-            var value = langOptions.value.find(item => item.label === val).value
-            fetch(`/dev-api/api/set-lang?lang=${value}`, {
-                method: 'POST'
-            })
+            // var value = langOptions.value.find(item => item.label === val).value
+            // fetch(`/dev-api/api/set-lang?lang=${value}`, {
+            //     method: 'POST'
+            // })
             showToast(`已切换到 ${val}`, 'info')
         })
 
@@ -1480,7 +1483,8 @@ export default {
                 reject(error);
             };
 
-            xhr.send(JSON.stringify({ query: query, baseurl: baseurl }));
+            var value = langOptions.value.find(item => item.label === currentLang.value).value
+            xhr.send(JSON.stringify({ query: query, baseurl: baseurl , lang: value }));
         }
 
 
@@ -1980,6 +1984,12 @@ pre {
     /* 垂直对齐按钮 */
     display: inline-block;
     /* 确保文件名能够与其他元素在同一行显示 */
+    max-width: 160px;
+    /* 你可以根据实际布局调整 */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
 }
 
 .file-button-group {
