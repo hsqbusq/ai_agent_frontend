@@ -443,7 +443,7 @@ import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
 import reportTpl from './report-template.html?raw'
 import langOptionsJson from './langOptions.json'
-import { config } from 'exceljs';
+import ExcelJS from 'exceljs'
 
 window.Buffer = Buffer;
 export default {
@@ -778,7 +778,7 @@ export default {
             });
         }
 
-        // 运行测试用例
+        // 序列化测试用例数据
         const runCaseConversion = (row) => {
             startCaseConversion(row);
         }
@@ -963,68 +963,125 @@ export default {
         }
 
 
-        const exportTestReport = async () => {
-            cases.value.forEach((row) => {
-                // 判断case.value.Result是否空
-                if (row.Result === undefined || row.Result === '') {
 
-                } else {
+        const exportTestReport = async () => {
+            reslutCases.value = [];
+            for (const row of cases.value) {
+                if (row.Result !== undefined && row.Result !== '') {
                     reslutCases.value.push(row);
-                    fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences);
+                    await fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences);
                 }
-            })
-            const list = reslutCases.value;
-            const total = list.length;
-            const pass = list.filter(c => /pass/i.test(c.Result)).length;
+            }
+            const total = reslutCases.value.length;
+            const pass = reslutCases.value.filter(r =>
+                typeof r.Result === 'string' && !/fail/i.test(r.Result)
+            ).length;
             const fail = total - pass;
 
-            const clip = (val) => `<td class="td-clip" title="${(val ?? '')
-                .replace(/"/g, '&quot;')}">${val ?? ''}</td>`;
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('测试报告');
 
-            const rowsHtml = list.map(c => `
-                <tr>
-                    <td>${c.id}</td>
-                    <td>${c.TestCaseID ?? ''}</td>
-                    <td>${c.SyRDIDFSRD ?? ''}</td>
-                    <td>${c.Auto_testID ?? ''}</td>
-                    <td>${c.TSR ?? ''}</td>
-                    <td>${c.CasePriority ?? ''}</td>
-                    <td>${c.TestMethod ?? ''}</td>
-                    <td>${c.TestStrategy ?? ''}</td>
-                    <td>${c.DesignMethod ?? ''}</td>
-                    <td>${c.TestKey ?? ''}</td>
-                    ${clip(c.Initial_Condition)}
-                    ${clip(c.Action)}
-                    ${clip(c.Expected_Result)}
-                    ${clip(c.InitTestSequences)}
-                    ${clip(c.ActionTestSequences)}
-                    <td>${c.ExpectedTestSequences}</td>
-                    <td style="background:${/pass/i.test(c.Result) ? '#d4f8d4' : '#ffe1e1'};font-weight:600;">
-                        ${c.Result ?? ''}
-                    </td>
-                    <td>${c.ActualResult
-                    ? `<img src="data:image/png;base64,${c.ActualResult}"/>`
-                    : '<span class="empty-img">暂无图片</span>'}
-                    </td>
-                    <td>${c.Selected ?? ''}</td>
-                    <td>${c.PRNo ?? ''}</td>
-                    <td>${c.TestLogs ?? ''}</td>
-                    <td>${c.Numberoftests ?? ''}</td>
-                    <td>${c.TestDate ?? ''}</td>
-                    <td>${c.Remark ?? ''}</td>
-                </tr>`).join('');
+            worksheet.columns = [
+                { header: 'Case ID', key: 'id', width: 10 },
+                { header: '测试用例ID', key: 'TestCaseID', width: 15 },
+                { header: 'SyRD/FSRD ID', key: 'SyRDIDFSRD', width: 15 },
+                { header: '自动测试ID', key: 'Auto_testID', width: 15 },
+                { header: 'TSR', key: 'TSR', width: 10 },
+                { header: '用例优先级', key: 'CasePriority', width: 10 },
+                { header: '测试方法', key: 'TestMethod', width: 10 },
+                { header: '测试策略', key: 'TestStrategy', width: 10 },
+                { header: '设计方法', key: 'DesignMethod', width: 10 },
+                { header: '测试功能点', key: 'TestKey', width: 20 },
+                { header: '初始条件', key: 'Initial_Condition', width: 30 },
+                { header: '动作', key: 'Action', width: 20 },
+                { header: '预期结果', key: 'Expected_Result', width: 20 },
+                { header: '初始条件序列', key: 'InitTestSequences', width: 30 },
+                { header: '操作步骤序列', key: 'ActionTestSequences', width: 30 },
+                { header: '预期结果序列', key: 'ExpectedTestSequences', width: 30 },
+                { header: '测试结果', key: 'Result', width: 10 },
+                { header: '实际结果', key: 'ActualResult', width: 20 },
+                { header: '是否选中', key: 'Selected', width: 10 },
+                { header: 'PR号', key: 'PRNo', width: 10 },
+                { header: '测试日志', key: 'TestLogs', width: 20 },
+                { header: '测试次数', key: 'Numberoftests', width: 10 },
+                { header: '测试日期', key: 'TestDate', width: 15 },
+                { header: '备注', key: 'Remark', width: 20 }
+            ];
 
-            const html = reportTpl
-                .replaceAll('{{TITLE}}', '自动化测试报告')
-                .replace('{{TOTAL}}', total)
-                .replace('{{PASS}}', pass)
-                .replace('{{FAIL}}', fail)
-                .replace('{{ROWS}}', rowsHtml);
+            worksheet.insertRow(1, { id: '测试总数', SyRDIDFSRD: total });
+            worksheet.insertRow(2, { id: '测试成功数', SyRDIDFSRD: pass });
+            worksheet.insertRow(3, { id: '测试失败数', SyRDIDFSRD: fail });
+            for (let i = 1; i <= 3; i++) {
+                const row = worksheet.getRow(i);
+                row.font = { bold: true, size: 13, color: { argb: 'FFFFFF' } };
+                row.alignment = { horizontal: 'left' };
 
-            const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-            const timeStamp = new Date().toLocaleString('zh-CN', { hour12: false })
-                .replace(/[/: ]/g, '')
-            saveAs(blob, `TestReport_${timeStamp}.html`)
+                row.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+                row.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+                row.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+            }
+
+            const autoHeaderRow = worksheet.getRow(4);
+            autoHeaderRow.font = { bold: true };
+            autoHeaderRow.eachCell(cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            });
+
+            for (const row of reslutCases.value) {
+                const excelRow = worksheet.addRow({
+                    id: row.id,
+                    TestCaseID: row.TestCaseID ?? '',
+                    SyRDIDFSRD: row.SyRDIDFSRD ?? '',
+                    Auto_testID: row.Auto_testID ?? '',
+                    TSR: row.TSR ?? '',
+                    CasePriority: row.CasePriority ?? '',
+                    TestMethod: row.TestMethod ?? '',
+                    TestStrategy: row.TestStrategy ?? '',
+                    DesignMethod: row.DesignMethod ?? '',
+                    TestKey: row.TestKey ?? '',
+                    Initial_Condition: row.Initial_Condition ?? '',
+                    Action: row.Action ?? '',
+                    Expected_Result: row.Expected_Result ?? '',
+                    InitTestSequences: row.InitTestSequences ?? '',
+                    ActionTestSequences: row.ActionTestSequences ?? '',
+                    ExpectedTestSequences: row.ExpectedTestSequences ?? '',
+                    Result: row.Result ?? '',
+                    ActualResult: '',
+                    Selected: row.Selected ?? '',
+                    PRNo: row.PRNo ?? '',
+                    TestLogs: row.TestLogs ?? '',
+                    Numberoftests: row.Numberoftests ?? '',
+                    TestDate: row.TestDate ?? '',
+                    Remark: row.Remark ?? ''
+                });
+
+                /* 插图片 */
+                if (row.ActualResult) {
+                    const imageBuffer = Buffer.from(row.ActualResult, 'base64');
+                    const imageId = workbook.addImage({
+                        buffer: imageBuffer,
+                        extension: 'png',
+                    });
+                    worksheet.addImage(imageId, {
+                        tl: { col: 17, row: excelRow.number - 1 },
+                        ext: { width: 200, height: 120 },
+                        editAs: 'oneCell',
+                    });
+                    excelRow.height = 90;
+                } else {
+                    excelRow.getCell(18).value = '无图片';
+                }
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const timeStamp = new Date()
+                .toLocaleString('zh-CN', { hour12: false })
+                .replace(/[/: ]/g, '');
+            saveAs(blob, `TestReport_${timeStamp}.xlsx`);
         };
 
         // 知识图谱相关数据
@@ -1484,7 +1541,7 @@ export default {
             };
 
             var value = langOptions.value.find(item => item.label === currentLang.value).value
-            xhr.send(JSON.stringify({ query: query, baseurl: baseurl , lang: value }));
+            xhr.send(JSON.stringify({ query: query, baseurl: baseurl, lang: value }));
         }
 
 
