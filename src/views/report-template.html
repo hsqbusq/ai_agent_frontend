@@ -2,7 +2,8 @@
 <html lang="en">
 
 <head>
-    <script src="https://cdn.bootcdn.net/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <meta charset="utf-8" />
     <title>{{TITLE}}</title>
     <style>
@@ -184,7 +185,7 @@
 <body>
     <div class="header-row">
         <h1>{{TITLE}}</h1>
-        <button onclick="exportToExcel()" class="export-btn">
+        <button onclick="exportTestReport()" class="export-btn">
             导出为 Excel
         </button>
     </div>
@@ -241,26 +242,104 @@
 
 <script>
 
-    function exportToExcel() {
+    async function exportTestReport() {
         const total = Number(document.querySelector('[data-total] .value').textContent);
-        const pass = Number(document.querySelector('[data-pass] .value').textContent);
-        const fail = Number(document.querySelector('[data-fail] .value').textContent);
+        const pass = Number(document.querySelector('[data-pass]  .value').textContent);
+        const fail = Number(document.querySelector('[data-fail]  .value').textContent);
 
-        const origTable = document.querySelector('table');
-        const tempTable = document.createElement('table');
+        const table = document.querySelector('table');
+        const headerRow = Array.from(table.tHead.rows[0].cells).map(th => th.innerText.trim());
+        const dataRows = Array.from(table.tBodies[0].rows).map(tr =>
+            Array.from(tr.cells).map(td => td.innerText.trim())
+        );
 
-        const summaryRow = tempTable.insertRow();
-        summaryRow.insertCell().innerText = '测试总数:';
-        const totalCell = summaryRow.insertCell();
-        totalCell.style.fontWeight = 'bold';
-        totalCell.innerText = total;
-        const pfCell = summaryRow.insertCell();
-        pfCell.style.fontWeight = 'bold';
-        pfCell.innerText = `通过数:${pass} - 失败数:${fail}`;
-        for (let i = 0; i < 6; i++) summaryRow.insertCell();
-        tempTable.appendChild(origTable.tHead.cloneNode(true));
-        tempTable.appendChild(origTable.tBodies[0].cloneNode(true));
-        const wb = XLSX.utils.table_to_book(tempTable, { sheet: '测试报告' });
-        XLSX.writeFile(wb, `测试报告_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`);
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('测试报告');
+
+        ws.columns = [
+            { header: 'Case ID', key: 'id', width: 10 },
+            { header: '测试用例ID', key: 'TestCaseID', width: 15 },
+            { header: 'SyRD/FSRD ID', key: 'SyRDIDFSRD', width: 15 },
+            { header: '自动测试ID', key: 'Auto_testID', width: 15 },
+            { header: 'TSR', key: 'TSR', width: 10 },
+            { header: '用例优先级', key: 'CasePriority', width: 10 },
+            { header: '测试方法', key: 'TestMethod', width: 10 },
+            { header: '测试策略', key: 'TestStrategy', width: 10 },
+            { header: '设计方法', key: 'DesignMethod', width: 10 },
+            { header: '测试功能点', key: 'TestKey', width: 20 },
+            { header: '初始条件', key: 'Initial_Condition', width: 30 },
+            { header: '动作', key: 'Action', width: 20 },
+            { header: '预期结果', key: 'Expected_Result', width: 20 },
+            { header: '初始条件序列', key: 'InitTestSequences', width: 30 },
+            { header: '操作步骤序列', key: 'ActionTestSequences', width: 30 },
+            { header: '预期结果序列', key: 'ExpectedTestSequences', width: 30 },
+            { header: '测试结果', key: 'Result', width: 10 },
+            { header: '实际结果', key: 'ActualResult', width: 20 },
+            { header: '是否选中', key: 'Selected', width: 10 },
+            { header: 'PR号', key: 'PRNo', width: 10 },
+            { header: '测试日志', key: 'TestLogs', width: 20 },
+            { header: '测试次数', key: 'Numberoftests', width: 10 },
+            { header: '测试日期', key: 'TestDate', width: 15 },
+            { header: '备注', key: 'Remark', width: 20 }
+        ];
+
+        ws.insertRow(1, { id: '测试总数', SyRDIDFSRD: total });
+        ws.insertRow(2, { id: '测试成功数', SyRDIDFSRD: pass });
+        ws.insertRow(3, { id: '测试失败数', SyRDIDFSRD: fail });
+        for (let i = 1; i <= 3; i++) {
+            const r = ws.getRow(i);
+            r.font = { bold: true, size: 13, color: { argb: 'FFFFFF' } };
+            r.alignment = { horizontal: 'left' };
+            r.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+            r.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+            r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+        }
+
+        const headerExcelRow = ws.getRow(4);
+        headerExcelRow.font = { bold: true };
+        headerExcelRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        dataRows.forEach((trData, idx) => {
+            const rowObj = {};
+            headerRow.forEach((key, i) => {
+                rowObj[key] = trData[i] || '';
+            });
+
+            const excelRow = ws.addRow(rowObj);
+            
+            excelRow.eachCell({ includeEmpty: false }, (cell) => {
+                cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+            });
+
+            const tdActual = table.tBodies[0].rows[idx].cells[16];
+            const img = tdActual && tdActual.querySelector('img');
+            if (img && img.src.startsWith('data:image/png;base64,')) {
+                const base64 = img.src.split(',')[1];
+                const imgId = workbook.addImage({
+                    base64: base64,
+                    extension: 'png',
+                });
+                ws.addImage(imgId, {
+                    tl: { col: 16, row: excelRow.number - 1 },
+                    ext: { width: 200, height: 120 },
+                    editAs: 'oneCell'
+                });
+                excelRow.height = 90;
+            } else {
+                excelRow.getCell(17).value = '无图片';
+            }
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const timeStamp = new Date()
+            .toLocaleString('zh-CN', { hour12: false })
+            .replace(/[/: ]/g, '');
+        saveAs(blob, `TestReport_${timeStamp}.xlsx`);
     }
 </script>

@@ -835,6 +835,8 @@ export default {
                 showToast('起始测试用例不能大于终止测试用例', 'warning');
                 return;
             }
+
+
             for (let i = start; i <= end; i++) {
                 newSelectedRowsAll1.push(cases.value[i]);
             }
@@ -851,17 +853,13 @@ export default {
                 selectedRowsAll.value.push(row);
             })
             selectRowsdialogVisible.value = false;
-            changePage.value = true
-            paginatedCases.value.forEach(row => {
-                const isSelected = selectedRowsAll.value.some(r => r.id === row.id);
-                proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
-            });
-            changePage.value = false
+            const targetPage = Math.floor(start / pageSize.value) + 1;
+            handlePageChange(targetPage);
         }
 
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
-
+            
             selection.forEach((row) => {
                 if (!selectedRowsAll.value.some(r => r.id === row.id)) {
                     selectedRowsAll.value.push(row);
@@ -908,7 +906,6 @@ export default {
             currentPage.value = newPage
             changePage.value = true
             showToast(`切换到第 ${newPage} 页`, 'info')
-            console.log(selectedRowsAll.value)
             nextTick(() => {
                 paginatedCases.value.forEach(row => {
                     changePage.value = true
@@ -1330,6 +1327,7 @@ export default {
                 return
             }
 
+            showToast(`开始转换用例`, 'info')
             selectedRowsAll.value.forEach((row) => {
                 runCaseConversion(row);
             })
@@ -1483,7 +1481,7 @@ export default {
             };
 
             var value = langOptions.value.find(item => item.label === currentLang.value).value
-            xhr.send(JSON.stringify({ query: query, baseurl: baseurl , lang: value }));
+            xhr.send(JSON.stringify({ query: query, baseurl: baseurl, lang: value }));
         }
 
 
@@ -1495,7 +1493,6 @@ export default {
 
             const index = cases.value.findIndex(c => c.id === row.id);
             cases.value[index].ExpectedTestSequences = row.Expected_Result;
-
             // // 第三次调用
             // callApi(row.id, row.Expected_Result, 'C', false);
         }
