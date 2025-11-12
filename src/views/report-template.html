@@ -314,7 +314,9 @@
                 cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
             });
 
-            const tdActual = table.tBodies[0].rows[idx].cells[16];
+            const tdActual = table.tBodies[0].rows[idx].cells[17];
+            console.log(tdActual);
+            
             const img = tdActual && tdActual.querySelector('img');
             if (img && img.src.startsWith('data:image/png;base64,')) {
                 const base64 = img.src.split(',')[1];
@@ -323,13 +325,13 @@
                     extension: 'png',
                 });
                 ws.addImage(imgId, {
-                    tl: { col: 16, row: excelRow.number - 1 },
+                    tl: { col: 17, row: excelRow.number - 1 },
                     ext: { width: 200, height: 120 },
                     editAs: 'oneCell'
                 });
                 excelRow.height = 90;
             } else {
-                excelRow.getCell(17).value = '无图片';
+                excelRow.getCell(18).value = '无图片';
             }
         });
 
