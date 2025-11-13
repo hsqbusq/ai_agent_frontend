@@ -1386,7 +1386,7 @@ export default {
                                 const test_id = match[1];
                                 testIdFound = true;
                                 const pollForResult = async () => {
-                                    const maxPollingTime = 300000; // 300s
+                                    const maxPollingTime = 600000; // 300s
                                     const interval = 5000; // 5s
                                     let elapsedTime = 0;
 
