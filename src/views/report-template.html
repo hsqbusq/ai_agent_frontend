@@ -320,7 +320,7 @@
             const img = tdActual && tdActual.querySelector('img');
             if (img && img.src.startsWith('data:image/png;base64,')) {
                 const base64 = img.src.split(',')[1];
-                const imgId = workbook.addImage({
+                const imgId = wb.addImage({
                     base64: base64,
                     extension: 'png',
                 });
