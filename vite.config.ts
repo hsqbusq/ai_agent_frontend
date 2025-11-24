@@ -1,29 +1,32 @@
-import { defineConfig, Plugin } from 'vite';
-import vue from '@vitejs/plugin-vue';
-import vuetify from 'vite-plugin-vuetify';
-import Markdown from './plugins/md-loader.js';
-import Binary from './plugins/binary-loader.js';
+import { defineConfig, Plugin } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vuetify from 'vite-plugin-vuetify'
+import Markdown from './plugins/md-loader.js'
+import Binary from './plugins/binary-loader.js'
 
-
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     vue(),
     vuetify({ autoImport: true }),
     Markdown() as Plugin,
-    Binary() as Plugin,
+    Binary() as Plugin
   ],
-  base: '/', // 设置为您的 GitHub 仓库名
+  base: '/', 
 
   server: {
     port: 3000,
     proxy: {
       '/dev-api': {
         target: 'http://117.72.163.123:25173',
-        //  target: 'http://117.72.163.123:19000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/dev-api/, '')
+        rewrite: path => path.replace(/^\/dev-api/, '')
       },
+
+      '/feishu': {
+        target: 'https://open.feishu.cn',
+        changeOrigin: true,          
+        rewrite: path => path.replace(/^\/feishu/, '') 
+      }
     }
   }
-});
+})

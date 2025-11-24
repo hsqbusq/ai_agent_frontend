@@ -32,6 +32,9 @@
                         <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
                             <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
                         </el-button>
+                        <el-button type="primary" size="small" @click="SynchronizeTestResults" style="padding: 15px">
+                            <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 文档同步设置
+                        </el-button>
                         <!-- <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
@@ -320,6 +323,29 @@
             </template>
         </el-dialog>
 
+
+        <el-dialog v-model="SynchronizeTestResultsDialogVisible" title="飞书文档同步设置" width="50%">
+            <el-form label-width="150px">
+                <el-form-item label="项目名称">
+                    <el-input v-model="xmmc" placeholder="请输入项目名称"></el-input>
+                </el-form-item>
+            </el-form>
+            <el-form label-width="150px">
+                <el-form-item label="飞书文档链接url">
+                    <el-input v-model="feishuDocUrl" placeholder="请输入飞书文档url"></el-input>
+                </el-form-item>
+            </el-form>
+            <el-form-item label="是否自动同步至飞书">
+                <el-switch v-model="autoSyncToFeishu" active-text="是" inactive-text="否"></el-switch>
+            </el-form-item>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="SynchronizeTestResultsDialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="saveSetting">保存设置</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
         <!-- 知识图谱弹窗组件 -->
         <el-dialog v-model="generateKnowledgeGraphDialogVisible" title="知识图谱" width="50%">
             <el-form label-width="150px">
@@ -594,6 +620,161 @@ export default {
             ExpectedTestSequences: ''
         })
 
+        // 同步数据到飞书文档的弹窗相关数据
+        const feishuDocUrl = ref('')
+        const xmmc = ref('')
+        const SynchronizeTestResultsDialogVisible = ref(false)
+        const autoSyncToFeishu = ref(false);
+        feishuDocUrl.value = localStorage.getItem('feishuDocUrl', feishuDocUrl.value);
+        xmmc.value = localStorage.getItem('xmmc', xmmc.value);
+        autoSyncToFeishu.value = localStorage.getItem('autoSyncToFeishu', autoSyncToFeishu.value);
+        const SynchronizeTestResults = () => {
+            SynchronizeTestResultsDialogVisible.value = true
+            xmmc.value = localStorage.getItem('xmmc') || ''
+            feishuDocUrl.value = localStorage.getItem('feishuDocUrl') || ''
+            autoSyncToFeishu.value = localStorage.getItem('autoSyncToFeishu') === 'true' || false
+        }
+
+        const saveSetting = async () => {
+            localStorage.setItem('feishuDocUrl', feishuDocUrl.value);
+            localStorage.setItem('xmmc', xmmc.value);
+            localStorage.setItem('autoSyncToFeishu', autoSyncToFeishu.value.toString());
+
+            showToast('设置已保存', 'success')
+            // sendSynchronizeTestResultsRequest()
+            SynchronizeTestResultsDialogVisible.value = false
+        }
+
+
+        const sendSynchronizeTestResultsRequest = async () => {
+            if (!feishuDocUrl.value) {
+                showToast('请先输入飞书文档url', 'warning');
+                return;
+            }
+            if (!xmmc.value) {
+                showToast('请先输入项目名称', 'warning');
+                return;
+            }
+            if (!autoSyncToFeishu.value) {
+                return;
+            }
+
+            const accessToken = await getTenantToken();
+
+            const testedSelected = selectedRowsAll.value.filter(
+                c => c.Result !== undefined && c.Result !== ''
+            );
+            if (testedSelected.length === 0) {
+                showToast('本次测试没有产生测试结果，无需同步', 'info');
+                return;
+            }
+
+            const moduleMap = {};
+
+            for (const sheet of casesTable.value) {
+                if (sheet.sheetName === '全选') continue;
+
+                const moduleCases = selectedRowsAll.value.filter(c => {
+                    const idx = cases.value.findIndex(tc => tc.id === c.id);
+                    return idx >= sheet.start && idx <= sheet.end;
+                });
+
+                if (moduleCases.length === 0) continue;
+
+                const total = moduleCases.length;
+                const pass = moduleCases.filter(c => /pass/i.test(c.Result)).length;
+
+                moduleMap[sheet.sheetName] = { total, pass, cases: moduleCases };
+            }
+
+            const parsed = parseFeishuUrl(feishuDocUrl.value);
+            console.log(parsed);
+            const APP_TOKEN = parsed.appToken;
+            const TABLE_ID = parsed.tableId;
+
+            if (moduleMap.length === 0) {
+                showToast('已选用例中无已完成数据，无需同步', 'info');
+                return;
+            }
+
+            await exportTestReport();
+            const fileName = 'file:///D:/uidp9463/Downloads/' + exportName.value;
+
+            const fs_url = `/feishu/open-apis/bitable/v1/apps/${APP_TOKEN}/tables/${TABLE_ID}/records/batch_create`;
+            const records = Object.entries(moduleMap).map(([moduleName, stat]) => ({
+                fields: {
+                    '项目名称': xmmc.value,
+                    '测试类型': 'AI全链路测试',
+                    '测试模块': moduleName,
+                    '开始测试时间': startTime.value,
+                    '结束测试时间': endTime.value,
+                    '测试案例总数': stat.total,
+                    '通过案例数': stat.pass,
+                    '未通过案例数': stat.total - stat.pass,
+                    '测试报告路径': '',
+                    '测试台架名称': url.value,
+                    '测试报告路径': fileName
+                }
+            }));
+
+
+
+
+
+            fetch(fs_url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json; charset=utf-8'
+                },
+                body: JSON.stringify({ records })
+            })
+                .then(r => r.json())
+                .then(res => {
+                    if (res.code === 0) {
+                        showToast(`成功写入 ${records.length} 条模块统计数据`, 'success');
+                        SynchronizeTestResultsDialogVisible.value = false;
+                    } else {
+                        console.error(res);
+                        showToast('写入失败：' + res.error.message, 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    showToast('网络错误', 'error');
+                });
+        };
+
+        const getTenantToken = async () => {
+            const res = await fetch('/feishu/open-apis/auth/v3/tenant_access_token/internal', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    app_id: 'cli_a9abf30babf89ccd',
+                    app_secret: 'Goe12Cd39rJEfdoVJCvogdxX3SrtCOLK'
+                })
+            }).then(r => r.json());
+
+            if (res.code !== 0) showToast('获取飞书token失败：' + res.msg, 'error');
+            return res.tenant_access_token;
+        }
+
+        const parseFeishuUrl = () => {
+            if (!feishuDocUrl.value) showToast('文档URL不能为空', 'warning');
+
+            const u = feishuDocUrl.value.replace(/\/$/, '');
+
+            const baseMatch = u.match(/\/base\/([a-zA-Z0-9]+)\?.*table=([a-zA-Z0-9]+)/);
+            if (baseMatch) {
+                return { appToken: baseMatch[1], tableId: baseMatch[2] };
+            }
+
+            const pathMatch = u.match(/\/([a-zA-Z0-9]+)\/table\/([a-zA-Z0-9]+)/);
+            if (pathMatch) {
+                return { appToken: pathMatch[1], tableId: pathMatch[2] };
+            }
+            showToast('无法解析飞书文档URL，请检查格式', 'error');
+        }
 
         // 查看日志的弹窗相关数据
         const logDialogVisible = ref(false)
@@ -670,31 +851,24 @@ export default {
         }
         const connectDeviceStream = (deviceType) => {
             if (deviceType === 'mobile') {
-                // 手机设备连接逻辑
                 if (!url.value) {
                     showToast('请先输入URL地址', 'warning');
                     return;
                 }
-                // 更新手机设备视频流URL
-                // 这里可以根据需要修改URL格式
                 const mobileUrl = `${url.value}/adb/video`;
                 //console.log(mobileUrl)
-                // 刷新iframe
                 if (videoPlayer.value) {
                     videoPlayer.value.src = mobileUrl;
                 }
                 showToast('手机视频流已连接', 'success');
             } else if (deviceType === 'instrument') {
-                // 仪表设备连接逻辑
                 if (!url.value) {
                     showToast('请先输入URL地址', 'warning');
                     return;
                 }
-                // 更新仪表设备视频流URL
                 const instrumentUrl = `${url.value}/camera/video?name=UGREEN`;
                 //console.log(instrumentUrl);
                 instrumentStreamUrl.value = instrumentUrl;
-                // 刷新iframe
                 if (instrumentVideoPlayer.value) {
                     instrumentVideoPlayer.value.src = instrumentUrl;
                 }
@@ -767,16 +941,7 @@ export default {
             showToast('测试用例已删除', 'success')
         }
 
-        // 运行测试用例
-        const runTestCase = (query, baseurl, id) => {
-            return new Promise((resolve, reject) => {
-                try {
-                    startPollingForDebugResults(query, baseurl, id, resolve, reject);
-                } catch (error) {
-                    reject(error);
-                }
-            });
-        }
+
 
         // 运行测试用例
         const runCaseConversion = (row) => {
@@ -859,7 +1024,7 @@ export default {
 
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
-            
+
             selection.forEach((row) => {
                 if (!selectedRowsAll.value.some(r => r.id === row.id)) {
                     selectedRowsAll.value.push(row);
@@ -935,40 +1100,39 @@ export default {
 
         const fetchActualResultForExcel = async (test_id, command) => {
             try {
-                fetch(`/dev-api/api/crop_by_semantics`, {
+                const response = await fetch('/dev-api/api/crop_by_semantics', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ test_id, command })
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        //console.log(data);
-                        if (data.status === "ok") {
-                            reslutCases.value.slice(-1)[0].ActualResult = data.base64;
-                        } else {
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error fetching test result:', error);
-                    });
+                });
+                const data = await response.json();
+                return data.status === 'ok' ? data.base64 : '';
             } catch (error) {
-                console.error(`Testid${caseItem.Testid}的case真实结果失败`, error);
-                showToast(`Testid${caseItem.Testid}的case真实结果失败`, 'error');
+                console.error(`Testid ${test_id} 截图失败`, error);
+                return '';
             }
-        }
+        };
 
 
+        const exportName = ref('')
         const exportTestReport = async () => {
-            cases.value.forEach((row) => {
-                if (row.Result === undefined || row.Result === '') {
+            showToast('正在获取测试截图生成测试报告，请稍后...', 'info');
 
-                } else {
-                    reslutCases.value.push(row);
-                    fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences);
-                }
-            })
+            // #获取真实结果图片，##较慢
+            // const needPics = cases.value.filter(c => c.Result !== undefined && c.Result !== '');
+            // const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+            // const groups = chunk(needPics, 10);
+            // const allTasks = groups.flatMap(group =>
+            //     group.map(row =>
+            //         fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences)
+            //             .then(pic => ({ ...row, ActualResult: pic }))
+            //             .catch(() => ({ ...row, ActualResult: '' }))
+            //     )
+            // );
+            // const results = await Promise.allSettled(allTasks);
+            // reslutCases.value = results.map(r => r.value);
+
+            reslutCases.value = cases.value.filter(c => c.Result !== undefined && c.Result !== '');
             const list = reslutCases.value;
             const total = list.length;
             const pass = list.filter(c => /pass/i.test(c.Result)).length;
@@ -1020,7 +1184,8 @@ export default {
             const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
             const timeStamp = new Date().toLocaleString('zh-CN', { hour12: false })
                 .replace(/[/: ]/g, '')
-            saveAs(blob, `TestReport_${timeStamp}.html`)
+            exportName.value = `TestReport_${timeStamp}.html`
+            saveAs(blob, `${exportName.value}`)
         };
 
         // 知识图谱相关数据
@@ -1280,6 +1445,10 @@ export default {
             }
         }
 
+        const startTime = ref()
+        const endTime = ref()
+
+        // 开始测试
         const startDebugging = async () => {
             if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要调试的测试用例', 'warning');
@@ -1288,20 +1457,21 @@ export default {
             activeName.value = 'third';
             isDebugRunning.value = true;
             debugRows.value = [];
+            startTime.value = parseInt(Date.now());
 
             let index = 0;
             while (index < selectedRowsAll.value.length && isDebugRunning.value) {
                 const row = selectedRowsAll.value[index];
-                console.log(`开始调试用例${row.id}`);
-                console.log(selectedRowsAll.value);
-                console.log(selectedRowsAll.value.length);
+                // console.log(`开始调试用例${row.id}`);
+                // console.log(selectedRowsAll.value);
+                // console.log(selectedRowsAll.value.length);
                 try {
                     if (!debugRows.value.some(dr => dr.id === row.id)) {
                         debugRows.value.push(row);
                     }
-                    console.log(debugRows.value);
+                    // console.log(debugRows.value);
                     selectedCase.value = row.id;
-                    console.log(selectedCase.value);
+                    // console.log(selectedCase.value);
                     const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
                     const baseurl = url.value;
 
@@ -1311,14 +1481,28 @@ export default {
                 }
 
                 index++;
-                console.log(selectedRowsAll.value.length)
-                console.log(`结束调试用例${row.id}`);
-                console.log(index);
-                console.log(isDebugRunning.value);
+                // console.log(selectedRowsAll.value.length)
+                // console.log(`结束调试用例${row.id}`);
+                // console.log(index);
+                // console.log(isDebugRunning.value);
             }
 
             isDebugRunning.value = false;
+            endTime.value = parseInt(Date.now());
+            showToast('调试已完成', 'info');
+            await sendSynchronizeTestResultsRequest();
         };
+
+        // 运行测试用例
+        const runTestCase = (query, baseurl, id) => {
+            return new Promise((resolve, reject) => {
+                try {
+                    startPollingForDebugResults(query, baseurl, id, resolve, reject);
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
 
         // 开始序列号用例转化
         const caseConversion = () => {
@@ -1335,13 +1519,12 @@ export default {
 
         const isDebugRunning = ref(false)
 
-        const stopDebugging = () => {
+        const stopDebugging = async () => {
             isDebugRunning.value = false;
             debugRows.value = [];
             selectedCase.value = '';
             stopPolling();
             executionLogs.value = {};
-            showToast('调试已停止', 'info');
         }
 
         const pollingIntervals = {};
@@ -1712,6 +1895,7 @@ export default {
             dbcFileInput,
             importXlsmFile,
             exportTestReport,
+            exportName,
             generateKnowledgeGraph,
             handleFileUpload,
             startDebugging,
@@ -1735,7 +1919,17 @@ export default {
             selectRowsHandle,
             caseIdOptions,
             startId,
-            endId
+            endId,
+            feishuDocUrl,
+            xmmc,
+            autoSyncToFeishu,
+            saveSetting,
+            SynchronizeTestResults,
+            SynchronizeTestResultsDialogVisible,
+            sendSynchronizeTestResultsRequest,
+            getTenantToken,
+            startTime,
+            endTime
         }
     }
 }
