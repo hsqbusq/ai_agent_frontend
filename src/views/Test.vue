@@ -26,7 +26,7 @@
                         <el-button type="primary" size="small" @click="generateKnowledgeGraph" style="padding: 15px">
                             <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 形成知识图谱
                         </el-button>
-                        <el-button type="primary" size="small" @click="caseConversion" style="padding: 15px">
+                        <el-button type="primary" size="small" @click="promptCaseConversion" style="padding: 15px">
                             <img src="../assets/06.svg" alt="" style="width: 14px;height: 14px" /> 序列化用例转化
                         </el-button>
                         <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
@@ -270,7 +270,6 @@
                                 </div>
                             </el-tab-pane>
 
-                            <!-- 新增仪表设备标签页 -->
                             <el-tab-pane label="仪表设备" name="six">
                                 <div class="video-container">
                                     <iframe ref="instrumentVideoPlayer" width="100%" height="480" frameborder="0"
@@ -284,15 +283,28 @@
                                     </div>
                                 </div>
                             </el-tab-pane>
-                        </el-tabs> <!-- 新增设备视图 -->
+                        </el-tabs>
                     </div>
                 </div>
             </div>
 
         </div>
 
-        <!-- 新增测试用例弹窗组件 -->
-        <el-dialog v-model="dialogVisible" title="新增测试用例" width="50%">
+        <el-dialog v-model="caseConversionDialogVisible" title="序列化用例转化" width="50%">
+            <el-form label-width="150px">
+                <el-form-item label="提示词">
+                    <el-input v-model="prompt1" placeholder="请输入序列化用例转化的提示词"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <span class="dialog-footer">
+                    <el-button @click="caseConversionDialogVisible = false">取消</el-button>
+                    <el-button type="primary" @click="caseConversion">开始转换</el-button>
+                </span>
+            </template>
+        </el-dialog>
+
+        <el-dialog v-model="dialogVisible" title="序列化转换" width="50%">
             <el-form :model="newCase" label-width="120px">
                 <el-form-item label="测试功能点">
                     <el-input v-model="newCase.TestKey" placeholder="请输入测试功能点"></el-input>
@@ -323,7 +335,6 @@
                 </span>
             </template>
         </el-dialog>
-
 
         <el-dialog v-model="SynchronizeTestResultsDialogVisible" title="飞书文档同步设置" width="50%">
             <el-form label-width="150px">
@@ -1513,8 +1524,15 @@ export default {
             });
         }
 
-        // 开始序列号用例转化
+        const prompt1 = ref("")
+        const caseConversionDialogVisible = ref(false)
+
+        const promptCaseConversion = () => {
+            caseConversionDialogVisible.value = true
+        }
+
         const caseConversion = () => {
+            caseConversionDialogVisible.value = false
             if (selectedRowsAll.value.length === 0) {
                 showToast('请先选择要转换的测试用例', 'warning')
                 return
@@ -1725,7 +1743,8 @@ export default {
                 showToast(`用例 ${id} 网络错误，请检查服务是否可用`, 'error');
             };
             const dbc = dbcFileName.value.name;
-            xhr.send(JSON.stringify({ input, task, stream, dbc }));
+            const prompt = prompt1.value;
+            xhr.send(JSON.stringify({ input, task, stream, dbc, prompt }));
         }
 
         // 停止所有轮询
@@ -1882,6 +1901,9 @@ export default {
             newCase,
             generateKnowledgeGraphDialogVisible,
             generateKnowledgeGraphLogDiagVisible,
+            caseConversionDialogVisible,
+            prompt1,
+            promptCaseConversion,
             generateKnowledgeGraphLog,
             sendGenerateKnowledgeGraphRequest,
             baseurl,
