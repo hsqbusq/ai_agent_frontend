@@ -71,6 +71,7 @@
                 <div class="card">
                     <div class="control-container">
                         <el-button @click="selectRows">选择测试用例</el-button>
+                        <el-button @click="clearAllSelection">取消选择</el-button>
                         <el-select v-model="infoType" placeholder="请选择信息类型" @change="handleInfoTypeChange"
                             class="half-width">
                             <el-option label="关键信息" value="critical"></el-option>
@@ -469,7 +470,7 @@ import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
 import reportTpl from './report-template.html?raw'
 import langOptionsJson from './langOptions.json'
-import { config } from 'exceljs';
+import { saveCases, saveCasesTable, loadCases, loadCasesTable } from '../utils/db.js'
 
 window.Buffer = Buffer;
 export default {
@@ -479,8 +480,10 @@ export default {
 
         const selectedCase = ref('');
         const selectedSheet = ref('')
-        const infoType = ref('all'); // 默认值为关键信息
-        const url = ref('http://172.23.96.54:8000');
+        const infoType = ref('all');
+        const default_url = ref('http://172.23.96.54:8000');
+
+        const url = ref(localStorage.getItem('TEST_URL') ?? default_url);
         const showTestKey = ref(true); // 控制“测试功能点”列的显示
         const showTestidColumn = false;
         const currentLang = ref('中文')
@@ -501,82 +504,83 @@ export default {
         const activeName = ref('first')
         const activeDevice = ref('five')
         // 测试用例数据
-        const cases = ref(JSON.parse(localStorage.getItem('cases')) || [
-            {
-                id: '001',
-                TestCaseID: '',
-                SyRDIDFSRD: '',
-                Auto_testID: '',
-                TSR: '',
-                CasePriority: '',
-                TestMethod: '',
-                TestStrategy: '',
-                DesignMethod: '',
-                TestKey: '',
-                Initial_Condition: '',
-                Action: '',
-                Expected_Result: '',
-                InitTestSequences: "1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2",
-                ActionTestSequences: '1.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0x140',
-                ExpectedTestSequences: '1.Vision-Pattern-车速21',
-                ActualResult: '',
-                Selected: '',
-                PRNo: '',
-                TestLogs: '',
-                Numberoftests: '',
-                TestDate: '',
-                Remark: '',
-                Result: undefined,
-            },
-            {
-                id: '002',
-                TestCaseID: '',
-                SyRDIDFSRD: '',
-                Auto_testID: '',
-                TSR: '',
-                CasePriority: '',
-                TestMethod: '',
-                TestStrategy: '',
-                DesignMethod: '',
-                TestKey: '',
-                Initial_Condition: '',
-                Action: '',
-                Expected_Result: '',
-                InitTestSequences: '安卓测试 进入设置',
-                ActionTestSequences: '进入车辆设置',
-                ExpectedTestSequences: '页面正常显示',
-                ActualResult: '',
-                Selected: '',
-                PRNo: '',
-                TestLogs: '',
-                Numberoftests: '',
-                TestDate: '',
-                Remark: '',
-                Result: undefined,
-            }
-        ])
+        const cases = ref([])
+        // const cases = ref(JSON.parse(localStorage.getItem('cases')) || [
+        //     {
+        //         id: '001',
+        //         TestCaseID: '',
+        //         SyRDIDFSRD: '',
+        //         Auto_testID: '',
+        //         TSR: '',
+        //         CasePriority: '',
+        //         TestMethod: '',
+        //         TestStrategy: '',
+        //         DesignMethod: '',
+        //         TestKey: '',
+        //         Initial_Condition: '',
+        //         Action: '',
+        //         Expected_Result: '',
+        //         InitTestSequences: "1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2",
+        //         ActionTestSequences: '1.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0x140',
+        //         ExpectedTestSequences: '1.Vision-Pattern-车速21',
+        //         ActualResult: '',
+        //         Selected: '',
+        //         PRNo: '',
+        //         TestLogs: '',
+        //         Numberoftests: '',
+        //         TestDate: '',
+        //         Remark: '',
+        //         Result: undefined,
+        //     },
+        //     {
+        //         id: '002',
+        //         TestCaseID: '',
+        //         SyRDIDFSRD: '',
+        //         Auto_testID: '',
+        //         TSR: '',
+        //         CasePriority: '',
+        //         TestMethod: '',
+        //         TestStrategy: '',
+        //         DesignMethod: '',
+        //         TestKey: '',
+        //         Initial_Condition: '',
+        //         Action: '',
+        //         Expected_Result: '',
+        //         InitTestSequences: '安卓测试 进入设置',
+        //         ActionTestSequences: '进入车辆设置',
+        //         ExpectedTestSequences: '页面正常显示',
+        //         ActualResult: '',
+        //         Selected: '',
+        //         PRNo: '',
+        //         TestLogs: '',
+        //         Numberoftests: '',
+        //         TestDate: '',
+        //         Remark: '',
+        //         Result: undefined,
+        //     }
+        // ])
+        const casesTable = ref([])
 
-        const casesTable = ref(JSON.parse(localStorage.getItem('casesTable')) || [])
+        // const casesTable = ref(JSON.parse(localStorage.getItem('casesTable')) || [])
 
-        watch(casesTable, (newCasesTable) => {
-            localStorage.setItem('casesTable', JSON.stringify(newCasesTable))
-        }, { deep: true })
+        // watch(casesTable, (newCasesTable) => {
+        //     localStorage.setItem('casesTable', JSON.stringify(newCasesTable))
+        // }, { deep: true })
 
-        watch(cases, (newCases) => {
-            localStorage.setItem('cases', JSON.stringify(newCases))
-        }, { deep: true })
+        // watch(cases, (newCases) => {
+        //     localStorage.setItem('cases', JSON.stringify(newCases))
+        // }, { deep: true })
 
-        // fetch(`/dev-api/api/set-lang?lang=ch`, {
-        //     method: 'POST'
-        // })
+        watch(cases, async () => await saveCases(cases.value), { deep: true })
+        watch(casesTable, async () => await saveCasesTable(casesTable.value), { deep: true })
 
         watch(currentLang, val => {
-            // var value = langOptions.value.find(item => item.label === val).value
-            // fetch(`/dev-api/api/set-lang?lang=${value}`, {
-            //     method: 'POST'
-            // })
             showToast(`已切换到 ${val}`, 'info')
         })
+
+        watch(url, newVal => {
+            localStorage.setItem('TEST_URL', newVal);
+        });
 
         const reslutCases = ref([])
 
@@ -982,7 +986,12 @@ export default {
             }
         }
 
-        // 计算属性，只跑一次
+        const clearAllSelection = () => {
+            selectedRowsAll.value = []
+            proxy.$refs.caseTable.clearSelection()
+            showToast('已取消所有选中用例', 'info')
+        }
+
         const caseIdOptions = computed(() =>
             cases.value.map(item => ({ value: item.id, label: item.id }))
         );
@@ -1668,7 +1677,7 @@ export default {
         }
 
 
-        const startCaseConversion = (row) => {
+        const startCaseConversion = async (row) => {
             // 第一次调用
             callApi(row.id, row.Initial_Condition, 'A', false, 'A');
             // 第二次调用
@@ -1687,23 +1696,33 @@ export default {
             xhr.setRequestHeader('Accept', 'text/event-stream');
 
             xhr.onreadystatechange = function () {
-                if (xhr.readyState === 3) {
-                    const response = JSON.parse(xhr.responseText);
-                    const content = response.choices[0].message.content;
-                    if (step === 'A') {
-                        const index = cases.value.findIndex(c => c.id === id);
-                        cases.value[index].InitTestSequences = content;
-                    }
-                    if (step === 'B') {
-                        const index = cases.value.findIndex(c => c.id === id);
-                        cases.value[index].ActionTestSequences = content;
-                    }
-                    // if (task === 'C') {
-                    //     const index = cases.value.findIndex(c => c.id === id);
-                    //     cases.value[index].ExpectedTestSequences = content;
+                if (xhr.readyState !== 4) return;
 
-                    // }
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        const content = response.choices?.[0]?.message?.content;
+                        if (typeof content !== 'string') throw new Error('返回格式异常');
+
+                        const index = cases.value.findIndex(c => c.id === id);
+                        if (index === -1) return;
+
+                        if (step === 'A') {
+                            cases.value[index].InitTestSequences = content;
+                        } else if (step === 'B') {
+                            cases.value[index].ActionTestSequences = content;
+                            showToast(`用例 ${id} 转换成功`, 'success');
+                        }
+                    } catch (e) {
+                        console.error(e);
+                        showToast(`用例 ${id} 解析失败：${e.message}`, 'error');
+                    }
+                } else {
+                    showToast(`用例 ${id} 请求失败：HTTP ${xhr.status}`, 'error');
                 }
+            };
+            xhr.onerror = function () {
+                showToast(`用例 ${id} 网络错误，请检查服务是否可用`, 'error');
             };
             const dbc = dbcFileName.value.name;
             xhr.send(JSON.stringify({ input, task, stream, dbc }));
@@ -1809,7 +1828,9 @@ export default {
 
 
         // 模拟组件加载
-        onMounted(() => {
+        onMounted(async () => {
+            cases.value = await loadCases()
+            casesTable.value = await loadCasesTable()
             setTimeout(() => {
                 fetchTestList(1);
             }, 500)
@@ -1831,6 +1852,7 @@ export default {
             url,
             showTestKey,
             showTestidColumn,
+            clearAllSelection,
             activeDevice,
             pollingIntervals,
             cases,
