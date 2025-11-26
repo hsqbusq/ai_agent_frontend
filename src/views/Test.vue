@@ -511,10 +511,6 @@ export default {
             showTestKey.value = value !== 'critical';
         };
         const { proxy } = getCurrentInstance();
-
-        // 从全局属性中获取 udid
-        const udid = ref(proxy.$udid.value);
-
         const instrumentStreamUrl = ref('http://172.23.96.54:8000/camera/video?name=UGREEN');
         const videoPlayer = ref(null);
         const instrumentVideoPlayer = ref(null);
@@ -1912,7 +1908,6 @@ export default {
             runSingleRow,
             isDebugRunning,
             activeName,
-            udid,
             dbcFileName,
             infoType,
             url,
