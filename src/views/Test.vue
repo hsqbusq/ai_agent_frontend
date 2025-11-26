@@ -84,8 +84,8 @@
                     </div>
                     <div>
                         <el-table ref="caseTable" :data="paginatedCases" class="editable-table" height="450"
-                            highlight-current-row @selection-change="handleSelectionChange" style="width: 100%"
-                            row-key="id">
+                            highlight-current-row @selection-change="handleSelectionChange"
+                            @row-contextmenu="onRowRightClick" style="width: 100%" row-key="id">
                             <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
                             <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
                             <el-table-column prop="TestCaseID" label="测试用例ID" min-width="120"
@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -182,6 +182,13 @@
                             </el-button>
                         </el-table-column> -->
                         </el-table>
+                        <ul v-show="contextMenu.visible"
+                            :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }" class="context-menu"
+                            @mouseleave="contextMenu.visible = false">
+                            <li @click="startDebugging">执行已选用例</li>
+                            <li @click="runSingleRow(contextMenu.row)">本用例执行</li>
+                            <li @click="convertRow(contextMenu.row)">本用例序列化转换</li>
+                        </ul>
                     </div>
 
                     <div class="pagination-container">
@@ -581,6 +588,42 @@ export default {
         // watch(cases, (newCases) => {
         //     localStorage.setItem('cases', JSON.stringify(newCases))
         // }, { deep: true })
+
+        const contextMenu = reactive({
+            visible: false,
+            x: 0,
+            y: 0,
+            row: null
+        })
+
+        const onRowRightClick = (row, column, event) => {
+            event.preventDefault()    
+            contextMenu.x = event.clientX
+            contextMenu.y = event.clientY
+            contextMenu.row = row
+            contextMenu.visible = true
+        }
+
+        const convertRow = (row) => {
+            contextMenu.visible = false
+            if (!row) return
+            runCaseConversion(row)          // 沿用已有转换逻辑
+            showToast(`用例 ${row.id} 转换中...`, 'info')
+        }
+
+        const runSingleRow = async (row) => {
+            contextMenu.visible = false
+            if (!row) return
+
+            selectedRowsAll.value = [row]
+            await nextTick(() => {
+                proxy.$refs.caseTable.clearSelection()
+                proxy.$refs.caseTable.toggleRowSelection(row, true)
+            })
+
+            await startDebugging()
+            showToast(`用例 ${row.id} 开始执行`, 'info')
+        }
 
         watch(cases, async () => await saveCases(cases.value), { deep: true })
         watch(casesTable, async () => await saveCasesTable(casesTable.value), { deep: true })
@@ -1863,6 +1906,10 @@ export default {
         return {
             currentLang,
             langOptions,
+            contextMenu,
+            onRowRightClick,
+            convertRow,
+            runSingleRow,
             isDebugRunning,
             activeName,
             udid,
@@ -2258,5 +2305,29 @@ pre {
 
 .centered-inputs span {
     margin: 0 8px;
+}
+
+.context-menu {
+    position: fixed;
+    background: #fff;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    list-style: none;
+    padding: 4px 0;
+    margin: 0;
+    font-size: 14px;
+    z-index: 2000;
+}
+
+.context-menu li {
+    padding: 6px 16px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.context-menu li:hover {
+    background-color: #f2f6fc;
+    color: #409eff;
 }
 </style>
