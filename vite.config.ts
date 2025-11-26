@@ -11,7 +11,7 @@ export default defineConfig({
     Markdown() as Plugin,
     Binary() as Plugin
   ],
-  base: '/', 
+  base: '/',
 
   server: {
     port: 3000,
@@ -24,8 +24,15 @@ export default defineConfig({
 
       '/feishu': {
         target: 'https://open.feishu.cn',
-        changeOrigin: true,          
-        rewrite: path => path.replace(/^\/feishu/, '') 
+        changeOrigin: true,
+        rewrite: path => path.replace(/^\/feishu/, '/'),
+        configure: (proxy) => {
+          proxy.on('proxyRes', (proxyRes) => {
+            proxyRes.headers['access-control-allow-methods'] = 'POST,GET,OPTIONS'
+            proxyRes.headers['access-control-allow-headers'] = 'Content-Type,Authorization'
+            proxyRes.headers['access-control-allow-origin'] = '*'
+          })
+        }
       }
     }
   }
