@@ -11,9 +11,9 @@
                         <el-button type="primary" size="small" @click="stopDebugging" style="padding: 15px">
                             <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 停止测试
                         </el-button>
-                        <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
+                        <!-- <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
                             <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 增加用例
-                        </el-button>
+                        </el-button> -->
                         <el-button type="primary" size="small" @click="importXlsmFile" style="padding: 15px">
                             <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 导入用例
                         </el-button>
@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -489,6 +489,7 @@ import { Buffer } from 'buffer';
 import reportTpl from './report-template.html?raw'
 import langOptionsJson from './langOptions.json'
 import { saveCases, saveCasesTable, loadCases, loadCasesTable } from '../utils/db.js'
+import { forEach } from 'lodash';
 
 window.Buffer = Buffer;
 export default {
@@ -593,7 +594,7 @@ export default {
         })
 
         const onRowRightClick = (row, column, event) => {
-            event.preventDefault()    
+            event.preventDefault()
             contextMenu.x = event.clientX
             contextMenu.y = event.clientY
             contextMenu.row = row
@@ -986,10 +987,36 @@ export default {
 
             selectedRowsAll.value.forEach((row) => {
                 const index = cases.value.findIndex(c => c.id === row.id)
+                console.log(index);
+
                 if (index !== -1) {
                     cases.value.splice(index, 1)
                 }
+                cases.value.forEach((row) => {
+                    if (row.id > index) {
+                        row.id = String(Number(row.id) - 1).padStart(3, '0')
+                    }
+                })
+                for (let i = casesTable.value.length - 1; i >= 0; i--) {
+                    const sheet = casesTable.value[i]
+                    if (sheet.name === '全选') {
+                        sheet.end -= 1
+                        sheet.length -= 1
+                    }
+                    if (sheet.start <= index && sheet.end >= index) {
+                        sheet.end -= 1
+                        sheet.length -= 1
+                    } else if (sheet.start > index) {
+                        sheet.start -= 1
+                        sheet.end -= 1
+                    }
+                    // 长度为0时删除
+                    if (sheet.length === 0) {
+                        casesTable.value.splice(i, 1)
+                    }
+                }
             })
+
             selectedRowsAll.value = []
 
             showToast('测试用例已删除', 'success')
@@ -1048,8 +1075,11 @@ export default {
 
         const selectRowsHandle = () => {
             const newSelectedRowsAll1 = [];
+            console.log(cases.value);
+
             const start = cases.value.findIndex(caseItem => caseItem.id === startId.value);
             const end = cases.value.findIndex(caseItem => caseItem.id === endId.value);
+
             console.log(start, end)
             if (start === -1 || end === -1) {
                 showToast('请选择有效的测试用例', 'warning');
