@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -710,44 +710,27 @@ export default {
                 showToast('请先输入项目名称', 'warning');
                 return;
             }
-            if (!autoSyncToFeishu.value) {
-                return;
-            }
+            if (!autoSyncToFeishu.value) return;
 
-            const accessToken = await getTenantToken();
-
-            const testedSelected = selectedRowsAll.value.filter(
-                c => c.Result !== undefined && c.Result !== ''
-            );
+            const testedSelected = selectedRowsAll.value.filter(c => c.Result !== undefined && c.Result !== '');
             if (testedSelected.length === 0) {
                 showToast('本次测试没有产生测试结果，无需同步', 'info');
                 return;
             }
 
             const moduleMap = {};
-
             for (const sheet of casesTable.value) {
                 if (sheet.sheetName === '全选') continue;
-
-                const moduleCases = selectedRowsAll.value.filter(c => {
+                const moduleCases = testedSelected.filter(c => {
                     const idx = cases.value.findIndex(tc => tc.id === c.id);
                     return idx >= sheet.start && idx <= sheet.end;
                 });
-
                 if (moduleCases.length === 0) continue;
-
                 const total = moduleCases.length;
                 const pass = moduleCases.filter(c => /pass/i.test(c.Result)).length;
-
                 moduleMap[sheet.sheetName] = { total, pass, cases: moduleCases };
             }
-
-            const parsed = parseFeishuUrl(feishuDocUrl.value);
-            console.log(parsed);
-            const APP_TOKEN = parsed.appToken;
-            const TABLE_ID = parsed.tableId;
-
-            if (moduleMap.length === 0) {
+            if (Object.keys(moduleMap).length === 0) {
                 showToast('已选用例中无已完成数据，无需同步', 'info');
                 return;
             }
@@ -755,64 +738,40 @@ export default {
             await exportTestReport();
             const fileName = 'file:///D:/uidp9463/Downloads/' + exportName.value;
 
-            const fs_url = `/feishu/open-apis/bitable/v1/apps/${APP_TOKEN}/tables/${TABLE_ID}/records/batch_create`;
+            const { appToken, tableId } = parseFeishuUrl(feishuDocUrl.value);
+
             const records = Object.entries(moduleMap).map(([moduleName, stat]) => ({
                 fields: {
-                    '项目名称': xmmc.value,
-                    '测试类型': 'AI全链路测试',
-                    '测试模块': moduleName,
-                    '开始测试时间': startTime.value,
-                    '结束测试时间': endTime.value,
-                    '测试案例总数': stat.total,
-                    '通过案例数': stat.pass,
-                    '未通过案例数': stat.total - stat.pass,
-                    '测试报告路径': '',
-                    '测试台架名称': url.value,
-                    '测试报告路径': fileName
+                    项目名称: xmmc.value,
+                    测试类型: 'AI全链路测试',
+                    测试模块: moduleName,
+                    开始测试时间: startTime.value,
+                    结束测试时间: endTime.value,
+                    测试案例总数: stat.total,
+                    通过案例数: stat.pass,
+                    未通过案例数: stat.total - stat.pass,
+                    测试台架名称: url.value,
+                    测试报告路径: fileName
                 }
             }));
 
+            try {
+                const res = await fetch('/dev-api/api/addtable', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ app_token: appToken, table_id: tableId, records})
+                }).then(r => r.json());
 
-
-
-
-            fetch(fs_url, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${accessToken}`,
-                    'Content-Type': 'application/json; charset=utf-8'
-                },
-                body: JSON.stringify({ records })
-            })
-                .then(r => r.json())
-                .then(res => {
-                    if (res.code === 0) {
-                        showToast(`成功写入 ${records.length} 条模块统计数据`, 'success');
-                        SynchronizeTestResultsDialogVisible.value = false;
-                    } else {
-                        console.error(res);
-                        showToast('写入失败：' + res.error.message, 'error');
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    showToast('网络错误', 'error');
-                });
+                if (res.code === 0) {
+                    showToast(`成功写入 ${records.length} 条模块统计数据`, 'success');
+                    SynchronizeTestResultsDialogVisible.value = false;
+                } else {
+                    showToast('写入失败：' + (res.msg || res.error?.message), 'error');
+                }
+            } catch (e) {
+                showToast('网络错误', 'error');
+            }
         };
-
-        const getTenantToken = async () => {
-            const res = await fetch('/feishu/open-apis/auth/v3/tenant_access_token/internal', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    app_id: 'cli_a9abf30babf89ccd',
-                    app_secret: 'Goe12Cd39rJEfdoVJCvogdxX3SrtCOLK'
-                })
-            }).then(r => r.json());
-
-            if (res.code !== 0) showToast('获取飞书token失败：' + res.msg, 'error');
-            return res.tenant_access_token;
-        }
 
         const parseFeishuUrl = () => {
             if (!feishuDocUrl.value) showToast('文档URL不能为空', 'warning');
@@ -2043,7 +2002,6 @@ export default {
             SynchronizeTestResults,
             SynchronizeTestResultsDialogVisible,
             sendSynchronizeTestResultsRequest,
-            getTenantToken,
             startTime,
             endTime
         }

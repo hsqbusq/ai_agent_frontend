@@ -20,20 +20,8 @@ export default defineConfig({
         target: 'http://117.72.163.123:25173',
         changeOrigin: true,
         rewrite: path => path.replace(/^\/dev-api/, '')
-      },
-
-      '/feishu': {
-        target: 'https://open.feishu.cn',
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/feishu/, '/'),
-        configure: (proxy) => {
-          proxy.on('proxyRes', (proxyRes) => {
-            proxyRes.headers['access-control-allow-methods'] = 'POST,GET,OPTIONS'
-            proxyRes.headers['access-control-allow-headers'] = 'Content-Type,Authorization'
-            proxyRes.headers['access-control-allow-origin'] = '*'
-          })
-        }
       }
+
     }
   }
 })
