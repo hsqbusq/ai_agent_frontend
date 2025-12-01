@@ -520,60 +520,7 @@ export default {
         const activeDevice = ref('five')
         // 测试用例数据
         const cases = ref([])
-        // const cases = ref(JSON.parse(localStorage.getItem('cases')) || [
-        //     {
-        //         id: '001',
-        //         TestCaseID: '',
-        //         SyRDIDFSRD: '',
-        //         Auto_testID: '',
-        //         TSR: '',
-        //         CasePriority: '',
-        //         TestMethod: '',
-        //         TestStrategy: '',
-        //         DesignMethod: '',
-        //         TestKey: '',
-        //         Initial_Condition: '',
-        //         Action: '',
-        //         Expected_Result: '',
-        //         InitTestSequences: "1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2",
-        //         ActionTestSequences: '1.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0x140',
-        //         ExpectedTestSequences: '1.Vision-Pattern-车速21',
-        //         ActualResult: '',
-        //         Selected: '',
-        //         PRNo: '',
-        //         TestLogs: '',
-        //         Numberoftests: '',
-        //         TestDate: '',
-        //         Remark: '',
-        //         Result: undefined,
-        //     },
-        //     {
-        //         id: '002',
-        //         TestCaseID: '',
-        //         SyRDIDFSRD: '',
-        //         Auto_testID: '',
-        //         TSR: '',
-        //         CasePriority: '',
-        //         TestMethod: '',
-        //         TestStrategy: '',
-        //         DesignMethod: '',
-        //         TestKey: '',
-        //         Initial_Condition: '',
-        //         Action: '',
-        //         Expected_Result: '',
-        //         InitTestSequences: '安卓测试 进入设置',
-        //         ActionTestSequences: '进入车辆设置',
-        //         ExpectedTestSequences: '页面正常显示',
-        //         ActualResult: '',
-        //         Selected: '',
-        //         PRNo: '',
-        //         TestLogs: '',
-        //         Numberoftests: '',
-        //         TestDate: '',
-        //         Remark: '',
-        //         Result: undefined,
-        //     }
-        // ])
+
         const casesTable = ref([])
 
         // const casesTable = ref(JSON.parse(localStorage.getItem('casesTable')) || [])
@@ -759,7 +706,7 @@ export default {
                 const res = await fetch('/dev-api/api/addtable', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ app_token: appToken, table_id: tableId, records})
+                    body: JSON.stringify({ app_token: appToken, table_id: tableId, records })
                 }).then(r => r.json());
 
                 if (res.code === 0) {
@@ -1876,7 +1823,61 @@ export default {
 
         // 模拟组件加载
         onMounted(async () => {
-            cases.value = await loadCases()
+            cases.value = await loadCases().then(list =>
+                list.length ? list : [
+                    {
+                        id: '001',
+                        TestCaseID: '',
+                        SyRDIDFSRD: '',
+                        Auto_testID: '',
+                        TSR: '',
+                        CasePriority: '',
+                        TestMethod: '',
+                        TestStrategy: '',
+                        DesignMethod: '',
+                        TestKey: '',
+                        Initial_Condition: '',
+                        Action: '',
+                        Expected_Result: '',
+                        InitTestSequences: "1.Switch-2-ON-KL30\n2.Switch-1-ON-KL15\n3.Switch-3-ON-ACC\n4.Pwr-1-SupplyPower-13.5\n5.CAN-Msg-ONEBOX_1_G-1\n6.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0\n7.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSigValidData-0\n8.CAN-Sig-FLZCU_9-FLZCU_9_PowerMode-2",
+                        ActionTestSequences: '1.CAN-1-Sig-ONEBOX_1_G-VehicleSpeedVSOSig-0x140',
+                        ExpectedTestSequences: '1.Vision-Pattern-车速21',
+                        ActualResult: '',
+                        Selected: '',
+                        PRNo: '',
+                        TestLogs: '',
+                        Numberoftests: '',
+                        TestDate: '',
+                        Remark: '',
+                        Result: undefined,
+                    },
+                    {
+                        id: '002',
+                        TestCaseID: '',
+                        SyRDIDFSRD: '',
+                        Auto_testID: '',
+                        TSR: '',
+                        CasePriority: '',
+                        TestMethod: '',
+                        TestStrategy: '',
+                        DesignMethod: '',
+                        TestKey: '',
+                        Initial_Condition: '',
+                        Action: '',
+                        Expected_Result: '',
+                        InitTestSequences: '安卓测试 进入设置',
+                        ActionTestSequences: '进入车辆设置',
+                        ExpectedTestSequences: '页面正常显示',
+                        ActualResult: '',
+                        Selected: '',
+                        PRNo: '',
+                        TestLogs: '',
+                        Numberoftests: '',
+                        TestDate: '',
+                        Remark: '',
+                        Result: undefined,
+                    }
+                ])
             casesTable.value = await loadCasesTable()
             setTimeout(() => {
                 fetchTestList(1);
