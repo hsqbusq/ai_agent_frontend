@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -1111,22 +1111,9 @@ export default {
 
         const exportName = ref('')
         const exportTestReport = async () => {
-            showToast('正在获取测试截图生成测试报告，请稍后...', 'info');
+            showToast('正在生成测试报告，请稍后...', 'info');
 
-            // #获取真实结果图片，##较慢
-            // const needPics = cases.value.filter(c => c.Result !== undefined && c.Result !== '');
-            // const chunk = (arr, size) => Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
-            // const groups = chunk(needPics, 10);
-            // const allTasks = groups.flatMap(group =>
-            //     group.map(row =>
-            //         fetchActualResultForExcel(row.Testid, row.ExpectedTestSequences)
-            //             .then(pic => ({ ...row, ActualResult: pic }))
-            //             .catch(() => ({ ...row, ActualResult: '' }))
-            //     )
-            // );
-            // const results = await Promise.allSettled(allTasks);
-            // reslutCases.value = results.map(r => r.value);
-
+            // 直接过滤出已有结果的用例，不再获取实际结果图片
             reslutCases.value = cases.value.filter(c => c.Result !== undefined && c.Result !== '');
             const list = reslutCases.value;
             const total = list.length;
@@ -1137,37 +1124,35 @@ export default {
                 .replace(/"/g, '&quot;')}">${val ?? ''}</td>`;
 
             const rowsHtml = list.map(c => `
-                <tr>
-                    <td>${c.id}</td>
-                    <td>${c.TestCaseID ?? ''}</td>
-                    <td>${c.SyRDIDFSRD ?? ''}</td>
-                    <td>${c.Auto_testID ?? ''}</td>
-                    <td>${c.TSR ?? ''}</td>
-                    <td>${c.CasePriority ?? ''}</td>
-                    <td>${c.TestMethod ?? ''}</td>
-                    <td>${c.TestStrategy ?? ''}</td>
-                    <td>${c.DesignMethod ?? ''}</td>
-                    <td>${c.TestKey ?? ''}</td>
-                    ${clip(c.Initial_Condition)}
-                    ${clip(c.Action)}
-                    ${clip(c.Expected_Result)}
-                    ${clip(c.InitTestSequences)}
-                    ${clip(c.ActionTestSequences)}
-                    <td>${c.ExpectedTestSequences}</td>
-                    <td style="background:${/pass/i.test(c.Result) ? '#d4f8d4' : '#ffe1e1'};font-weight:600;">
-                        ${c.Result ?? ''}
-                    </td>
-                    <td>${c.ActualResult
-                    ? `<img src="data:image/png;base64,${c.ActualResult}"/>`
-                    : '<span class="empty-img">暂无图片</span>'}
-                    </td>
-                    <td>${c.Selected ?? ''}</td>
-                    <td>${c.PRNo ?? ''}</td>
-                    <td>${c.TestLogs ?? ''}</td>
-                    <td>${c.Numberoftests ?? ''}</td>
-                    <td>${c.TestDate ?? ''}</td>
-                    <td>${c.Remark ?? ''}</td>
-                </tr>`).join('');
+        <tr>
+            <td>${c.id}</td>
+            <td>${c.TestCaseID ?? ''}</td>
+            <td>${c.SyRDIDFSRD ?? ''}</td>
+            <td>${c.Auto_testID ?? ''}</td>
+            <td>${c.TSR ?? ''}</td>
+            <td>${c.CasePriority ?? ''}</td>
+            <td>${c.TestMethod ?? ''}</td>
+            <td>${c.TestStrategy ?? ''}</td>
+            <td>${c.DesignMethod ?? ''}</td>
+            <td>${c.TestKey ?? ''}</td>
+            ${clip(c.Initial_Condition)}
+            ${clip(c.Action)}
+            ${clip(c.Expected_Result)}
+            ${clip(c.InitTestSequences)}
+            ${clip(c.ActionTestSequences)}
+            <td>${c.ExpectedTestSequences}</td>
+            <td style="background:${/pass/i.test(c.Result) ? '#d4f8d4' : '#ffe1e1'};font-weight:600;">
+                ${c.Result ?? ''}
+            </td>
+            <!-- 直接显示“暂无图片” -->
+            <td><span class="empty-img">暂无图片</span></td>
+            <td>${c.Selected ?? ''}</td>
+            <td>${c.PRNo ?? ''}</td>
+            <td>${c.TestLogs ?? ''}</td>
+            <td>${c.Numberoftests ?? ''}</td>
+            <td>${c.TestDate ?? ''}</td>
+            <td>${c.Remark ?? ''}</td>
+        </tr>`).join('');
 
             const html = reportTpl
                 .replaceAll('{{TITLE}}', '自动化测试报告')
