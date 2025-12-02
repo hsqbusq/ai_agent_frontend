@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -1340,17 +1340,33 @@ export default {
                     const firstSheetName = workbook.SheetNames[0]
                     const worksheet = workbook.Sheets[firstSheetName]
                     const json = XLSX.utils.sheet_to_json(worksheet)
+                    console.log(json);
+                    
                     json.forEach((row) => {
+                        console.log(row);
+
                         const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
                         cases.value.push({
                             id: newId,
-                            TestKey: row['TestKey\r\n测试功能点'],
-                            Initial_Condition: row['Initial_Condition\r\n初始条件'],
-                            Action: row['Action\r\n动作'],
-                            Expected_Result: row['Expected_Result\r\n预期结果'],
-                            InitTestSequences: row['InitTestSequences\r\n初始条件序列'],
-                            ActionTestSequences: row['ActionTestSequences\r\n操作步骤序列'],
-                            ExpectedTestSequences: row['ExpectedTestSequences\r\n预期结果序列'],
+                            TestCaseID: row['Test Case ID'],
+                            SyRDIDFSRD: row['SyRD ID/FSR'],
+                            TSR: row['TSR'],
+                            CasePriority: row['Case\nPriority'],
+                            DesignMethod: row["Design Method "],
+                            TestMethod: row["Test Method"],
+                            TestStrategy: row["Test\nStrategy "],
+                            TestKey: row['Test Key\n功能点'],
+                            Initial_Condition: row['初始条件序列'],
+                            Action: row['操作步骤序列'],
+                            Expected_Result: row['Expected Result\n期望结果'],
+                            Selected: row['Selected'],
+                            Result: row['Test  Result'],
+                            ActualResult: row['Actual Result'],
+                            PRNo: row['PR No.'],
+                            TestLogs: row['Test Log'],
+                            Numberoftests: row['Number of tests'],
+                            TestDate: row['Test Date'],
+                            Remark: row['Remark'],
                         })
                     })
                     showToast(`文件导入完成: ${file.name}`, 'success')
@@ -1405,7 +1421,6 @@ export default {
                                 ActualResult: row['Actual Result'],
                                 PRNo: row['PR No.'],
                                 TestLogs: row['Test Logs'],
-                                Numberoftests: row['Number of tests'],
                                 TestDate: row['Test Date'],
                                 Remark: row['Remark'],
                             })
