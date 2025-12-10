@@ -249,13 +249,18 @@
                                     </el-table>
                                 </div>
                                 <div v-else>
+
                                     请选择一个测试用例以查看其执行日志。
                                 </div>
-                                <!-- <el-table :data="executionLogs" class="logs-table" height="440" style="width: 100%">
-                                    <el-table-column prop="id" label="序号" width="80" align="center"></el-table-column>
-                                    <el-table-column prop="time" label="时间" min-width="160" sortable></el-table-column>
-                                    <el-table-column prop="message" label="消息" min-width="260"></el-table-column>
-                                </el-table> -->
+                            </el-tab-pane>
+
+                            <el-tab-pane label="用户日志" name="fourth">
+                                <el-table :data="userLogs" :row-style="getRowStyle"
+                                    class="logs-table execution-logs-table" max-height="440" style="width: 100%">
+                                    <el-table-column prop="step_id" label="序号" width="80"
+                                        align="center"></el-table-column>
+                                    <el-table-column prop="msg" label="内容" min-width="160" sortable>
+                                    </el-table-column> </el-table>
                             </el-tab-pane>
                         </el-tabs>
 
@@ -985,7 +990,6 @@ export default {
 
             const start = cases.value.findIndex(caseItem => caseItem.id === startId.value);
             const end = cases.value.findIndex(caseItem => caseItem.id === endId.value);
-
             console.log(start, end)
             if (start === -1 || end === -1) {
                 showToast('请选择有效的测试用例', 'warning');
@@ -1341,7 +1345,7 @@ export default {
                     const worksheet = workbook.Sheets[firstSheetName]
                     const json = XLSX.utils.sheet_to_json(worksheet)
                     console.log(json);
-                    
+
                     json.forEach((row) => {
                         console.log(row);
 
@@ -1460,29 +1464,20 @@ export default {
             let index = 0;
             while (index < selectedRowsAll.value.length && isDebugRunning.value) {
                 const row = selectedRowsAll.value[index];
-                // console.log(`开始调试用例${row.id}`);
-                // console.log(selectedRowsAll.value);
-                // console.log(selectedRowsAll.value.length);
                 try {
                     if (!debugRows.value.some(dr => dr.id === row.id)) {
                         debugRows.value.push(row);
                     }
-                    // console.log(debugRows.value);
                     selectedCase.value = row.id;
-                    // console.log(selectedCase.value);
                     const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
                     const baseurl = url.value;
 
-                    await runTestCase(query, baseurl, row.id);
+                    await runTestCase(query, baseurl, row.id, row);
                 } catch (error) {
                     showToast(`测试用例${row.id}调试失败`, 'error');
                 }
 
                 index++;
-                // console.log(selectedRowsAll.value.length)
-                // console.log(`结束调试用例${row.id}`);
-                // console.log(index);
-                // console.log(isDebugRunning.value);
             }
 
             isDebugRunning.value = false;
@@ -1494,10 +1489,10 @@ export default {
         };
 
         // 运行测试用例
-        const runTestCase = (query, baseurl, id) => {
+        const runTestCase = (query, baseurl, id, row) => {
             return new Promise((resolve, reject) => {
                 try {
-                    startPollingForDebugResults(query, baseurl, id, resolve, reject);
+                    startPollingForDebugResults(query, baseurl, id, resolve, reject, row);
                 } catch (error) {
                     reject(error);
                 }
@@ -1535,8 +1530,35 @@ export default {
         }
 
         const pollingIntervals = {};
-        const startPollingForDebugResults = (query, baseurl, id, resolve, reject) => {
+        const userLogs = ref([]);
+        const getRowStyle = ({ row }) => row.rowStyle || {}
+        const changeColor = (caseId, finalColor, succ, fail, index) => {
+            const logs = userLogs.value.filter(u => u.caseId === caseId);
+            if (index < logs.length) {
+                logs[index].type = succ >= fail ? 'success' : 'error';
+                logs[index].rowStyle = { backgroundColor: finalColor };
+                index++;
+                const randomInterval = Math.random() * (0.8 - 0.3) + 0.3; // 随机间隔 0.3-0.8 秒
+                setTimeout(() => {
+                    changeColor(caseId, finalColor, succ, fail, index);
+                }, randomInterval * 1000);
+            }
+        };
+
+        const startPollingForDebugResults = (query, baseurl, id, resolve, reject, row) => {
             showToast('发送调试请求成功，日志将在下方测试执行日志展示！', 'success');
+            userLogs.value = [];
+            const steps = row.InitTestSequences.split('\n').filter(Boolean)
+                .concat(row.ActionTestSequences.split('\n').filter(Boolean))
+            const logList = steps.map((text, idx) => ({
+                step_id: idx + 1,
+                msg: `用例${row.id} 步骤${idx + 1}: ${text}`,
+                type: 'waiting',
+                caseId: row.id,
+                rowStyle: { backgroundColor: '#ffffff' }
+            }))
+            userLogs.value = logList
+
             executionLogs.value[id] = [];
             executionLogs.value[id].push({
                 log_id: 1,
@@ -1552,7 +1574,7 @@ export default {
                 message: `开始调试，请等待！`,
             });
 
-            let testIdFound = false; // 添加标志变量
+            let testIdFound = false;
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/dev-api/chat', true);
             xhr.setRequestHeader('Content-Type', 'application/json');
@@ -1561,15 +1583,20 @@ export default {
 
             xhr.onreadystatechange = () => {
                 if (xhr.readyState === 3 && isDebugRunning.value) {
-                    // 获取新接收到的部分响应数据
                     const newResponseText = xhr.responseText.slice(lastProcessedLength);
 
                     const lines = newResponseText.split('\n');
-                    var thinkFlag = false; // 标志是否有思考提示
+                    var thinkFlag = false;
 
                     lines.forEach(line => {
-                        if (line.trim() === '') return; // 跳过空行
+                        if (line.trim() === '') return;
                         if (line === '') return;
+                        const succ = (line.match(/执行成功/g) || []).length
+                        const fail = (line.match(/执行失败/g) || []).length
+                        if (succ + fail > 0) {
+                            const finalColor = succ >= fail ? 'rgb(31 181 51)' : '#eb1919';
+                            changeColor(row.id, finalColor, succ, fail, 0)
+                        }
                         const match = line.match(/data: \[.*?\]\{"test_id": "(.*?)"\}/);
                         if (!testIdFound) {
                             if (match) {
@@ -1589,8 +1616,6 @@ export default {
                                                 if (index !== -1) {
                                                     cases.value[index].Result = data.result;
                                                     cases.value[index].Testid = test_id;
-                                                    // reslutCases.value.push(cases.value[index]);
-                                                    // fetchActualResultForExcel(test_id, cases.value[index].ExpectedTestSequences);
                                                 }
                                                 fetchTestList(1); // 刷新测试用例列表
                                                 clearInterval(intervalId); // 停止轮询
@@ -1624,6 +1649,7 @@ export default {
                                 return;
                             }
                         }
+
                         if (testIdFound && match) return;
                         if (line.includes('<think>')) {
                             thinkFlag = true;
@@ -1921,6 +1947,7 @@ export default {
             logCases,
             executionLogs,
             filteredExecutionLogs,
+            userLogs,
             executionLogsTable,
             filteredLogCases,
             paginatedCases,
@@ -2009,7 +2036,9 @@ export default {
             SynchronizeTestResultsDialogVisible,
             sendSynchronizeTestResultsRequest,
             startTime,
-            endTime
+            endTime,
+            getRowStyle,
+            changeColor
         }
     }
 }
