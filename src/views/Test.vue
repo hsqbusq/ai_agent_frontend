@@ -1536,7 +1536,11 @@ export default {
             const logs = userLogs.value.filter(u => u.caseId === caseId);
             if (index < logs.length) {
                 logs[index].type = succ >= fail ? 'success' : 'error';
-                logs[index].rowStyle = { backgroundColor: finalColor };
+                logs[index].rowStyle = {
+                    backgroundColor: finalColor,
+                    fontWeight: 'bold',
+                    color: 'black'
+                };
                 index++;
                 const randomInterval = Math.random() * (0.8 - 0.3) + 0.3; // 随机间隔 0.3-0.8 秒
                 setTimeout(() => {
