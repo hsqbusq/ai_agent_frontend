@@ -303,8 +303,8 @@
         </div>
 
         <el-dialog v-model="caseConversionDialogVisible" title="序列化用例转化" width="50%">
-            <el-form label-width="150px">
-                <el-form-item label="提示词">
+            <el-form label-width="150px" @submit.prevent>
+                <el-form-item label="提示词" >
                     <el-input v-model="prompt1" placeholder="请输入序列化用例转化的提示词"></el-input>
                 </el-form-item>
             </el-form>
@@ -349,13 +349,13 @@
         </el-dialog>
 
         <el-dialog v-model="SynchronizeTestResultsDialogVisible" title="飞书文档同步设置" width="50%">
-            <el-form label-width="150px">
+            <el-form label-width="150px" @submit.prevent>
                 <el-form-item label="项目名称">
                     <el-input v-model="xmmc" placeholder="请输入项目名称"></el-input>
                 </el-form-item>
             </el-form>
             <el-form label-width="150px">
-                <el-form-item label="飞书文档链接url">
+                <el-form-item label="飞书文档链接url" @submit.prevent>
                     <el-input v-model="feishuDocUrl" placeholder="请输入飞书文档url"></el-input>
                 </el-form-item>
             </el-form>
