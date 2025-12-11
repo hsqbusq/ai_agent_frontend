@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -304,7 +304,7 @@
 
         <el-dialog v-model="caseConversionDialogVisible" title="序列化用例转化" width="50%">
             <el-form label-width="150px" @submit.prevent>
-                <el-form-item label="提示词" >
+                <el-form-item label="提示词">
                     <el-input v-model="prompt1" placeholder="请输入序列化用例转化的提示词"></el-input>
                 </el-form-item>
             </el-form>
@@ -553,12 +553,7 @@ export default {
             contextMenu.visible = true
         }
 
-        const convertRow = (row) => {
-            contextMenu.visible = false
-            if (!row) return
-            runCaseConversion(row)          // 沿用已有转换逻辑
-            showToast(`用例 ${row.id} 转换中...`, 'info')
-        }
+
 
         const runSingleRow = async (row) => {
             contextMenu.visible = false
@@ -935,10 +930,7 @@ export default {
 
 
 
-        // 运行测试用例
-        const runCaseConversion = (row) => {
-            startCaseConversion(row);
-        }
+
 
         // 清除日志
         const clearLogs = () => {
@@ -1023,6 +1015,11 @@ export default {
 
         // 处理选中改变事件
         const handleSelectionChange = (selection) => {
+            console.log(isConverting.value);
+            console.log(selectedRowsAll.value);
+            if (isConverting.value) {
+                return;
+            }
 
             selection.forEach((row) => {
                 if (!selectedRowsAll.value.some(r => r.id === row.id)) {
@@ -1506,18 +1503,6 @@ export default {
             caseConversionDialogVisible.value = true
         }
 
-        const caseConversion = () => {
-            caseConversionDialogVisible.value = false
-            if (selectedRowsAll.value.length === 0) {
-                showToast('请先选择要转换的测试用例', 'warning')
-                return
-            }
-
-            showToast(`开始转换用例`, 'info')
-            selectedRowsAll.value.forEach((row) => {
-                runCaseConversion(row);
-            })
-        }
 
         const isDebugRunning = ref(false)
 
@@ -1704,57 +1689,105 @@ export default {
             xhr.send(JSON.stringify({ query: query, baseurl: baseurl, lang: value }));
         }
 
+        const isConverting = ref(false);
+        const caseConversion = async () => {
+            caseConversionDialogVisible.value = false
+            if (selectedRowsAll.value.length === 0) {
+                showToast('请先选择要转换的测试用例', 'warning')
+                return
+            }
 
-        const startCaseConversion = async (row) => {
-            // 第一次调用
-            callApi(row.id, row.Initial_Condition, 'A', false, 'A');
-            // 第二次调用
-            callApi(row.id, row.Action, 'A', false, 'B');
+            isConverting.value = true;
+            const selectedIds = selectedRowsAll.value.map(row => row.id);
+            const conversionPromises = selectedRowsAll.value.map(row => {
+                return new Promise((resolve, reject) => {
+                    runCaseConversion(row, resolve, reject);
+                });
+            });
 
-            const index = cases.value.findIndex(c => c.id === row.id);
-            cases.value[index].ExpectedTestSequences = row.Expected_Result;
-            // // 第三次调用
-            // callApi(row.id, row.Expected_Result, 'C', false);
+            try {
+                await Promise.all(conversionPromises);
+                showToast(`所有用例转换完成`, 'success');
+            } catch (error) {
+                showToast(`用例转换失败: ${error.message}`, 'error');
+            } finally {
+                isConverting.value = false;
+                nextTick(() => {
+                    selectedIds.forEach(id => {
+                        const row = cases.value.find(c => c.id === id);
+                        if (row) {
+                            proxy.$refs.caseTable.toggleRowSelection(row, true);
+                        }
+                    });
+                });
+            }
+        }
+
+        const convertRow = (row) => {
+            contextMenu.visible = false
+            if (!row) return
+            runCaseConversion(row)
+            showToast(`用例 ${row.id} 转换中...`, 'info')
+        }
+
+        // 运行测试用例
+        const runCaseConversion = (row, resolve, reject) => {
+            startCaseConversion(row, resolve, reject);
+        };
+
+        const startCaseConversion = async (row, resolve, reject) => {
+            try {
+                await callApi(row.id, row.Initial_Condition, 'A', false, 'A');
+                await callApi(row.id, row.Action, 'A', false, 'B');
+
+                const index = cases.value.findIndex(c => c.id === row.id);
+                cases.value[index].ExpectedTestSequences = row.Expected_Result;
+                resolve();
+            } catch (error) {
+                reject(error);
+            }
         }
 
         const callApi = (id, input, task, stream, step) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/dev-api/v1/chat/completions', true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('Accept', 'text/event-stream');
+            return new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/dev-api/v1/chat/completions', true);
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('Accept', 'text/event-stream');
 
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState !== 4) return;
+                xhr.onreadystatechange = function () {
+                    if (xhr.readyState !== 4) return;
 
-                if (xhr.status === 200) {
-                    try {
-                        const response = JSON.parse(xhr.responseText);
-                        const content = response.choices?.[0]?.message?.content;
-                        if (typeof content !== 'string') throw new Error('返回格式异常');
+                    if (xhr.status === 200) {
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            const content = response.choices?.[0]?.message?.content;
+                            if (typeof content !== 'string') throw new Error('返回格式异常');
 
-                        const index = cases.value.findIndex(c => c.id === id);
-                        if (index === -1) return;
-
-                        if (step === 'A') {
-                            cases.value[index].InitTestSequences = content;
-                        } else if (step === 'B') {
-                            cases.value[index].ActionTestSequences = content;
-                            showToast(`用例 ${id} 转换成功`, 'success');
+                            const index = cases.value.findIndex(c => c.id === id);
+                            if (index !== -1) {
+                                if (step === 'A') {
+                                    cases.value[index].InitTestSequences = content;
+                                } else if (step === 'B') {
+                                    cases.value[index].ActionTestSequences = content;
+                                    showToast(`用例 ${id} 转换成功`, 'success');
+                                }
+                            }
+                            resolve();
+                        } catch (e) {
+                            reject(e);
                         }
-                    } catch (e) {
-                        console.error(e);
-                        showToast(`用例 ${id} 解析失败：${e.message}`, 'error');
+                    } else {
+                        reject(new Error(`用例 ${id} 请求失败：HTTP ${xhr.status}`));
                     }
-                } else {
-                    showToast(`用例 ${id} 请求失败：HTTP ${xhr.status}`, 'error');
-                }
-            };
-            xhr.onerror = function () {
-                showToast(`用例 ${id} 网络错误，请检查服务是否可用`, 'error');
-            };
-            const dbc = dbcFileName.value.name;
-            const prompt = prompt1.value;
-            xhr.send(JSON.stringify({ input, task, stream, dbc, prompt }));
+                };
+                xhr.onerror = function () {
+                    reject(new Error(`用例 ${id} 网络错误，请检查服务是否可用`));
+                };
+                const dbc = dbcFileName.value.name;
+                const prompt = prompt1.value;
+                xhr.send(JSON.stringify({ input, task, stream, dbc, prompt }));
+            });
         }
 
         // 停止所有轮询
@@ -2042,7 +2075,8 @@ export default {
             startTime,
             endTime,
             getRowStyle,
-            changeColor
+            changeColor,
+            isConverting
         }
     }
 }
