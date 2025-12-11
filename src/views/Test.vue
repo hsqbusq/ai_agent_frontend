@@ -1697,6 +1697,7 @@ export default {
                 return
             }
 
+            showToast('开始转换测试用例', 'info');
             isConverting.value = true;
             const selectedIds = selectedRowsAll.value.map(row => row.id);
             const conversionPromises = selectedRowsAll.value.map(row => {
@@ -1706,8 +1707,15 @@ export default {
             });
 
             try {
-                await Promise.all(conversionPromises);
-                showToast(`所有用例转换完成`, 'success');
+                const results = await Promise.allSettled(conversionPromises);
+                const failedIds = results
+                    .filter(result => result.status === 'rejected')
+                    .map((_, index) => selectedRowsAll.value[index].id);
+                if (failedIds.length > 0) {
+                    showToast(`部分用例转换失败: ${failedIds.join(', ')}`, 'error');
+                } else {
+                    showToast(`所有用例转换完成`, 'success');
+                }
             } catch (error) {
                 showToast(`用例转换失败: ${error.message}`, 'error');
             } finally {
