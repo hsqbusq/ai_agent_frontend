@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -1566,22 +1566,25 @@ export default {
                     color: 'black'
                 };
                 index++;
-                const randomInterval = Math.random() * (0.8 - 0.3) + 0.3; 
+                const randomInterval = Math.random() * (0.8 - 0.3) + 0.3;
                 setTimeout(() => {
                     changeColor(caseId, finalColor, succ, fail, index);
                 }, randomInterval * 1000);
             }
         };
 
-        const iconDialogVisible = ref(false)   
+        const iconDialogVisible = ref(false)
         const iconInfo = ref({})
         const saveIconLoading = ref(false)
-
+        const tap_iconInfo = ref('')
         // 接口返回的 base64
         const showIcon = async () => {
             showToast('正在获取图标...', 'info')
             try {
-                const params = new URLSearchParams({ base_url: url.value })
+                const params = new URLSearchParams({
+                    base_url: url.value,
+                    page_key: tap_iconInfo.value
+                })
                 const res = await fetch(`/dev-api/api/getcurrenticon?${params}`, {
                     method: 'GET'
                 }).then(r => r.json())
@@ -1699,6 +1702,13 @@ export default {
 
                             console.log(hasTapIcon)
                             if (hasTapIcon) {
+                                const tapIconStartIndex = contentBetweenProcedures.indexOf('<tap_icon>');
+                                const tapIconEndIndex = contentBetweenProcedures.indexOf('<tap_icon>', tapIconStartIndex + 1);
+                                const contentBetweenTapIcon = contentBetweenProcedures.substring(tapIconStartIndex + '<tap_icon>'.length, tapIconEndIndex);
+                                const tapIconText = contentBetweenTapIcon.match(/_([^_]+)_/)?.[1] ?? '';
+                                tap_iconInfo.value = tapIconText;
+                                console.log(tap_iconInfo.value);
+
                                 const firstWaitingIdx = userLogs.value.findIndex(
                                     log => log.caseId === row.id && log.type === 'waiting'
                                 );
@@ -2280,7 +2290,8 @@ export default {
             iconInfo,
             showIcon,
             saveIconLoading,
-            saveIconNames
+            saveIconNames,
+            tap_iconInfo
         }
     }
 }
