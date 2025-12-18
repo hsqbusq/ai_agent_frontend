@@ -114,7 +114,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -122,7 +122,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -130,7 +130,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -256,11 +256,27 @@
 
                             <el-tab-pane label="用户日志" name="fourth">
                                 <el-table :data="userLogs" :row-style="getRowStyle"
-                                    class="logs-table execution-logs-table" max-height="440" style="width: 100%">
-                                    <el-table-column prop="step_id" label="序号" width="80"
-                                        align="center"></el-table-column>
-                                    <el-table-column prop="msg" label="内容" min-width="160" sortable>
-                                    </el-table-column> </el-table>
+                                    class="logs-table execution-logs-table" max-height="440" style="width: 100%"
+                                    row-key="step_id">
+
+                                    <el-table-column prop="step_id" label="序号" width="80" align="center" />
+
+                                    <el-table-column label="内容" min-width="260">
+                                        <template #default="{ row }">
+                                            <div :style="row.rowStyle">{{ row.msg }}</div>
+
+                                            <div v-for="(sub, idx) in row.subSteps" :key="idx" class="user-logs-sub">
+                                                └─ {{ idx + 1 }}. {{ sub.text }}
+
+                                                <el-button v-if="sub.hasTapIcon" size="small"
+                                                    style="margin-left:6px;height:20px;padding:0 8px;font-size:12px;"
+                                                    @click="showIcon">
+                                                    点击失败? 去修改
+                                                </el-button>
+                                            </div>
+                                        </template>
+                                    </el-table-column>
+                                </el-table>
                             </el-tab-pane>
                         </el-tabs>
 
@@ -301,6 +317,27 @@
             </div>
 
         </div>
+
+        <!-- 图标查看弹窗 -->
+        <el-dialog v-model="iconDialogVisible" title="当前图标" width="70%" :close-on-click-modal="true">
+            <div style="text-align:center;">
+                <img v-if="iconInfo.img_base64" :src="'data:image/png;base64,' + iconInfo.img_base64"
+                    style="max-width:100%;border:1px solid #ccc;border-radius:4px;" />
+                <div v-if="iconInfo.iconList" style="margin-top:12px;text-align:left;">
+                    <div v-for="item in iconInfo.iconList" :key="item.index"
+                        style="display:flex;align-items:center;margin-bottom:6px;line-height:1.8;">
+                        <span style="min-width:36px;font-weight:bold;">{{ item.index }}.</span>
+                        <span style="color:#999;margin-right:6px;">{{ item.coord }}:</span>
+                        <el-input v-model="item.name" size="small" style="flex:1;" />
+                    </div>
+                </div>
+                <span v-if="!iconInfo.img_base64 && !iconInfo.icon_names">暂无图标</span>
+            </div>
+            <template #footer>
+                <el-button type="primary" :loading="saveIconLoading" @click="saveIconNames">保 存</el-button>
+                <el-button @click="iconDialogVisible = false">关 闭</el-button>
+            </template>
+        </el-dialog>
 
         <el-dialog v-model="caseConversionDialogVisible" title="序列化用例转化" width="50%">
             <el-form label-width="150px" @submit.prevent>
@@ -634,7 +671,7 @@ export default {
             SynchronizeTestResultsDialogVisible.value = true
             xmmc.value = localStorage.getItem('xmmc') || ''
             feishuDocUrl.value = localStorage.getItem('feishuDocUrl') || ''
-            autoSyncToFeishu.value = localStorage.getItem('autoSyncToFeishu') === 'true' || false
+            autoSyncToFeishu.value = localStorage.getItem('autoSyncToFeishu') === 'true';
         }
 
         const saveSetting = async () => {
@@ -1480,6 +1517,8 @@ export default {
             isDebugRunning.value = false;
             endTime.value = parseInt(Date.now());
             showToast('调试已完成', 'info');
+            console.log(autoSyncToFeishu.value);
+
             if (autoSyncToFeishu.value) {
                 await sendSynchronizeTestResultsRequest();
             }
@@ -1527,21 +1566,86 @@ export default {
                     color: 'black'
                 };
                 index++;
-                const randomInterval = Math.random() * (0.8 - 0.3) + 0.3; // 随机间隔 0.3-0.8 秒
+                const randomInterval = Math.random() * (0.8 - 0.3) + 0.3; 
                 setTimeout(() => {
                     changeColor(caseId, finalColor, succ, fail, index);
                 }, randomInterval * 1000);
             }
         };
 
-        const startPollingForDebugResults = (query, baseurl, id, resolve, reject, row) => {
+        const iconDialogVisible = ref(false)   
+        const iconInfo = ref({})
+        const saveIconLoading = ref(false)
+
+        // 接口返回的 base64
+        const showIcon = async () => {
+            showToast('正在获取图标...', 'info')
+            try {
+                const params = new URLSearchParams({ base_url: url.value })
+                const res = await fetch(`/dev-api/api/getcurrenticon?${params}`, {
+                    method: 'GET'
+                }).then(r => r.json())
+                if (String(res.code) === '200') {
+                    iconInfo.value.img_base64 = res.result.img_base64
+                    iconInfo.value.page_hash = res.result.page_hash
+                    const rawLines = (res.result.icon_names || '').split('\n')
+                    iconInfo.value.iconList = rawLines.map((line, idx) => {
+                        const [coord, name = ''] = line.split(': ')
+                        return {
+                            index: idx + 1,
+                            coord: coord.trim(),
+                            name: name.trim()
+                        }
+                    })
+                    console.log(iconInfo.value);
+
+                    iconDialogVisible.value = true
+                } else {
+                    ElMessage.error(res.msg || '获取图标失败')
+                }
+            } catch (e) {
+                ElMessage.error('网络异常：' + e.message)
+            }
+        }
+
+        const saveIconNames = async () => {
+            saveIconLoading.value = true
+            try {
+                const iconNamesStr = iconInfo.value.iconList
+                    .map(it => `${it.coord}: ${it.name}`)
+                    .join('\n')
+
+                const res = await fetch('/dev-api/api/setcurrenticon', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        page_key: iconInfo.value.page_hash,
+                        icon_names: iconNamesStr
+                    })
+                }).then(r => r.json())
+
+                if (String(res.code) === '200') {
+                    ElMessage.success(res.msg || '图标名称已保存')
+                    iconDialogVisible.value = false
+                } else {
+                    ElMessage.error(res.msg || '保存失败')
+                }
+            } catch (e) {
+                ElMessage.error('网络异常：' + e.message)
+            } finally {
+                saveIconLoading.value = false
+            }
+        }
+
+
+        const startPollingForDebugResults = async (query, baseurl, id, resolve, reject, row) => {
             showToast('发送调试请求成功，日志将在下方测试执行日志展示！', 'success');
             userLogs.value = [];
             const steps = row.InitTestSequences.split('\n').filter(Boolean)
                 .concat(row.ActionTestSequences.split('\n').filter(Boolean))
             const logList = steps.map((text, idx) => ({
                 step_id: idx + 1,
-                msg: `用例${row.id} 步骤${idx + 1}: ${text}`,
+                msg: `${text}`,
                 type: 'waiting',
                 caseId: row.id,
                 rowStyle: { backgroundColor: '#ffffff' }
@@ -1576,17 +1680,104 @@ export default {
 
                     const lines = newResponseText.split('\n');
                     var thinkFlag = false;
-
-                    lines.forEach(line => {
+                    lines.forEach(async line => {
                         if (line.trim() === '') return;
                         if (line === '') return;
                         const succ = (line.match(/执行成功/g) || []).length
                         const fail = (line.match(/执行失败/g) || []).length
                         if (succ + fail > 0) {
                             const finalColor = succ >= fail ? 'rgb(31 181 51)' : '#eb1919';
-                            changeColor(row.id, finalColor, succ, fail, 0)
+                            await changeColor(row.id, finalColor, succ, fail, 0)
                         }
+                        const procedureStartIndex = line.indexOf('<procedure>');
+                        const procedureEndIndex = line.indexOf('<procedure>', procedureStartIndex + 1);
+
+                        if (procedureStartIndex !== -1 && procedureEndIndex !== -1) {
+                            const contentBetweenProcedures = line.substring(procedureStartIndex + '<procedure>'.length, procedureEndIndex);
+                            const procedureText = contentBetweenProcedures.match(/_([^_]+)_/)?.[1] ?? '';
+                            const hasTapIcon = /<tap_icon>/.test(contentBetweenProcedures);
+
+                            console.log(hasTapIcon)
+                            if (hasTapIcon) {
+                                const firstWaitingIdx = userLogs.value.findIndex(
+                                    log => log.caseId === row.id && log.type === 'waiting'
+                                );
+
+                                if (firstWaitingIdx !== -1) {
+                                    const firstLog = userLogs.value[firstWaitingIdx];
+                                    firstLog.type = 'success';
+                                    firstLog.rowStyle = {
+                                        backgroundColor: 'rgb(31 181 51)',
+                                        fontWeight: 'bold',
+                                        color: 'black'
+                                    };
+                                    if (!firstLog.subSteps) firstLog.subSteps = [];
+                                    firstLog.subSteps.push({
+                                        text: '点击成功',
+                                        hasTapIcon: true
+                                    });
+                                }
+                            }
+                            if (line.includes('成功')) {
+                                console.log("添加procedure");
+
+                                const targetIdx = userLogs.value.findIndex(
+                                    log => log.caseId === row.id &&
+                                        contentBetweenProcedures.includes(log.msg)
+                                );
+                                console.log(targetIdx);
+
+                                if (targetIdx !== -1) {
+                                    const toGreen = [];
+                                    for (let i = 0; i <= targetIdx; i++) {
+                                        const log = userLogs.value[i];
+                                        if (log.caseId === row.id && log.type === 'waiting') {
+                                            toGreen.push(i);
+                                        }
+                                    }
+                                    let delay = 0;
+                                    toGreen.forEach(idx => {
+                                        delay += (Math.random() * 0.5 + 0.3) * 1000;
+                                        setTimeout(() => {
+                                            const log = userLogs.value[idx];
+                                            log.type = 'success';
+                                            log.rowStyle = {
+                                                backgroundColor: 'rgb(31 181 51)',
+                                                fontWeight: 'bold',
+                                                color: 'black'
+                                            };
+                                        }, delay);
+                                    });
+
+                                    const targetLog = userLogs.value[targetIdx];
+
+                                    if (!targetLog.subSteps) targetLog.subSteps = [];
+
+                                    targetLog.subSteps.push({
+                                        text: procedureText,
+                                        hasTapIcon: false
+                                    });
+                                }
+                            }
+
+                        }
+                        // const resultStartIndex = line.indexOf('<result>');
+                        // const resultEndIndex = line.indexOf('<result>', resultStartIndex + 1);
+
+                        // if (resultStartIndex !== -1 && resultEndIndex !== -1) {
+                        //     const contentBetweenresult = line.substring(resultStartIndex + '<result>'.length, resultEndIndex);
+                        //     const resulttText = "测试结果：" + contentBetweenresult
+                        //     const logEntry = {
+                        //         step_id: userLogs.value.length + 1,
+                        //         msg: resulttText,
+                        //         type: 'success',
+                        //         caseId: row.id,
+                        //         rowStyle: { backgroundColor: 'rgb(31 181 51)', fontWeight: 'bold', color: 'black' }
+                        //     };
+                        //     userLogs.value.push(logEntry);
+                        // }
                         const match = line.match(/data: \[.*?\]\{"test_id": "(.*?)"\}/);
+
                         if (!testIdFound) {
                             if (match) {
                                 const test_id = match[1];
@@ -2084,7 +2275,12 @@ export default {
             endTime,
             getRowStyle,
             changeColor,
-            isConverting
+            isConverting,
+            iconDialogVisible,
+            iconInfo,
+            showIcon,
+            saveIconLoading,
+            saveIconNames
         }
     }
 }
@@ -2393,5 +2589,10 @@ pre {
 .context-menu li:hover {
     background-color: #f2f6fc;
     color: #409eff;
+}
+
+.user-logs-sub {
+    color: #000 !important;
+    font-weight: 700 !important;
 }
 </style>
