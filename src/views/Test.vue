@@ -35,6 +35,9 @@
                         <el-button type="primary" size="small" @click="SynchronizeTestResults" style="padding: 15px">
                             <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 文档同步设置
                         </el-button>
+                        <el-button type="primary" size="small" @click="openTestConfigDialog" style="padding:15px">
+                            <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 测试配置
+                        </el-button>
                         <!-- <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
@@ -317,6 +320,48 @@
             </div>
 
         </div>
+
+        <el-dialog v-model="testConfigVisible" title="测试配置" width="440px" :close-on-click-modal="true">
+            <el-form label-width="150px" style="padding:0 8px">
+                <el-card shadow="never" style="margin-bottom:16px">
+                    <template #header>
+                        <div style="font-weight:600">图像匹配相关设置</div>
+                    </template>
+                    <!-- <el-form-item label="图像等待策略">
+                        <el-select v-model="testConfig.waitStrategy" style="width:100%">
+                            <el-option label="固定时间+持续判断" value="fixed_and_poll" />
+                            <el-option label="仅固定时间" value="fixed_only" />
+                            <el-option label="仅持续判断" value="poll_only" />
+                        </el-select>
+                    </el-form-item> -->
+                    <el-form-item label="前置等待时间">
+                        <el-input-number v-model="testConfig.preWaitSec" :min="0" :max="999" :step="1" :precision="0"
+                            style="width:100%" />
+                        <div style="font-size:12px;color:#999">单位：秒</div>
+                    </el-form-item>
+                    <el-form-item label="检测超时时间">
+                        <el-input-number v-model="testConfig.timeoutSec" :min="1" :max="999" :step="1" :precision="0"
+                            style="width:100%" />
+                        <div style="font-size:12px;color:#999">单位：秒</div>
+                    </el-form-item>
+                </el-card>
+                <!-- <el-card shadow="never">
+                    <template #header>
+                        <div style="font-weight:600">执行用例流程设置</div>
+                    </template>
+                    <el-form-item label="失败后继续执行当前行其他步骤">
+                        <el-switch v-model="testConfig.continueOnFail" active-text="是" inactive-text="否" />
+                    </el-form-item>
+                    <el-form-item label="所有再发报文改为默认值">
+                        <el-switch v-model="testConfig.defaultAllIn" active-text="是" inactive-text="否" />
+                    </el-form-item>
+                </el-card> -->
+            </el-form>
+            <template #footer>
+                <el-button @click="testConfigVisible = false">取 消</el-button>
+                <el-button type="primary" @click="saveTestConfig">保 存</el-button>
+            </template>
+        </el-dialog>
 
         <!-- 图标查看弹窗 -->
         <el-dialog v-model="iconDialogVisible" title="当前图标" width="70%" :close-on-click-modal="true">
@@ -1887,7 +1932,7 @@ export default {
             };
 
             var value = langOptions.value.find(item => item.label === currentLang.value).value
-            xhr.send(JSON.stringify({ query: query, baseurl: baseurl, lang: value }));
+            xhr.send(JSON.stringify({ query: query, baseurl: baseurl, lang: value, detect_before_timeout: testConfig.preWaitSec+'', detect_timeout: testConfig.timeoutSec+'' }));
         }
 
         const isConverting = ref(false);
@@ -2096,7 +2141,33 @@ export default {
             }
             showToast('DBC文件选择成功', 'success')
         }
+        const testConfigVisible = ref(false)
 
+        const testConfig = reactive({
+            waitStrategy: 'fixed_and_poll',
+            preWaitSec: 0,
+            timeoutSec: 0,
+            continueOnFail: false,
+            defaultAllIn: false
+        })
+
+        const loadTestConfig = () => {
+            try {
+                const str = localStorage.getItem('TEST_CONFIG')
+                if (str) Object.assign(testConfig, JSON.parse(str))
+            } catch { }
+        }
+        loadTestConfig()
+
+        const openTestConfigDialog = () => {
+            testConfigVisible.value = true
+        }
+
+        const saveTestConfig = () => {
+            localStorage.setItem('TEST_CONFIG', JSON.stringify(testConfig))
+            testConfigVisible.value = false
+            showToast('测试配置已保存', 'success')
+        }
 
         // 模拟组件加载
         onMounted(async () => {
@@ -2291,7 +2362,11 @@ export default {
             showIcon,
             saveIconLoading,
             saveIconNames,
-            tap_iconInfo
+            tap_iconInfo,
+            testConfigVisible,
+            testConfig,
+            openTestConfigDialog,
+            saveTestConfig
         }
     }
 }
