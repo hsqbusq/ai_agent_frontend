@@ -38,6 +38,7 @@
                         <el-button type="primary" size="small" @click="openTestConfigDialog" style="padding:15px">
                             <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 测试配置
                         </el-button>
+                        
                         <!-- <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
