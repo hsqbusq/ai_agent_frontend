@@ -11,9 +11,9 @@
                         <el-button type="primary" size="small" @click="stopDebugging" style="padding: 15px">
                             <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 停止测试
                         </el-button>
-                        <!-- <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
+                        <el-button type="primary" size="small" @click="addTestCase" style="padding: 15px">
                             <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 增加用例
-                        </el-button> -->
+                        </el-button>
                         <el-button type="primary" size="small" @click="importXlsmFile" style="padding: 15px">
                             <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 导入用例
                         </el-button>
@@ -32,13 +32,16 @@
                         <el-button type="primary" size="small" @click="deleteTestCase" style="padding: 15px">
                             <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 删除用例
                         </el-button>
+                        <el-button type="primary" size="small" @click="clearTestCase" style="padding: 15px">
+                            <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 清空用例
+                        </el-button>
                         <el-button type="primary" size="small" @click="SynchronizeTestResults" style="padding: 15px">
                             <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 文档同步设置
                         </el-button>
                         <el-button type="primary" size="small" @click="openTestConfigDialog" style="padding:15px">
                             <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 测试配置
                         </el-button>
-                        
+
                         <!-- <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
@@ -570,7 +573,7 @@
 
 <script>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, getCurrentInstance, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as XLSX from 'xlsx'
 import { saveAs } from 'file-saver';
 import { Buffer } from 'buffer';
@@ -1011,7 +1014,39 @@ export default {
             showToast('测试用例已删除', 'success')
         }
 
+        const clearTestCase = async () => {
+            if (cases.value.length === 0) {
+                showToast('当前已无测试用例', 'info');
+                return;
+            }
 
+            try {
+                // 二次确认
+                await ElMessageBox.confirm(
+                    '此操作将永久清空所有测试用例，是否继续？',
+                    '危险操作',
+                    {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }
+                );
+            } catch {
+                return;
+            }
+
+            cases.value = [];
+            casesTable.value = [];
+
+            await saveCases([]);
+            await saveCasesTable([]);
+
+            currentPage.value = 1;
+            selectedRowsAll.value = [];
+            proxy.$refs.caseTable?.clearSelection();
+
+            showToast('全部测试用例已清空', 'success');
+        }
 
 
 
@@ -1933,7 +1968,7 @@ export default {
             };
 
             var value = langOptions.value.find(item => item.label === currentLang.value).value
-            xhr.send(JSON.stringify({ query: query, baseurl: baseurl, lang: value, detect_before_timeout: testConfig.preWaitSec+'', detect_timeout: testConfig.timeoutSec+'' }));
+            xhr.send(JSON.stringify({ query: query, baseurl: baseurl, lang: value, detect_before_timeout: testConfig.preWaitSec + '', detect_timeout: testConfig.timeoutSec + '' }));
         }
 
         const isConverting = ref(false);
@@ -2244,6 +2279,7 @@ export default {
             contextMenu,
             onRowRightClick,
             convertRow,
+            clearTestCase,
             runSingleRow,
             isDebugRunning,
             activeName,
