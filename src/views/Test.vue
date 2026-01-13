@@ -1451,49 +1451,49 @@ export default {
             casesTable.value = []
             const file = event.target.files[0]
             if (file && file.type === 'application/vnd.ms-excel.sheet.macroEnabled.12') {
-                showToast(`正在导入文件: ${file.name}`, 'info')
-                const reader = new FileReader()
+                showToast(`正在导入文件: ${file.name}`, 'info');
+                const reader = new FileReader();
                 reader.onload = (e) => {
-                    const data = new Uint8Array(e.target.result)
-                    const workbook = XLSX.read(data, { type: 'array' })
-                    const firstSheetName = workbook.SheetNames[0]
-                    const worksheet = workbook.Sheets[firstSheetName]
-                    const json = XLSX.utils.sheet_to_json(worksheet)
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];   // 单 sheet，直接取第 1 个
+                    const json = XLSX.utils.sheet_to_json(worksheet);
                     console.log(json);
 
                     json.forEach((row) => {
-                        console.log(row);
-
-                        const newId = `${String(cases.value.length + 1).padStart(3, '0')}`
+                        const newId = `${String(cases.value.length + 1).padStart(3, '0')}`;
                         cases.value.push({
                             id: newId,
-                            TestCaseID: row['Test Case ID'],
-                            SyRDIDFSRD: row['SyRD ID/FSR'],
-                            TSR: row['TSR'],
-                            CasePriority: row['Case\nPriority'],
-                            DesignMethod: row["Design Method "],
-                            TestMethod: row["Test Method"],
-                            TestStrategy: row["Test\nStrategy "],
-                            TestKey: row['Test Key\n功能点'],
-                            Initial_Condition: row['初始条件序列'],
-                            Action: row['操作步骤序列'],
-                            Expected_Result: row['Expected Result\n期望结果'],
-                            InitTestSequences: row['Init Test Sequences\n测试序列前置条件'],
-                            ActionTestSequences: row['Action Test Sequences\n动作测试序列'],
-                            ExpectedTestSequences: row['Expected Test Sequences\n预期测试序列结果'],
-                            Selected: row['Selected'],
-                            Result: row['Test  Result'],
+
+                            TestCaseID: row['Test Case ID'] ?? '',
+                            SyRDIDFSRD: row['SyRD ID/SRD'] ?? row['SyRD ID/FSR'] ?? '',
+                            Auto_testID: row['Auto_test ID'] ?? '',
+                            TSR: row['TSR'] ?? '',
+                            CasePriority: row['Case\nPriority'] ?? row['Case Priority'] ?? '',
+                            DesignMethod: row['Design Method '] ?? row['DesignMethod'] ?? '',
+                            TestMethod: row['Test Method'] ?? '',
+                            TestStrategy: row['Test\nStrategy '] ?? row['Test Strategy'] ?? '',
+                            TestKey: row['Test Key\n功能点'] ?? row['Test Key'] ?? '',
+                            Initial_Condition: row['初始条件序列'] ?? '',
+                            Action: row['操作步骤序列'] ?? '',
+                            Expected_Result: row['Expected Result\n期望结果'] ?? row['Expected Result'] ?? '',
+                            Selected: row['Selected'] ?? '',
+                            Result: row['Test  Result'] ?? row['Test Result'],
                             ActualResult: row['Actual Result'],
-                            PRNo: row['PR No.'],
-                            TestLogs: row['Test Log'],
-                            Numberoftests: row['Number of tests'],
-                            TestDate: row['Test Date'],
-                            Remark: row['Remark'],
-                        })
-                    })
-                    showToast(`文件导入完成: ${file.name}`, 'success')
-                }
-                reader.readAsArrayBuffer(file)
+                            PRNo: row['PR No.'] ?? '',
+                            TestLogs: row['Test Log'] ?? row['Test Logs'] ?? '',
+                            Numberoftests: row['Number of tests'] ?? '',
+                            TestDate: row['Test Date'] ?? '',
+                            Remark: row['Remark'] ?? '',
+
+                            InitTestSequences: row['Init Test Sequences\n测试序列前置条件'] ?? row['Init Test Sequences'] ?? '',
+                            ActionTestSequences: row['Action Test Sequences\n动作测试序列'] ?? row['Action Test Sequences'] ?? '',
+                            ExpectedTestSequences: row['Expected Test Sequences\n预期测试序列结果'] ?? row['Expected Test Sequences'] ?? ''
+                        });
+                    });
+                    showToast(`文件导入完成: ${file.name}`, 'success');
+                };
+                reader.readAsArrayBuffer(file);
             } else if (file && file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
                 showToast(`正在导入文件: ${file.name},请等待！`, 'info')
                 const reader = new FileReader()
