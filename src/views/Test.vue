@@ -291,11 +291,26 @@
                     </div>
                     <div class="card" style="flex: 5;padding: 10px;">
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
+                            <!-- 车机设备 -->
                             <el-tab-pane label="车机设备" name="five">
+                                <div v-if="mobilePoint" class="coord-info">
+                                    当前坐标：({{ mobilePoint.x }}, {{ mobilePoint.y }})
+                                </div>
+
                                 <div class="video-container">
                                     <iframe ref="videoPlayer" width="100%" height="480" frameborder="0"
                                         allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
+                                    <canvas ref="mobileCanvas" class="overlay-canvas"
+                                        @click="onVideoClick($event, 'mobile')"></canvas>
+
+                                    <div v-if="mobilePoint" class="pin-dot"
+                                        :style="{ left: mobilePoint.left + 'px', top: mobilePoint.top + 'px' }">
+                                        <el-tooltip :content="`(${mobilePoint.x}, ${mobilePoint.y})`" placement="top">
+                                            <span class="pin-index">1</span>
+                                        </el-tooltip>
+                                    </div>
+
                                     <div class="device-controls">
                                         <el-button type="primary" @click="connectDeviceStream('mobile')"
                                             style="margin-top: 10px;">
@@ -305,11 +320,26 @@
                                 </div>
                             </el-tab-pane>
 
+                            <!-- 仪表设备 -->
                             <el-tab-pane label="仪表设备" name="six">
+                                <div v-if="instrumentPoint" class="coord-info">
+                                    当前坐标：({{ instrumentPoint.x }}, {{ instrumentPoint.y }})
+                                </div>
                                 <div class="video-container">
                                     <iframe ref="instrumentVideoPlayer" width="100%" height="480" frameborder="0"
                                         allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
+                                    <canvas ref="instrumentCanvas" class="overlay-canvas"
+                                        @click="onVideoClick($event, 'instrument')"></canvas>
+
+                                    <div v-if="instrumentPoint" class="pin-dot"
+                                        :style="{ left: instrumentPoint.left + 'px', top: instrumentPoint.top + 'px' }">
+                                        <el-tooltip :content="`(${instrumentPoint.x}, ${instrumentPoint.y})`"
+                                            placement="top">
+                                            <span class="pin-index">1</span>
+                                        </el-tooltip>
+                                    </div>
+
                                     <div class="device-controls">
                                         <el-button type="primary" @click="connectDeviceStream('instrument')"
                                             style="margin-top: 10px;">
@@ -896,6 +926,48 @@ export default {
                 offset: 60
             })
         }
+
+        const mobileCanvas = ref(null)
+        const instrumentCanvas = ref(null)
+        const mobilePoint = ref(null)
+        const instrumentPoint = ref(null)
+
+
+        const clickPos = reactive({
+            show: false,
+            x: 0,
+            y: 0,
+            device: 'mobile'
+        })
+
+        const resizeCanvas = (canvas) => {
+            const box = canvas.parentElement.getBoundingClientRect()
+            canvas.width = box.width
+            canvas.height = box.height
+        }
+
+        const onVideoClick = (e, device) => {
+            const canvas = device === 'mobile' ? mobileCanvas.value : instrumentCanvas.value
+            const rect = canvas.getBoundingClientRect()
+            const cssX = e.clientX - rect.left
+            const cssY = e.clientY - rect.top
+            const logicX = Math.round((cssX / rect.width) * 2560)
+            const logicY = Math.round((cssY / rect.height) * 1440)
+
+            // 直接覆盖旧点
+            const target = device === 'mobile' ? mobilePoint : instrumentPoint
+            target.value = { left: cssX, top: cssY, x: logicX, y: logicY }
+
+            // 画点（清空后重绘）
+            const ctx = canvas.getContext('2d')
+            ctx.clearRect(0, 0, canvas.width, canvas.height) // 先清空
+            ctx.fillStyle = '#f56c6c'
+            ctx.beginPath()
+            ctx.arc(cssX, cssY, 4, 0, Math.PI * 2)
+            ctx.fill()
+            ElMessage.success(`(${logicX}, ${logicY}) 已记录`)
+        }
+
         const connectDeviceStream = (deviceType) => {
             if (deviceType === 'mobile') {
                 if (!url.value) {
@@ -2266,6 +2338,15 @@ export default {
             setTimeout(() => {
                 fetchTestList(1);
             }, 500)
+
+            nextTick(() => {
+                resizeCanvas(mobileCanvas.value)
+                resizeCanvas(instrumentCanvas.value)
+            })
+            window.addEventListener('resize', () => {
+                resizeCanvas(mobileCanvas.value)
+                resizeCanvas(instrumentCanvas.value)
+            })
         })
 
         // 组件卸载时停止轮询
@@ -2403,7 +2484,13 @@ export default {
             testConfigVisible,
             testConfig,
             openTestConfigDialog,
-            saveTestConfig
+            saveTestConfig,
+            mobileCanvas,
+            instrumentCanvas,
+            clickPos,
+            onVideoClick,
+            mobilePoint,
+            instrumentPoint
         }
     }
 }
@@ -2717,5 +2804,55 @@ pre {
 .user-logs-sub {
     color: #000 !important;
     font-weight: 700 !important;
+}
+
+.video-container {
+    position: relative;
+    width: 100%;
+    height: 480px;
+}
+
+.video-container iframe {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.overlay-canvas {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: auto;
+    z-index: 10;
+}
+
+.pin-dot {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    background: #f56c6c;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    color: #fff;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 11;
+}
+
+.pin-index {
+    pointer-events: none;
+}
+
+.coord-info {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #000;
+  user-select: text;
 }
 </style>
