@@ -20,8 +20,12 @@ export default defineConfig({
         target: 'http://117.72.163.123:25173',
         changeOrigin: true,
         rewrite: path => path.replace(/^\/dev-api/, '')
+      },
+      '/adb': {
+        target: 'http://117.72.163.123:25173',
+        changeOrigin: true,
+        rewrite: path => path  
       }
-
     }
   }
 })
