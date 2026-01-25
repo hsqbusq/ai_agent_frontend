@@ -792,13 +792,12 @@ export default {
         const loadIconConfigShot = async () => {
             iconConfigLoading.value = true
             try {
-                const res = await fetch('/apiB/adb/getScreenshot')
+                const res = await fetch(url.value+'/adb/getScreenshot')
                 if (!res.ok) throw new Error('接口异常 ' + res.status)
                 const blob = await res.blob()
-                const url = URL.createObjectURL(blob)
+                const blob_url = URL.createObjectURL(blob)
 
-                // 让 <img> 显示
-                iconRealImg.value.src = url
+                iconRealImg.value.src = blob_url
                 iconRealImg.value.onload = () => {
                     const img = iconRealImg.value
                     const cvs = iconOverlayCanvas.value
@@ -867,7 +866,7 @@ export default {
                     x: d.x,
                     y: d.y
                 })),
-                url: 'http://172.23.96.54:8000',
+                url: url.value,
                 is_system_control: true
             }
 
@@ -1116,7 +1115,7 @@ export default {
         })
 
         const getDeviceSize = async () => {
-            const res = await fetch('/dev-api/adb/runCmd?cmd=shell%20wm%20size');
+            const res = await fetch(url.value + '/adb/runCmd?cmd=shell%20wm%20size');
             const txt = await res.text();                // 只读一次
             console.log('raw:', txt, 'parsed:', txt.match(/(\d+)x(\d+)/));
             const m = txt.match(/(\d+)x(\d+)/);
