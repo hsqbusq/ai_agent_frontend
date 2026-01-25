@@ -1116,7 +1116,7 @@ export default {
         })
 
         const getDeviceSize = async () => {
-            const res = await fetch('/apiB/adb/runCmd?cmd=shell%20wm%20size');
+            const res = await fetch('/dev-api/adb/runCmd?cmd=shell%20wm%20size');
             const txt = await res.text();                // 只读一次
             console.log('raw:', txt, 'parsed:', txt.match(/(\d+)x(\d+)/));
             const m = txt.match(/(\d+)x(\d+)/);
