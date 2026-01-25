@@ -17,14 +17,14 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/dev-api': {
-        target: 'http://117.72.163.123:25173',
+        target: 'http://117.72.163.123:25173/',
         changeOrigin: true,
         rewrite: path => path.replace(/^\/dev-api/, '')
       },
-      '/adb': {
+      '/apiB': {
         target: 'http://117.72.163.123:25173',
         changeOrigin: true,
-        rewrite: path => path  
+        rewrite: path => path.replace(/^\/apiB/, '')
       }
     }
   }

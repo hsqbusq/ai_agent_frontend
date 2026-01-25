@@ -38,6 +38,9 @@
                         <el-button type="primary" size="small" @click="SynchronizeTestResults" style="padding: 15px">
                             <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 文档同步设置
                         </el-button>
+                        <el-button type="primary" size="small" @click="iconConfig" style="padding: 15px">
+                            <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 图标配置
+                        </el-button>
                         <el-button type="primary" size="small" @click="openTestConfigDialog" style="padding:15px">
                             <img src="../assets/07.svg" alt="" style="width: 14px;height: 14px" /> 测试配置
                         </el-button>
@@ -121,7 +124,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -129,7 +132,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -137,7 +140,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -486,6 +489,46 @@
             </template>
         </el-dialog>
 
+
+        <!-- 图标配置弹窗 -->
+        <el-dialog v-model="iconConfigDialogVisible" title="图标配置" width="55%">
+            <el-alert v-if="iconConfigTip" :title="iconConfigTip" type="error" :closable="false"
+                style="margin-bottom:12px;">
+            </el-alert>
+            <!-- 图片+画布容器 -->
+            <div style="position:relative; text-align:center; line-height:0;">
+                <!-- 1. 真实截图，保证能看见 -->
+                <img ref="iconRealImg" style="max-width:100%; height:auto; border:1px solid #ccc; cursor:crosshair"
+                    @click="onImgClick" alt="截图">
+                <!-- 2. 透明画布，只画点和序号 -->
+                <canvas ref="iconOverlayCanvas"
+                    style="position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none;">
+                </canvas>
+            </div>
+
+            <!-- 已标点列表 -->
+            <el-table :data="iconDots" style="margin-top:12px;" max-height="220">
+                <el-table-column label="序号" width="60" type="index" />
+                <el-table-column label="名称" min-width="140">
+                    <template #default="{ row }">
+                        <el-input v-model="row.name" size="small" placeholder="请输入图标名称" />
+                    </template>
+                </el-table-column>
+                <el-table-column label="X" width="70" prop="x" />
+                <el-table-column label="Y" width="70" prop="y" />
+                <el-table-column width="60">
+                    <template #default="{ $index }">
+                        <el-button link type="danger" @click="delDot($index)">删除</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+
+            <template #footer>
+                <el-button @click="iconConfigDialogVisible = false">关 闭</el-button>
+                <el-button type="primary" @click="submitIconDots">保存坐标</el-button>
+            </template>
+        </el-dialog>
+
         <!-- 知识图谱弹窗组件 -->
         <el-dialog v-model="generateKnowledgeGraphDialogVisible" title="知识图谱" width="50%">
             <el-form label-width="150px">
@@ -611,6 +654,8 @@ import reportTpl from './report-template.html?raw'
 import langOptionsJson from './langOptions.json'
 import { saveCases, saveCasesTable, loadCases, loadCasesTable } from '../utils/db.js'
 import { forEach } from 'lodash';
+import { Loading } from '@element-plus/icons-vue'
+
 
 window.Buffer = Buffer;
 export default {
@@ -725,6 +770,136 @@ export default {
                 }
             }
         }, { deep: true });
+
+        const iconConfigDialogVisible = ref(false)
+        const iconConfigLoading = ref(false)
+        const iconDots = ref([])
+        const iconRealImg = ref(null)
+        const iconOverlayCanvas = ref(null)
+        const iconConfigTip = ref('')
+
+        const iconConfig = () => {
+            iconConfigDialogVisible.value = true
+            iconDots.value = []
+            nextTick(loadIconConfigShot)
+        }
+
+        watch(iconConfigDialogVisible, v => {
+            if (!v) iconConfigTip.value = ''   // 关闭弹框即清空提示
+        })
+
+
+        const loadIconConfigShot = async () => {
+            iconConfigLoading.value = true
+            try {
+                const res = await fetch('/apiB/adb/getScreenshot')
+                if (!res.ok) throw new Error('接口异常 ' + res.status)
+                const blob = await res.blob()
+                const url = URL.createObjectURL(blob)
+
+                // 让 <img> 显示
+                iconRealImg.value.src = url
+                iconRealImg.value.onload = () => {
+                    const img = iconRealImg.value
+                    const cvs = iconOverlayCanvas.value
+                    // 画布像素 = 原始分辨率
+                    cvs.width = img.naturalWidth
+                    cvs.height = img.naturalHeight
+                    // CSS 大小 = img 视觉大小
+                    const rect = img.getBoundingClientRect()
+                    cvs.style.width = rect.width + 'px'
+                    cvs.style.height = rect.height + 'px'
+
+                    redrawDots()                   // 重画已有标点
+                    iconConfigLoading.value = false
+                }
+            } catch (e) {
+                ElMessage.error('加载截图失败：' + e.message)
+                iconConfigLoading.value = false
+            }
+        }
+
+        const onImgClick = (e) => {
+            const img = iconRealImg.value
+            const rect = img.getBoundingClientRect()
+            // 点击 → 原始像素
+            const x = Math.round((e.offsetX / rect.width) * img.naturalWidth)
+            const y = Math.round((e.offsetY / rect.height) * img.naturalHeight)
+            iconDots.value.push({ name: '', x, y })
+            redrawDots()
+        }
+
+        const redrawDots = () => {
+            const cvs = iconOverlayCanvas.value
+            if (!cvs) return
+            const ctx = cvs.getContext('2d')
+            ctx.clearRect(0, 0, cvs.width, cvs.height)
+
+            // 缩放比 & 可调大小
+            const scale = cvs.clientWidth / cvs.width
+            const r = Math.max(8, 10 / scale)          // 原来 6 → 10
+            const fontSize = Math.max(14, 16 / scale)  // 原来 12 → 16
+
+            iconDots.value.forEach((d, idx) => {
+                // 红点
+                ctx.fillStyle = '#f56c6c'
+                ctx.beginPath()
+                ctx.arc(d.x, d.y, r, 0, Math.PI * 2)
+                ctx.fill()
+
+                // 白字序号
+                ctx.fillStyle = '#fff'
+                ctx.font = `${fontSize}px sans-serif`
+                ctx.textAlign = 'center'
+                ctx.fillText(idx + 1, d.x, d.y + r / 2)
+            })
+        }
+
+        const submitIconDots = async () => {
+            if (!iconDots.value.length) {
+                ElMessage.warning('请先添加坐标')
+                return
+            }
+
+            const payload = {
+                icons: iconDots.value.map(d => ({
+                    icon_name: d.name || `图标${d.x}_${d.y}`, // 防止空名
+                    x: d.x,
+                    y: d.y
+                })),
+                url: 'http://172.23.96.54:8000',
+                is_system_control: true
+            }
+
+            try {
+                const res = await fetch('/dev-api/addicons', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+
+                const data = await res.json()
+
+                if (res.ok && data.code === 200) {
+                    ElMessage.success(data.result?.description || '坐标已保存')
+                    iconConfigDialogVisible.value = false
+                } else {
+                    ElMessage.error(data.description || '保存失败')
+                }
+            } catch (e) {
+                ElMessage.error('网络错误')
+            }
+        }
+
+        const delDot = (index) => {
+            iconDots.value.splice(index, 1)
+            redrawDots()          // 立即重画画布
+        }
+
+        /* ====== 关闭弹窗时清预览（可选）====== */
+        watch(iconConfigDialogVisible, v => {
+            if (!v) document.querySelector('#iconPreview')?.remove()
+        })
 
         // 新增的弹窗相关数据
         const dialogVisible = ref(false)
@@ -941,7 +1116,7 @@ export default {
         })
 
         const getDeviceSize = async () => {
-            const res = await fetch('/dev-api/adb/runCmd?cmd=shell%20wm%20size');
+            const res = await fetch('/apiB/adb/runCmd?cmd=shell%20wm%20size');
             const txt = await res.text();                // 只读一次
             console.log('raw:', txt, 'parsed:', txt.match(/(\d+)x(\d+)/));
             const m = txt.match(/(\d+)x(\d+)/);
@@ -1699,13 +1874,40 @@ export default {
 
 
         const isDebugRunning = ref(false)
-
+        const currentTestId = ref('')
         const stopDebugging = async () => {
             isDebugRunning.value = false;
             debugRows.value = [];
             selectedCase.value = '';
             stopPolling();
             executionLogs.value = {};
+            if (currentTestId.value) {
+                try {
+                    await fetch(`/dev-api/cancelsession`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ test_id: currentTestId.value })
+                    })
+                    showToast('已发送停止指令', 'info')
+                } catch (e) {
+                    console.error('cancelSession 失败', e)
+                } finally {
+                    currentTestId.value = ''
+                }
+            }
+        }
+
+        const abortCurrentTest = () => {
+            isDebugRunning.value = false
+            if (currentTestId.value) {
+                fetch('/dev-api/cancelsession', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ test_id: currentTestId.value })
+                }).catch(() => { })
+                currentTestId.value = ''
+            }
+            stopPolling()
         }
 
         const pollingIntervals = {};
@@ -1926,26 +2128,26 @@ export default {
                             }
 
                         }
-                        // const resultStartIndex = line.indexOf('<result>');
-                        // const resultEndIndex = line.indexOf('<result>', resultStartIndex + 1);
 
-                        // if (resultStartIndex !== -1 && resultEndIndex !== -1) {
-                        //     const contentBetweenresult = line.substring(resultStartIndex + '<result>'.length, resultEndIndex);
-                        //     const resulttText = "测试结果：" + contentBetweenresult
-                        //     const logEntry = {
-                        //         step_id: userLogs.value.length + 1,
-                        //         msg: resulttText,
-                        //         type: 'success',
-                        //         caseId: row.id,
-                        //         rowStyle: { backgroundColor: 'rgb(31 181 51)', fontWeight: 'bold', color: 'black' }
-                        //     };
-                        //     userLogs.value.push(logEntry);
-                        // }
+                        const iconStart = line.indexOf('<iconnotfound>');
+                        const iconEnd = line.indexOf('<iconnotfound>', iconStart + 1);
+                        if (iconStart !== -1 && iconEnd !== -1) {
+                            const rawTip = line.slice(iconStart + '<iconnotfound>'.length, iconEnd);
+                            const missingIcon = rawTip.match(/图标\s*['"](.+?)['"]/)?.[1] ?? '未知图标';
+
+                            abortCurrentTest();
+                            iconConfigTip.value = `图标 “${missingIcon}” 没有历史记录且未提供坐标，请添加图标！`;
+                            iconConfig();
+                            ElMessage.error(`检测到缺失图标：${missingIcon}`);
+                            return;
+                        }
+
                         const match = line.match(/data: \[.*?\]\{"test_id": "(.*?)"\}/);
 
                         if (!testIdFound) {
                             if (match) {
                                 const test_id = match[1];
+                                currentTestId.value = test_id;
                                 testIdFound = true;
                                 const pollForResult = async () => {
                                     const maxPollingTime = 600000; // 300s
@@ -2517,7 +2719,23 @@ export default {
             mobilePoint,
             instrumentPoint,
             getDeviceSize,
-            resizeCanvas
+            resizeCanvas,
+            currentTestId,
+            iconConfigDialogVisible,
+            iconConfigLoading,
+            iconDots,
+
+            iconRealImg,
+            iconOverlayCanvas,
+            delDot,
+            iconConfig,
+            loadIconConfigShot,
+            onImgClick,
+            redrawDots,
+            submitIconDots,
+            iconConfigTip,
+            abortCurrentTest
+
         }
     }
 }
