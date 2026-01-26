@@ -792,7 +792,7 @@ export default {
         const loadIconConfigShot = async () => {
             iconConfigLoading.value = true
             try {
-                const res = await fetch(url.value+'/adb/getScreenshot')
+                const res = await fetch(url.value + '/adb/getScreenshot')
                 if (!res.ok) throw new Error('接口异常 ' + res.status)
                 const blob = await res.blob()
                 const blob_url = URL.createObjectURL(blob)
@@ -1703,8 +1703,51 @@ export default {
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];   // 单 sheet，直接取第 1 个
+                    const wb = XLSX.read(data, { type: 'array' });
+
+                    if (wb.SheetNames.includes('ModuleName')) {
+                        const ws = wb.Sheets['ModuleName'];
+                        const json = XLSX.utils.sheet_to_json(ws, { range: 7, defval: '' });
+
+                        json.forEach(row => {
+                            const newId = `${String(cases.value.length + 1).padStart(3, '0')}`;
+                            cases.value.push({
+                                id: newId,
+
+                                TestCaseID: (row['Test Case ID\r\n测试caseID'] ?? '').toString().trim(),
+                                SyRDIDFSRD: (row['RD ID/(FSR/TSR）\r\n需求ID'] ?? '').toString().trim(), 
+                                Auto_testID: '', 
+                                TSR: '', 
+                                CasePriority: (row['Case_Priority\r\n优先级'] ?? '').toString().trim(),
+                                DesignMethod: (row['Design Method \r\n设计方法'] ?? '').toString().trim(),
+                                TestMethod: (row['Test Method \r\n测试方法'] ?? '').toString().trim(),
+                                TestStrategy: '', // 用“测试目的”当功能点
+                                Initial_Condition: (row['Pre-condition\r\n前提条件'] ?? '').toString().trim(),
+                                Action: (row['Test Steps\r\n测试步骤'] ?? '').toString().trim(),
+                                Expected_Result: (row['Expected Result\r\n期望结果'] ?? '').toString().trim(),
+
+                                /* 这三列新模板也是空的，先留空 */
+                                InitTestSequences: '',
+                                ActionTestSequences: '',
+                                ExpectedTestSequences: '',
+
+                                Selected: (row['Selected\r\n是否选择'] ?? '').toString().trim(),
+                                Result: (row['Test  Result \r\n测试结果'] ?? '').toString().trim(),
+                                ActualResult: (row['Actual Result\r\n实际结果'] ?? '').toString().trim(),
+                                PRNo: (row['PR No.\r\nBug编号'] ?? '').toString().trim(),
+                                TestLogs: (row['Test Log\r\n测试日志'] ?? '').toString().trim(),
+                                Numberoftests: (row['Executions\r\n执行次数'] ?? '').toString().trim(),
+                                TestDate: (row['Test Date\r\n测试日期'] ?? '').toString().trim(),
+                                Remark: (row['Remark\r\n测试备注'] ?? '').toString().trim()
+                            });
+                        });
+
+                        casesTable.value = [{ sheetName: 'ModuleName', start: 0, end: cases.value.length - 1, length: cases.value.length }];
+                        showToast(`多工作表(ModuleName)导入完成: ${file.name}`, 'success');
+                        return;   
+                    }
+
+                    const worksheet = wb.Sheets[wb.SheetNames[0]];
                     const json = XLSX.utils.sheet_to_json(worksheet);
                     console.log(json);
 
@@ -1712,7 +1755,6 @@ export default {
                         const newId = `${String(cases.value.length + 1).padStart(3, '0')}`;
                         cases.value.push({
                             id: newId,
-
                             TestCaseID: row['Test Case ID'] ?? '',
                             SyRDIDFSRD: row['SyRD ID/SRD'] ?? row['SyRD ID/FSR'] ?? '',
                             Auto_testID: row['Auto_test ID'] ?? '',
@@ -1733,7 +1775,6 @@ export default {
                             Numberoftests: row['Number of tests'] ?? '',
                             TestDate: row['Test Date'] ?? '',
                             Remark: row['Remark'] ?? '',
-
                             InitTestSequences: row['Init Test Sequences\n测试序列前置条件'] ?? row['Init Test Sequences'] ?? '',
                             ActionTestSequences: row['Action Test Sequences\n动作测试序列'] ?? row['Action Test Sequences'] ?? '',
                             ExpectedTestSequences: row['Expected Test Sequences\n预期测试序列结果'] ?? row['Expected Test Sequences'] ?? ''
