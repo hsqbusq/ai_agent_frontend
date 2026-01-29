@@ -296,27 +296,31 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <!-- 车机设备 -->
                             <el-tab-pane label="车机设备" name="five">
-                                <!-- <div v-if="mobilePoint" class="coord-info">
+                                <!-- 保留坐标提示 -->
+                                <div v-if="mobilePoint" class="coord-info">
                                     当前坐标：({{ mobilePoint.x }}, {{ mobilePoint.y }})
-                                </div> -->
+                                </div>
 
                                 <div class="video-container">
+                                    <!-- 视频流 -->
                                     <iframe ref="videoPlayer" width="100%" height="480" frameborder="0"
                                         allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
-                                    <!-- <canvas ref="mobileCanvas" class="overlay-canvas"
+                                    <!-- 标点画布 -->
+                                    <canvas ref="mobileCanvas" class="overlay-canvas"
                                         @click="onVideoClick($event, 'mobile')"></canvas>
 
+                                    <!-- 红点提示 -->
                                     <div v-if="mobilePoint" class="pin-dot"
                                         :style="{ left: mobilePoint.left + 'px', top: mobilePoint.top + 'px' }">
                                         <el-tooltip :content="`(${mobilePoint.x}, ${mobilePoint.y})`" placement="top">
                                             <span class="pin-index">1</span>
                                         </el-tooltip>
-                                    </div> -->
+                                    </div>
 
+                                    <!-- 连接按钮 -->
                                     <div class="device-controls">
-                                        <el-button type="primary" @click="connectDeviceStream('mobile')"
-                                            style="margin-top: 10px;">
+                                        <el-button type="primary" @click="connectMobileStream">
                                             连接视频流
                                         </el-button>
                                     </div>
@@ -325,27 +329,14 @@
 
                             <!-- 仪表设备 -->
                             <el-tab-pane label="仪表设备" name="six">
-                                <div v-if="instrumentPoint" class="coord-info">
-                                    当前坐标：({{ instrumentPoint.x }}, {{ instrumentPoint.y }})
-                                </div>
+
                                 <div class="video-container">
                                     <iframe ref="instrumentVideoPlayer" width="100%" height="480" frameborder="0"
                                         allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
-                                    <!-- <canvas ref="instrumentCanvas" class="overlay-canvas"
-                                        @click="onVideoClick($event, 'instrument')"></canvas>
-
-                                    <div v-if="instrumentPoint" class="pin-dot"
-                                        :style="{ left: instrumentPoint.left + 'px', top: instrumentPoint.top + 'px' }">
-                                        <el-tooltip :content="`(${instrumentPoint.x}, ${instrumentPoint.y})`"
-                                            placement="top">
-                                            <span class="pin-index">1</span>
-                                        </el-tooltip>
-                                    </div> -->
 
                                     <div class="device-controls">
-                                        <el-button type="primary" @click="connectDeviceStream('instrument')"
-                                            style="margin-top: 10px;">
+                                        <el-button type="primary" @click="connectInstrumentStream">
                                             连接视频流
                                         </el-button>
                                     </div>
@@ -1101,101 +1092,73 @@ export default {
             })
         }
 
-        // const mobileCanvas = ref(null)
-        // const instrumentCanvas = ref(null)
-        // const mobilePoint = ref(null)
-        // const instrumentPoint = ref(null)
+        const mobileCanvas = ref(null)
+        const mobilePoint = ref(null)
 
 
-        // const clickPos = reactive({
-        //     show: false,
-        //     x: 0,
-        //     y: 0,
-        //     device: 'mobile'
-        // })
+        const clickPos = reactive({
+            show: false,
+            x: 0,
+            y: 0,
+            device: 'mobile'
+        })
 
-        // const getDeviceSize = async () => {
-        //     const res = await fetch(url.value + '/adb/runCmd?cmd=shell%20wm%20size');
-        //     const txt = await res.text();                // 只读一次
-        //     console.log('raw:', txt, 'parsed:', txt.match(/(\d+)x(\d+)/));
-        //     const m = txt.match(/(\d+)x(\d+)/);
-        //     return m ? { w: +m[1], h: +m[2] } : { w: 2560, h: 1440 };
-        // };
-
-        // const resizeCanvas = (canvas, realW, realH) => {
-        //     if (!canvas) return;                 // 防空
-        //     const box = canvas.parentElement?.getBoundingClientRect();
-        //     if (!box) return;
-
-        //     canvas.width = realW;
-        //     canvas.height = realH;
-        //     canvas.style.width = box.width + 'px';
-        //     canvas.style.height = box.height + 'px';
-        // };
-
-        // const onVideoClick = (e, device) => {
-        //     const canvas = device === 'mobile' ? mobileCanvas.value : instrumentCanvas.value;
-        //     const rect = canvas.getBoundingClientRect();
-
-        //     /* 1. 高度比例（已知正确） */
-        //     const y = Math.round((e.offsetY / rect.height) * canvas.height);
-
-        //     /* 2. 用同一比例反推宽度（代替横向拉伸） */
-        //     const x = Math.round((e.offsetX / rect.height) * canvas.height); // ← 关键
-
-        //     console.log('逻辑坐标:', x, y);   // 最右 ≈ canvas.height 比例值
-
-        //     /* 3. 画点、存值照旧 … */
-        //     const ctx = canvas.getContext('2d');
-        //     ctx.clearRect(0, 0, canvas.width, canvas.height);
-        //     ctx.fillStyle = '#f56c6c';
-        //     ctx.beginPath();
-        //     ctx.arc(x, y, 4, 0, Math.PI * 2);
-        //     ctx.fill();
-
-        //     const target = device === 'mobile' ? mobilePoint : instrumentPoint;
-        //     target.value = { left: e.offsetX, top: e.offsetY, x, y };
-        //     ElMessage.success(`已记录 (${x}, ${y})`);
-        // };
-
-        // const connectDeviceStream = async (deviceType) => {
-        //     const { w, h } = await getDeviceSize();   // ← 拿真实分辨率
-        //     const canvas = deviceType === 'mobile' ? mobileCanvas.value : instrumentCanvas.value;
-        //     resizeCanvas(canvas, w, h);              // ← 设置 canvas 像素 & CSS 缩放
-
-        //     const src = deviceType === 'mobile'
-        //         ? `${url.value}/adb/video`
-        //         : `${url.value}/camera/video?name=UGREEN`;
-
-        //     (deviceType === 'mobile' ? videoPlayer : instrumentVideoPlayer).value.src = src;
-        // }
-
-        const connectDeviceStream = (deviceType) => {
-            if (deviceType === 'mobile') {
-                if (!url.value) {
-                    showToast('请先输入URL地址', 'warning');
-                    return;
-                }
-                const mobileUrl = `${url.value}/adb/video`;
-                //console.log(mobileUrl)
-                if (videoPlayer.value) {
-                    videoPlayer.value.src = mobileUrl;
-                }
-                showToast('手机视频流已连接', 'success');
-            } else if (deviceType === 'instrument') {
-                if (!url.value) {
-                    showToast('请先输入URL地址', 'warning');
-                    return;
-                }
-                const instrumentUrl = `${url.value}/camera/video?name=UGREEN`;
-                //console.log(instrumentUrl);
-                instrumentStreamUrl.value = instrumentUrl;
-                if (instrumentVideoPlayer.value) {
-                    instrumentVideoPlayer.value.src = instrumentUrl;
-                }
-                showToast('仪表视频流已连接', 'success');
-            }
+        const getDeviceSize = async () => {
+            const res = await fetch(url.value + '/adb/runCmd?cmd=shell%20wm%20size');
+            const txt = await res.text();                // 只读一次
+            console.log('raw:', txt, 'parsed:', txt.match(/(\d+)x(\d+)/));
+            const m = txt.match(/(\d+)x(\d+)/);
+            return m ? { w: +m[1], h: +m[2] } : { w: 2560, h: 1440 };
         };
+
+        const resizeCanvas = (canvas, realW, realH) => {
+            if (!canvas) return;                 // 防空
+            const box = canvas.parentElement?.getBoundingClientRect();
+            if (!box) return;
+
+            canvas.width = realW;
+            canvas.height = realH;
+            canvas.style.width = box.width + 'px';
+            canvas.style.height = box.height + 'px';
+        };
+
+        const onVideoClick = (e, device) => {
+            if (device === 'instrument') return;   // 仪表直接忽略点击
+
+            const canvas = mobileCanvas.value
+            const rect = canvas.getBoundingClientRect();
+
+            /* 1. 高度比例（已知正确） */
+            const y = Math.round((e.offsetY / rect.height) * canvas.height);
+
+            /* 2. 用同一比例反推宽度（代替横向拉伸） */
+            const x = Math.round((e.offsetX / rect.height) * canvas.height); // ← 关键
+
+            console.log('逻辑坐标:', x, y);   // 最右 ≈ canvas.height 比例值
+
+            /* 3. 画点、存值照旧 … */
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#f56c6c';
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            const target = mobilePoint;
+            target.value = { left: e.offsetX, top: e.offsetY, x, y };
+            ElMessage.success(`已记录 (${x}, ${y})`);
+        };
+
+        const connectInstrumentStream = () => {
+            instrumentVideoPlayer.value.src = `${url.value}/camera/video?name=UGREEN`;
+        };
+
+        const connectMobileStream = async () => {
+            const { w, h } = await getDeviceSize();
+            resizeCanvas(mobileCanvas.value, w, h);
+            videoPlayer.value.src = `${url.value}/adb/video`;
+        };
+
         // 自动保存用例
         const autoSave = (row) => {
             showToast(`用例 ${row.id} 已自动保存`, 'info')
@@ -2609,39 +2572,27 @@ export default {
                 fetchTestList(1);
             }, 500)
 
-            // const { w, h } = await getDeviceSize();
-            // console.log('接口分辨率 w=', w, 'h=', h);   // 看一眼真实值
+            const { w, h } = await getDeviceSize()
+            console.log('接口分辨率 w=', w, 'h=', h)
 
-            // nextTick(() => {
-            //     /* ② 硬编码 2560×1440 强行灌进去 —— 如果这样坐标就对，说明接口返回值错了 */
-            //     const hardW = 2560, hardH = 1440;
-            //     mobileCanvas.value.width = hardW;
-            //     mobileCanvas.value.height = hardH;
-            //     instrumentCanvas.value.width = hardW;
-            //     instrumentCanvas.value.height = hardH;
+            nextTick(() => {
+                mobileCanvas.value.width = 2560
+                mobileCanvas.value.height = 1440
+                const box = mobileCanvas.value.parentElement?.getBoundingClientRect()
+                if (box) {
+                    mobileCanvas.value.style.width = box.width + 'px'
+                    mobileCanvas.value.style.height = box.height + 'px'
+                }
+            })
 
-            //     /* ③ 再把 CSS 视觉大小撑满父容器 */
-            //     [mobileCanvas.value, instrumentCanvas.value].forEach(cv => {
-            //         const box = cv.parentElement?.getBoundingClientRect();
-            //         if (box) {
-            //             cv.style.width = box.width + 'px';
-            //             cv.style.height = box.height + 'px';
-            //         }
-            //     });
-            //     console.log('canvas 元素像素已强行设为 2560×1440');
-            // });
-
-            // window.addEventListener('resize', () => {
-            //     [mobileCanvas.value, instrumentCanvas.value].forEach(canvas => {
-            //         if (!canvas) return;
-            //         const box = canvas.parentElement?.getBoundingClientRect();
-            //         if (!box) return;
-            //         canvas.style.width = box.width + 'px';
-            //         canvas.style.height = box.height + 'px';
-            //     });
-            // });
-
-            
+            window.addEventListener('resize', () => {
+                if (!mobileCanvas.value) return
+                const box = mobileCanvas.value.parentElement?.getBoundingClientRect()
+                if (box) {
+                    mobileCanvas.value.style.width = box.width + 'px'
+                    mobileCanvas.value.style.height = box.height + 'px'
+                }
+            })
         })
 
         // 组件卸载时停止轮询
@@ -2727,7 +2678,6 @@ export default {
             videoPlayer,
             instrumentStreamUrl,
             instrumentVideoPlayer,
-            connectDeviceStream,
             dbcFileName,
             fileInput,
             dbcFileInput,
@@ -2780,14 +2730,12 @@ export default {
             testConfig,
             openTestConfigDialog,
             saveTestConfig,
-            // mobileCanvas,
-            // instrumentCanvas,
-            // clickPos,
-            // onVideoClick,
-            // mobilePoint,
-            // instrumentPoint,
-            // getDeviceSize,
-            // resizeCanvas,
+            mobileCanvas,
+            clickPos,
+            onVideoClick,
+            mobilePoint,
+            getDeviceSize,
+            resizeCanvas,
             currentTestId,
             iconConfigDialogVisible,
             iconConfigLoading,
@@ -2802,7 +2750,9 @@ export default {
             redrawDots,
             submitIconDots,
             iconConfigTip,
-            abortCurrentTest
+            abortCurrentTest,
+            connectMobileStream,
+            connectInstrumentStream
 
         }
     }
