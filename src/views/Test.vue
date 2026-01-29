@@ -124,7 +124,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
@@ -132,7 +132,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
@@ -140,7 +140,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                        }}</span>
+                                    }}</span>
                                 </template>
                             </el-table-column>
                             <el-table-column prop="Result" label="测试结果" min-width="180">
@@ -296,15 +296,15 @@
                         <el-tabs v-model="activeDevice" type="card" @tab-click="handleClick">
                             <!-- 车机设备 -->
                             <el-tab-pane label="车机设备" name="five">
-                                <div v-if="mobilePoint" class="coord-info">
+                                <!-- <div v-if="mobilePoint" class="coord-info">
                                     当前坐标：({{ mobilePoint.x }}, {{ mobilePoint.y }})
-                                </div>
+                                </div> -->
 
                                 <div class="video-container">
                                     <iframe ref="videoPlayer" width="100%" height="480" frameborder="0"
                                         allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
-                                    <canvas ref="mobileCanvas" class="overlay-canvas"
+                                    <!-- <canvas ref="mobileCanvas" class="overlay-canvas"
                                         @click="onVideoClick($event, 'mobile')"></canvas>
 
                                     <div v-if="mobilePoint" class="pin-dot"
@@ -312,7 +312,7 @@
                                         <el-tooltip :content="`(${mobilePoint.x}, ${mobilePoint.y})`" placement="top">
                                             <span class="pin-index">1</span>
                                         </el-tooltip>
-                                    </div>
+                                    </div> -->
 
                                     <div class="device-controls">
                                         <el-button type="primary" @click="connectDeviceStream('mobile')"
@@ -332,7 +332,7 @@
                                     <iframe ref="instrumentVideoPlayer" width="100%" height="480" frameborder="0"
                                         allow="autoplay; fullscreen; picture-in-picture" allowfullscreen>
                                     </iframe>
-                                    <canvas ref="instrumentCanvas" class="overlay-canvas"
+                                    <!-- <canvas ref="instrumentCanvas" class="overlay-canvas"
                                         @click="onVideoClick($event, 'instrument')"></canvas>
 
                                     <div v-if="instrumentPoint" class="pin-dot"
@@ -341,7 +341,7 @@
                                             placement="top">
                                             <span class="pin-index">1</span>
                                         </el-tooltip>
-                                    </div>
+                                    </div> -->
 
                                     <div class="device-controls">
                                         <el-button type="primary" @click="connectDeviceStream('instrument')"
@@ -1101,75 +1101,101 @@ export default {
             })
         }
 
-        const mobileCanvas = ref(null)
-        const instrumentCanvas = ref(null)
-        const mobilePoint = ref(null)
-        const instrumentPoint = ref(null)
+        // const mobileCanvas = ref(null)
+        // const instrumentCanvas = ref(null)
+        // const mobilePoint = ref(null)
+        // const instrumentPoint = ref(null)
 
 
-        const clickPos = reactive({
-            show: false,
-            x: 0,
-            y: 0,
-            device: 'mobile'
-        })
+        // const clickPos = reactive({
+        //     show: false,
+        //     x: 0,
+        //     y: 0,
+        //     device: 'mobile'
+        // })
 
-        const getDeviceSize = async () => {
-            const res = await fetch(url.value + '/adb/runCmd?cmd=shell%20wm%20size');
-            const txt = await res.text();                // 只读一次
-            console.log('raw:', txt, 'parsed:', txt.match(/(\d+)x(\d+)/));
-            const m = txt.match(/(\d+)x(\d+)/);
-            return m ? { w: +m[1], h: +m[2] } : { w: 2560, h: 1440 };
+        // const getDeviceSize = async () => {
+        //     const res = await fetch(url.value + '/adb/runCmd?cmd=shell%20wm%20size');
+        //     const txt = await res.text();                // 只读一次
+        //     console.log('raw:', txt, 'parsed:', txt.match(/(\d+)x(\d+)/));
+        //     const m = txt.match(/(\d+)x(\d+)/);
+        //     return m ? { w: +m[1], h: +m[2] } : { w: 2560, h: 1440 };
+        // };
+
+        // const resizeCanvas = (canvas, realW, realH) => {
+        //     if (!canvas) return;                 // 防空
+        //     const box = canvas.parentElement?.getBoundingClientRect();
+        //     if (!box) return;
+
+        //     canvas.width = realW;
+        //     canvas.height = realH;
+        //     canvas.style.width = box.width + 'px';
+        //     canvas.style.height = box.height + 'px';
+        // };
+
+        // const onVideoClick = (e, device) => {
+        //     const canvas = device === 'mobile' ? mobileCanvas.value : instrumentCanvas.value;
+        //     const rect = canvas.getBoundingClientRect();
+
+        //     /* 1. 高度比例（已知正确） */
+        //     const y = Math.round((e.offsetY / rect.height) * canvas.height);
+
+        //     /* 2. 用同一比例反推宽度（代替横向拉伸） */
+        //     const x = Math.round((e.offsetX / rect.height) * canvas.height); // ← 关键
+
+        //     console.log('逻辑坐标:', x, y);   // 最右 ≈ canvas.height 比例值
+
+        //     /* 3. 画点、存值照旧 … */
+        //     const ctx = canvas.getContext('2d');
+        //     ctx.clearRect(0, 0, canvas.width, canvas.height);
+        //     ctx.fillStyle = '#f56c6c';
+        //     ctx.beginPath();
+        //     ctx.arc(x, y, 4, 0, Math.PI * 2);
+        //     ctx.fill();
+
+        //     const target = device === 'mobile' ? mobilePoint : instrumentPoint;
+        //     target.value = { left: e.offsetX, top: e.offsetY, x, y };
+        //     ElMessage.success(`已记录 (${x}, ${y})`);
+        // };
+
+        // const connectDeviceStream = async (deviceType) => {
+        //     const { w, h } = await getDeviceSize();   // ← 拿真实分辨率
+        //     const canvas = deviceType === 'mobile' ? mobileCanvas.value : instrumentCanvas.value;
+        //     resizeCanvas(canvas, w, h);              // ← 设置 canvas 像素 & CSS 缩放
+
+        //     const src = deviceType === 'mobile'
+        //         ? `${url.value}/adb/video`
+        //         : `${url.value}/camera/video?name=UGREEN`;
+
+        //     (deviceType === 'mobile' ? videoPlayer : instrumentVideoPlayer).value.src = src;
+        // }
+
+        const connectDeviceStream = (deviceType) => {
+            if (deviceType === 'mobile') {
+                if (!url.value) {
+                    showToast('请先输入URL地址', 'warning');
+                    return;
+                }
+                const mobileUrl = `${url.value}/adb/video`;
+                //console.log(mobileUrl)
+                if (videoPlayer.value) {
+                    videoPlayer.value.src = mobileUrl;
+                }
+                showToast('手机视频流已连接', 'success');
+            } else if (deviceType === 'instrument') {
+                if (!url.value) {
+                    showToast('请先输入URL地址', 'warning');
+                    return;
+                }
+                const instrumentUrl = `${url.value}/camera/video?name=UGREEN`;
+                //console.log(instrumentUrl);
+                instrumentStreamUrl.value = instrumentUrl;
+                if (instrumentVideoPlayer.value) {
+                    instrumentVideoPlayer.value.src = instrumentUrl;
+                }
+                showToast('仪表视频流已连接', 'success');
+            }
         };
-
-        const resizeCanvas = (canvas, realW, realH) => {
-            if (!canvas) return;                 // 防空
-            const box = canvas.parentElement?.getBoundingClientRect();
-            if (!box) return;
-
-            canvas.width = realW;
-            canvas.height = realH;
-            canvas.style.width = box.width + 'px';
-            canvas.style.height = box.height + 'px';
-        };
-
-        const onVideoClick = (e, device) => {
-            const canvas = device === 'mobile' ? mobileCanvas.value : instrumentCanvas.value;
-            const rect = canvas.getBoundingClientRect();
-
-            /* 1. 高度比例（已知正确） */
-            const y = Math.round((e.offsetY / rect.height) * canvas.height);
-
-            /* 2. 用同一比例反推宽度（代替横向拉伸） */
-            const x = Math.round((e.offsetX / rect.height) * canvas.height); // ← 关键
-
-            console.log('逻辑坐标:', x, y);   // 最右 ≈ canvas.height 比例值
-
-            /* 3. 画点、存值照旧 … */
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#f56c6c';
-            ctx.beginPath();
-            ctx.arc(x, y, 4, 0, Math.PI * 2);
-            ctx.fill();
-
-            const target = device === 'mobile' ? mobilePoint : instrumentPoint;
-            target.value = { left: e.offsetX, top: e.offsetY, x, y };
-            ElMessage.success(`已记录 (${x}, ${y})`);
-        };
-
-        const connectDeviceStream = async (deviceType) => {
-            const { w, h } = await getDeviceSize();   // ← 拿真实分辨率
-            const canvas = deviceType === 'mobile' ? mobileCanvas.value : instrumentCanvas.value;
-            resizeCanvas(canvas, w, h);              // ← 设置 canvas 像素 & CSS 缩放
-
-            const src = deviceType === 'mobile'
-                ? `${url.value}/adb/video`
-                : `${url.value}/camera/video?name=UGREEN`;
-
-            (deviceType === 'mobile' ? videoPlayer : instrumentVideoPlayer).value.src = src;
-        }
-
         // 自动保存用例
         const autoSave = (row) => {
             showToast(`用例 ${row.id} 已自动保存`, 'info')
@@ -1715,9 +1741,9 @@ export default {
                                 id: newId,
 
                                 TestCaseID: (row['Test Case ID\r\n测试caseID'] ?? '').toString().trim(),
-                                SyRDIDFSRD: (row['RD ID/(FSR/TSR）\r\n需求ID'] ?? '').toString().trim(), 
-                                Auto_testID: '', 
-                                TSR: '', 
+                                SyRDIDFSRD: (row['RD ID/(FSR/TSR）\r\n需求ID'] ?? '').toString().trim(),
+                                Auto_testID: '',
+                                TSR: '',
                                 CasePriority: (row['Case_Priority\r\n优先级'] ?? '').toString().trim(),
                                 DesignMethod: (row['Design Method \r\n设计方法'] ?? '').toString().trim(),
                                 TestMethod: (row['Test Method \r\n测试方法'] ?? '').toString().trim(),
@@ -1744,7 +1770,7 @@ export default {
 
                         casesTable.value = [{ sheetName: 'ModuleName', start: 0, end: cases.value.length - 1, length: cases.value.length }];
                         showToast(`多工作表(ModuleName)导入完成: ${file.name}`, 'success');
-                        return;   
+                        return;
                     }
 
                     const worksheet = wb.Sheets[wb.SheetNames[0]];
@@ -2583,37 +2609,39 @@ export default {
                 fetchTestList(1);
             }, 500)
 
-            const { w, h } = await getDeviceSize();
-            console.log('接口分辨率 w=', w, 'h=', h);   // 看一眼真实值
+            // const { w, h } = await getDeviceSize();
+            // console.log('接口分辨率 w=', w, 'h=', h);   // 看一眼真实值
 
-            nextTick(() => {
-                /* ② 硬编码 2560×1440 强行灌进去 —— 如果这样坐标就对，说明接口返回值错了 */
-                const hardW = 2560, hardH = 1440;
-                mobileCanvas.value.width = hardW;
-                mobileCanvas.value.height = hardH;
-                instrumentCanvas.value.width = hardW;
-                instrumentCanvas.value.height = hardH;
+            // nextTick(() => {
+            //     /* ② 硬编码 2560×1440 强行灌进去 —— 如果这样坐标就对，说明接口返回值错了 */
+            //     const hardW = 2560, hardH = 1440;
+            //     mobileCanvas.value.width = hardW;
+            //     mobileCanvas.value.height = hardH;
+            //     instrumentCanvas.value.width = hardW;
+            //     instrumentCanvas.value.height = hardH;
 
-                /* ③ 再把 CSS 视觉大小撑满父容器 */
-                [mobileCanvas.value, instrumentCanvas.value].forEach(cv => {
-                    const box = cv.parentElement?.getBoundingClientRect();
-                    if (box) {
-                        cv.style.width = box.width + 'px';
-                        cv.style.height = box.height + 'px';
-                    }
-                });
-                console.log('canvas 元素像素已强行设为 2560×1440');
-            });
+            //     /* ③ 再把 CSS 视觉大小撑满父容器 */
+            //     [mobileCanvas.value, instrumentCanvas.value].forEach(cv => {
+            //         const box = cv.parentElement?.getBoundingClientRect();
+            //         if (box) {
+            //             cv.style.width = box.width + 'px';
+            //             cv.style.height = box.height + 'px';
+            //         }
+            //     });
+            //     console.log('canvas 元素像素已强行设为 2560×1440');
+            // });
 
-            window.addEventListener('resize', () => {
-                [mobileCanvas.value, instrumentCanvas.value].forEach(canvas => {
-                    if (!canvas) return;
-                    const box = canvas.parentElement?.getBoundingClientRect();
-                    if (!box) return;
-                    canvas.style.width = box.width + 'px';
-                    canvas.style.height = box.height + 'px';
-                });
-            });
+            // window.addEventListener('resize', () => {
+            //     [mobileCanvas.value, instrumentCanvas.value].forEach(canvas => {
+            //         if (!canvas) return;
+            //         const box = canvas.parentElement?.getBoundingClientRect();
+            //         if (!box) return;
+            //         canvas.style.width = box.width + 'px';
+            //         canvas.style.height = box.height + 'px';
+            //     });
+            // });
+
+            
         })
 
         // 组件卸载时停止轮询
@@ -2752,14 +2780,14 @@ export default {
             testConfig,
             openTestConfigDialog,
             saveTestConfig,
-            mobileCanvas,
-            instrumentCanvas,
-            clickPos,
-            onVideoClick,
-            mobilePoint,
-            instrumentPoint,
-            getDeviceSize,
-            resizeCanvas,
+            // mobileCanvas,
+            // instrumentCanvas,
+            // clickPos,
+            // onVideoClick,
+            // mobilePoint,
+            // instrumentPoint,
+            // getDeviceSize,
+            // resizeCanvas,
             currentTestId,
             iconConfigDialogVisible,
             iconConfigLoading,
