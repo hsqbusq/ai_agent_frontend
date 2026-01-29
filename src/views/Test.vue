@@ -669,7 +669,6 @@ export default {
             showTestKey.value = value !== 'critical';
         };
         const { proxy } = getCurrentInstance();
-        const instrumentStreamUrl = ref('http://172.23.96.54:8000/camera/video?name=UGREEN');
         const videoPlayer = ref(null);
         const instrumentVideoPlayer = ref(null);
 
@@ -2676,7 +2675,6 @@ export default {
             handlePageChange2,
             handleDbcFileUpload,
             videoPlayer,
-            instrumentStreamUrl,
             instrumentVideoPlayer,
             dbcFileName,
             fileInput,
