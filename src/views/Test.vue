@@ -50,13 +50,14 @@
                     </el-button>
                     <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span> -->
                         <div class="file-button-group">
-                            <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px">
-                                <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取DBC
+                            <el-button type="primary" size="small" @click="selectDbcFile" style="padding: 15px"
+                                :loading="dbcUploadLoading">
+                                <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" />
+                                {{ dbcUploadLoading ? '上传中...' : '读取DBC' }}
                             </el-button>
                             <el-tooltip v-if="dbcFileName" :content="dbcFileName.name" placement="top">
                                 <span class="file-name">已选择：{{ dbcFileName.name }}</span>
                             </el-tooltip>
-                            <!-- <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span> -->
                         </div>
                     </div>
 
@@ -97,28 +98,121 @@
                             highlight-current-row @selection-change="handleSelectionChange"
                             @row-contextmenu="onRowRightClick" style="width: 100%" row-key="id">
                             <el-table-column type="selection" :selectable="selectable" width="55"></el-table-column>
+
+                            <!-- Case ID - 不可编辑 -->
                             <el-table-column prop="id" label="Case ID" width="80" align="center"></el-table-column>
-                            <el-table-column prop="TestCaseID" label="测试用例ID" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="SyRDIDFSRD" label="SyRD/FSRD ID" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="Auto_testID" label="自动测试ID" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="TSR" label="TSR" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="CasePriority" label="用例优先级" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="TestMethod" label="测试方法" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="TestStrategy" label="测试策略" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="DesignMethod" label="设计方法" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="TestKey" label="测试功能点" min-width="120"
-                                v-if="showTestKey"></el-table-column>
-                            <el-table-column prop="Initial_Condition" label="初始条件" min-width="200"></el-table-column>
-                            <el-table-column prop="Action" label="动作" min-width="180"></el-table-column>
-                            <el-table-column prop="Expected_Result" label="预期结果" min-width="180"></el-table-column>
+
+                            <!-- 测试用例ID - 可编辑 -->
+                            <el-table-column prop="TestCaseID" label="测试用例ID" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.TestCaseID"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.TestCaseID }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- SyRD/FSRD ID - 可编辑 -->
+                            <el-table-column prop="SyRDIDFSRD" label="SyRD/FSRD ID" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.SyRDIDFSRD"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.SyRDIDFSRD }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 自动测试ID - 可编辑 -->
+                            <el-table-column prop="Auto_testID" label="自动测试ID" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.Auto_testID"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.Auto_testID }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- TSR - 可编辑 -->
+                            <el-table-column prop="TSR" label="TSR" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.TSR"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.TSR }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 用例优先级 - 可编辑 -->
+                            <el-table-column prop="CasePriority" label="用例优先级" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.CasePriority"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.CasePriority }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 测试方法 - 可编辑 -->
+                            <el-table-column prop="TestMethod" label="测试方法" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.TestMethod"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.TestMethod }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 测试策略 - 可编辑 -->
+                            <el-table-column prop="TestStrategy" label="测试策略" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.TestStrategy"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.TestStrategy }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 设计方法 - 可编辑 -->
+                            <el-table-column prop="DesignMethod" label="设计方法" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.DesignMethod"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.DesignMethod }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 测试功能点 - 可编辑 -->
+                            <el-table-column prop="TestKey" label="测试功能点" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.TestKey"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.TestKey }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 初始条件 - 可编辑 -->
+                            <el-table-column prop="Initial_Condition" label="初始条件" min-width="200">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.Initial_Condition"
+                                        @blur="scope.row.editing = false" type="textarea" autosize></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.Initial_Condition
+                                    }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 动作 - 可编辑 -->
+                            <el-table-column prop="Action" label="动作" min-width="180">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.Action"
+                                        @blur="scope.row.editing = false" type="textarea" autosize></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.Action }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 预期结果 - 可编辑 -->
+                            <el-table-column prop="Expected_Result" label="预期结果" min-width="180">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.Expected_Result"
+                                        @blur="scope.row.editing = false" type="textarea" autosize></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.Expected_Result
+                                    }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- 初始条件序列 - 可编辑 -->
                             <el-table-column prop="InitTestSequences" label="初始条件序列" min-width="180">
                                 <template #default="scope">
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
@@ -127,6 +221,8 @@
                                     }}</span>
                                 </template>
                             </el-table-column>
+
+                            <!-- 操作步骤序列 - 可编辑 -->
                             <el-table-column prop="ActionTestSequences" label="操作步骤序列" min-width="140">
                                 <template #default="scope">
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
@@ -135,6 +231,8 @@
                                     }}</span>
                                 </template>
                             </el-table-column>
+
+                            <!-- 预期结果序列 - 可编辑 -->
                             <el-table-column prop="ExpectedTestSequences" label="预期结果序列" min-width="140">
                                 <template #default="scope">
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
@@ -143,6 +241,8 @@
                                     }}</span>
                                 </template>
                             </el-table-column>
+
+                            <!-- 测试结果 - 不可编辑 -->
                             <el-table-column prop="Result" label="测试结果" min-width="180">
                                 <template #default="scope">
                                     <span>{{ scope.row.Result }}</span>
@@ -154,10 +254,11 @@
                                     </el-button>
                                 </template>
                             </el-table-column>
+
+                            <!-- 实际结果 - 不可编辑 -->
                             <el-table-column prop="ActualResult" label="实际结果" min-width="180">
                                 <template #default="scope">
                                     <br />
-                                    <!--  -->
                                     <el-button v-if="scope.row.Result !== undefined" type="primary" size="small"
                                         @click="fetchActualResult(scope.row.Testid, scope.row.ExpectedTestSequences)"
                                         style="padding: 15px">
@@ -166,32 +267,71 @@
                                     </el-button>
                                 </template>
                             </el-table-column>
-                            <!-- <el-table-column prop="ActualResult" label="实际结果" min-width="120" v-if="showTestKey">
-                        </el-table-column> -->
-                            <el-table-column prop="Selected" label="是否选中" min-width="120" v-if="showTestKey">
-                            </el-table-column>
-                            <!-- <el-table-column prop="TestResult" label="测试结果" min-width="120" v-if="showTestKey">
-                        </el-table-column> -->
 
+                            <!-- 是否选中 - 可编辑 -->
+                            <el-table-column prop="Selected" label="是否选中" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.Selected"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.Selected }}</span>
+                                </template>
+                            </el-table-column>
+
+                            <!-- PR号 - 可编辑 -->
                             <el-table-column prop="PRNo" label="PR号" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.PRNo"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.PRNo }}</span>
+                                </template>
                             </el-table-column>
+
+                            <!-- 测试日志 - 可编辑 -->
                             <el-table-column prop="TestLogs" label="测试日志" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.TestLogs"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.TestLogs }}</span>
+                                </template>
                             </el-table-column>
+
+                            <!-- 测试次数 - 可编辑 -->
                             <el-table-column prop="Numberoftests" label="测试次数" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.Numberoftests"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.Numberoftests }}</span>
+                                </template>
                             </el-table-column>
+
+                            <!-- 测试日期 - 可编辑 -->
                             <el-table-column prop="TestDate" label="测试日期" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.TestDate"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.TestDate }}</span>
+                                </template>
                             </el-table-column>
+
+                            <!-- 备注 - 可编辑 -->
                             <el-table-column prop="Remark" label="备注" min-width="120" v-if="showTestKey">
+                                <template #default="scope">
+                                    <el-input v-if="scope.row.editing" v-model="scope.row.Remark"
+                                        @blur="scope.row.editing = false" size="small"></el-input>
+                                    <span @click="scope.row.editing = true" v-else>{{ scope.row.Remark }}</span>
+                                </template>
                             </el-table-column>
+
+                            <!-- Testid - 保持原有 -->
                             <el-table-column label="Testid" v-if="showTestidColumn"> </el-table-column>
-                            <!-- <el-table-column label="查看" min-width="260">
+                        </el-table>
+                        <!-- <el-table-column label="查看" min-width="260">
                             <el-button type="primary" size="small" @click="fetchTestLogs(row.id)" style="padding: 15px"
                                 v-if="scope.row.Result !== null">
                                 <img src="../assets/11.svg" alt="" style="width: 14px;height: 14px" />
                                 查看
                             </el-button>
                         </el-table-column> -->
-                        </el-table>
                         <ul v-show="contextMenu.visible"
                             :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }" class="context-menu"
                             @mouseleave="contextMenu.visible = false">
@@ -2445,6 +2585,7 @@ export default {
         }
 
         const dbcFileName = ref('')
+        const dbcUploadLoading = ref(false)
 
         const fetchActualResult = (test_id, command) => {
             //test_id = "test_20250802_134624"
@@ -2473,14 +2614,51 @@ export default {
                 });
         }
 
-        const handleDbcFileUpload = (event) => {
+        const handleDbcFileUpload = async (event) => {
             const file = event.target.files[0];
-            if (file) {
-                dbcFileName.value = file;
-                console.log(dbcFileName.value)
+            if (!file) return;
+
+            // 验证文件类型
+            if (!file.name.endsWith('.dbc')) {
+                showToast('请选择.dbc格式的文件', 'error');
+                return;
             }
-            showToast('DBC文件选择成功', 'success')
+
+            dbcUploadLoading.value = true;
+
+            try {
+                // 创建 FormData 对象
+                const formData = new FormData();
+                formData.append('file', file);  // 接口参数名为 file
+
+                // 调用上传接口
+                const response = await fetch('/dev-api/upload', {
+                    method: 'POST',
+                    body: formData
+                    // 注意：fetch 会自动设置 Content-Type: multipart/form-data 并添加 boundary
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.code === 200) {
+                    dbcFileName.value = {
+                        name: file.name,
+                        path: data.result?.save_path || '',
+                        size: data.result?.file_size || file.size
+                    };
+                    showToast(`DBC文件上传成功: ${file.name}`, 'success');
+                } else {
+                    throw new Error(data.description || '上传失败');
+                }
+            } catch (error) {
+                console.error('DBC上传失败:', error);
+                showToast(`DBC文件上传失败: ${error.message}`, 'error');
+                event.target.value = '';
+            } finally {
+                dbcUploadLoading.value = false;
+            }
         }
+
         const testConfigVisible = ref(false)
 
         const testConfig = reactive({
@@ -2677,6 +2855,7 @@ export default {
             videoPlayer,
             instrumentVideoPlayer,
             dbcFileName,
+            dbcUploadLoading,
             fileInput,
             dbcFileInput,
             importXlsmFile,
