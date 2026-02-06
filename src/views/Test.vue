@@ -2471,8 +2471,8 @@ export default {
 
         const startCaseConversion = async (row, resolve, reject) => {
             try {
-                await callApi(row.id, row.Initial_Condition, 'A', false, 'A');
-                await callApi(row.id, row.Action, 'A', false, 'B');
+                await callApi(row.id, row.Initial_Condition, 'A', false, 'A', row.Expected_Result);
+                await callApi(row.id, row.Action, 'B', false, 'B', row.Expected_Result);
 
                 const index = cases.value.findIndex(c => c.id === row.id);
                 cases.value[index].ExpectedTestSequences = row.Expected_Result;
@@ -2482,7 +2482,7 @@ export default {
             }
         }
 
-        const callApi = (id, input, task, stream, step) => {
+        const callApi = (id, input, task, stream, step, predict) => {
             return new Promise((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
                 xhr.open('POST', '/dev-api/v1/chat/completions', true);
@@ -2520,7 +2520,7 @@ export default {
                 };
                 const dbc = dbcFileName.value.name;
                 const prompt = prompt1.value;
-                xhr.send(JSON.stringify({ input, task, stream, dbc, prompt }));
+                xhr.send(JSON.stringify({ input, task, stream, dbc, prompt, predict }));
             });
         }
 
