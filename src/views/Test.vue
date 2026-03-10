@@ -35,6 +35,9 @@
                         <el-button type="primary" size="small" @click="clearTestCase" style="padding: 15px">
                             <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 清空用例
                         </el-button>
+                        <el-button type="primary" size="small" @click="clearTestResults" style="padding: 15px">
+                            <img src="../assets/10.svg" alt="" style="width: 14px;height: 14px" /> 清除测试结果
+                        </el-button>
                         <el-button type="primary" size="small" @click="SynchronizeTestResults" style="padding: 15px">
                             <img src="../assets/05.svg" alt="" style="width: 14px;height: 14px" /> 文档同步设置
                         </el-button>
@@ -189,7 +192,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.Initial_Condition"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.Initial_Condition
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
 
@@ -208,7 +211,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.Expected_Result"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.Expected_Result
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
 
@@ -218,7 +221,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.InitTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.InitTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
 
@@ -228,7 +231,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ActionTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ActionTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
 
@@ -238,7 +241,7 @@
                                     <el-input v-if="scope.row.editing" v-model="scope.row.ExpectedTestSequences"
                                         @blur="scope.row.editing = false" type="textarea" autosize></el-input>
                                     <span @click="scope.row.editing = true" v-else>{{ scope.row.ExpectedTestSequences
-                                    }}</span>
+                                        }}</span>
                                 </template>
                             </el-table-column>
 
@@ -341,9 +344,15 @@
                         </ul>
                     </div>
 
-                    <div class="pagination-container">
+                    <!-- <div class="pagination-container">
                         <el-pagination background layout="prev, pager, next" :total="cases.length" :page-size="pageSize"
                             :current-page="currentPage" @current-change="handlePageChange">
+                        </el-pagination>
+                    </div> -->
+                    <div class="pagination-container">
+                        <el-pagination background layout="total, sizes, prev, pager, next, jumper" :total="cases.length"
+                            v-model:page-size="pageSize" :page-sizes="pageSizeOptions" :current-page="currentPage"
+                            @current-change="handlePageChange" @size-change="handleSizeChange">
                         </el-pagination>
                     </div>
                 </div>
@@ -1192,6 +1201,20 @@ export default {
         const currentPage = ref(1)
         const changePage = ref(false)
         const pageSize = ref(20)
+        const pageSizeOptions = [10, 20, 50, 100]
+
+        const handleSizeChange = (newSize) => {
+            pageSize.value = newSize
+            currentPage.value = 1  // 切换大小时重置到第一页
+            showToast(`每页显示 ${newSize} 条`, 'info')
+            // 重新设置选中状态
+            nextTick(() => {
+                paginatedCases.value.forEach(row => {
+                    const isSelected = selectedRowsAll.value.some(r => r.id === row.id)
+                    proxy.$refs.caseTable?.toggleRowSelection(row, isSelected)
+                })
+            })
+        }
 
         const currentPage1 = ref(1)
         const pageSize1 = ref(10)
@@ -1424,7 +1447,50 @@ export default {
             showToast('全部测试用例已清空', 'success');
         }
 
+        // 清除所有测试结果
+        const clearTestResults = async () => {
+            // 检查是否有测试结果
+            const hasResults = cases.value.some(c => c.Result !== undefined && c.Result !== '');
+            if (!hasResults) {
+                showToast('当前没有测试结果需要清除', 'info');
+                return;
+            }
 
+            try {
+                // 二次确认
+                await ElMessageBox.confirm(
+                    '此操作将清除所有测试用例的测试结果（包括测试结果、实际结果），是否继续？',
+                    '确认清除',
+                    {
+                        confirmButtonText: '确定',
+                        cancelButtonText: '取消',
+                        type: 'warning'
+                    }
+                );
+            } catch {
+                return; // 用户取消
+            }
+
+            // 清除所有测试结果字段
+            cases.value.forEach(c => {
+                c.Result = undefined;
+                c.ActualResult = '';
+            });
+
+            // 清空执行日志
+            executionLogs.value = {};
+            debugRows.value = [];
+            selectedCase.value = '';
+
+            // 清除选中状态
+            selectedRowsAll.value = [];
+            proxy.$refs.caseTable?.clearSelection();
+
+            // 保存到本地存储
+            await saveCases(cases.value);
+
+            showToast('所有测试结果已清除', 'success');
+        };
 
         // 清除日志
         const clearLogs = () => {
@@ -2929,7 +2995,10 @@ export default {
             iconConfigTip,
             abortCurrentTest,
             connectMobileStream,
-            connectInstrumentStream
+            connectInstrumentStream,
+            pageSizeOptions,
+            handleSizeChange,
+            clearTestResults
 
         }
     }
