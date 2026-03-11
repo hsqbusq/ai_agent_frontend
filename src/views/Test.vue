@@ -209,6 +209,7 @@
             <el-table
               ref="caseTable"
               :data="paginatedCases"
+              :key="tableKey"
               class="editable-table"
               height="450"
               highlight-current-row
@@ -1460,7 +1461,7 @@ export default {
     const showTestidColumn = false;
     const currentLang = ref("中文");
     const langOptions = ref(langOptionsJson);
-
+    const tableKey = ref(0);
     const handleInfoTypeChange = (value) => {
       showTestKey.value = value !== "critical";
     };
@@ -2751,6 +2752,7 @@ export default {
       while (index < selectedRowsAll.value.length && isDebugRunning.value) {
         const row = selectedRowsAll.value[index];
         currentExecutingId.value = row.id;
+        tableKey.value++;
         try {
           if (!debugRows.value.some((dr) => dr.id === row.id)) {
             debugRows.value.push(row);
@@ -2762,6 +2764,13 @@ export default {
           await runTestCase(query, baseurl, row.id, row);
         } catch (error) {
           showToast(`测试用例${row.id}调试失败`, "error");
+        } finally {
+          // 关键修复：每个用例执行完成后，清空 currentExecutingId
+          // 这样只有当前正在执行的用例会显示绿色，执行完的就恢复原色
+          if (isDebugRunning.value) {
+            currentExecutingId.value = "";
+            tableKey.value++;
+          }
         }
 
         index++;
@@ -2769,12 +2778,13 @@ export default {
 
       isDebugRunning.value = false;
       endTime.value = parseInt(Date.now());
+      currentExecutingId.value = "";
       showToast("调试已完成", "info");
-      console.log(autoSyncToFeishu.value);
+      // console.log(autoSyncToFeishu.value);
 
-      if (autoSyncToFeishu.value) {
-        await sendSynchronizeTestResultsRequest();
-      }
+      // if (autoSyncToFeishu.value) {
+      //   await sendSynchronizeTestResultsRequest();
+      // }
     };
 
     // 运行测试用例
@@ -2797,8 +2807,9 @@ export default {
 
     const isDebugRunning = ref(false);
     const currentExecutingId = ref("");
+
     const rowClassName = ({ row }) => {
-      if (row.id === currentExecutingId.value) {
+      if (row._executing || row.id === currentExecutingId.value) {
         return "executing-row";
       }
       return "";
@@ -3726,6 +3737,7 @@ export default {
       stopPolling,
       fetchTestList,
       fetchTestLogs,
+      tableKey,
       fetchActualResult,
       logDialogVisible,
       ActualResultDialogVisible,
