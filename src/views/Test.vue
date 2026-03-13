@@ -101,15 +101,6 @@
             <el-button
               type="primary"
               size="small"
-              @click="SynchronizeTestResults"
-              style="padding: 15px"
-            >
-              <img src="../assets/05.svg" alt="" style="width: 14px; height: 14px" />
-              文档同步设置
-            </el-button>
-            <el-button
-              type="primary"
-              size="small"
               @click="iconConfig"
               style="padding: 15px"
             >
@@ -1164,36 +1155,6 @@
       </template>
     </el-dialog>
 
-    <el-dialog
-      v-model="SynchronizeTestResultsDialogVisible"
-      title="飞书文档同步设置"
-      width="50%"
-    >
-      <el-form label-width="150px" @submit.prevent>
-        <el-form-item label="项目名称">
-          <el-input v-model="xmmc" placeholder="请输入项目名称"></el-input>
-        </el-form-item>
-      </el-form>
-      <el-form label-width="150px">
-        <el-form-item label="飞书文档链接url" @submit.prevent>
-          <el-input v-model="feishuDocUrl" placeholder="请输入飞书文档url"></el-input>
-        </el-form-item>
-      </el-form>
-      <el-form-item label="是否自动同步至飞书">
-        <el-switch
-          v-model="autoSyncToFeishu"
-          active-text="是"
-          inactive-text="否"
-        ></el-switch>
-      </el-form-item>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="SynchronizeTestResultsDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveSetting">保存设置</el-button>
-        </span>
-      </template>
-    </el-dialog>
-
     <!-- 图标配置弹窗 -->
     <el-dialog v-model="iconConfigDialogVisible" title="图标配置" width="55%">
       <el-alert
@@ -1510,6 +1471,7 @@ export default {
         proxy.$refs.caseTable.clearSelection();
         proxy.$refs.caseTable.toggleRowSelection(row, true);
       });
+      await scrollToCase(row.id);
 
       await startDebugging();
       showToast(`用例 ${row.id} 开始执行`, "info");
@@ -1699,125 +1661,6 @@ export default {
       ActionTestSequences: "",
       ExpectedTestSequences: "",
     });
-
-    // 同步数据到飞书文档的弹窗相关数据
-    const feishuDocUrl = ref("");
-    const xmmc = ref("");
-    const SynchronizeTestResultsDialogVisible = ref(false);
-    const autoSyncToFeishu = ref(false);
-    feishuDocUrl.value = localStorage.getItem("feishuDocUrl", feishuDocUrl.value);
-    xmmc.value = localStorage.getItem("xmmc", xmmc.value);
-    autoSyncToFeishu.value = localStorage.getItem(
-      "autoSyncToFeishu",
-      autoSyncToFeishu.value
-    );
-    const SynchronizeTestResults = () => {
-      SynchronizeTestResultsDialogVisible.value = true;
-      xmmc.value = localStorage.getItem("xmmc") || "";
-      feishuDocUrl.value = localStorage.getItem("feishuDocUrl") || "";
-      autoSyncToFeishu.value = localStorage.getItem("autoSyncToFeishu") === "true";
-    };
-
-    const saveSetting = async () => {
-      localStorage.setItem("feishuDocUrl", feishuDocUrl.value);
-      localStorage.setItem("xmmc", xmmc.value);
-      localStorage.setItem("autoSyncToFeishu", autoSyncToFeishu.value.toString());
-
-      showToast("设置已保存", "success");
-      // sendSynchronizeTestResultsRequest()
-      SynchronizeTestResultsDialogVisible.value = false;
-    };
-
-    const sendSynchronizeTestResultsRequest = async () => {
-      if (!feishuDocUrl.value) {
-        showToast("请先输入飞书文档url", "warning");
-        return;
-      }
-      if (!xmmc.value) {
-        showToast("请先输入项目名称", "warning");
-        return;
-      }
-      if (!autoSyncToFeishu.value) return;
-
-      const testedSelected = selectedRowsAll.value.filter(
-        (c) => c.Result !== undefined && c.Result !== ""
-      );
-      if (testedSelected.length === 0) {
-        showToast("本次测试没有产生测试结果，无需同步", "info");
-        return;
-      }
-
-      const moduleMap = {};
-      for (const sheet of casesTable.value) {
-        if (sheet.sheetName === "全选") continue;
-        const moduleCases = testedSelected.filter((c) => {
-          const idx = cases.value.findIndex((tc) => tc.id === c.id);
-          return idx >= sheet.start && idx <= sheet.end;
-        });
-        if (moduleCases.length === 0) continue;
-        const total = moduleCases.length;
-        const pass = moduleCases.filter((c) => /pass/i.test(c.Result)).length;
-        moduleMap[sheet.sheetName] = { total, pass, cases: moduleCases };
-      }
-      if (Object.keys(moduleMap).length === 0) {
-        showToast("已选用例中无已完成数据，无需同步", "info");
-        return;
-      }
-
-      await exportTestReport();
-      const fileName = "file:///D:/uidp9463/Downloads/" + exportName.value;
-
-      const { appToken, tableId } = parseFeishuUrl(feishuDocUrl.value);
-
-      const records = Object.entries(moduleMap).map(([moduleName, stat]) => ({
-        fields: {
-          项目名称: xmmc.value,
-          测试类型: "AI全链路测试",
-          测试模块: moduleName,
-          开始测试时间: startTime.value,
-          结束测试时间: endTime.value,
-          测试案例总数: stat.total,
-          通过案例数: stat.pass,
-          未通过案例数: stat.total - stat.pass,
-          测试台架名称: url.value,
-          测试报告路径: fileName,
-        },
-      }));
-
-      try {
-        const res = await fetch("/dev-api/api/addtable", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ app_token: appToken, table_id: tableId, records }),
-        }).then((r) => r.json());
-
-        if (res.code === 0) {
-          showToast(`成功写入 ${records.length} 条模块统计数据`, "success");
-          SynchronizeTestResultsDialogVisible.value = false;
-        } else {
-          showToast("写入失败：" + (res.msg || res.error?.message), "error");
-        }
-      } catch (e) {
-        showToast("网络错误", "error");
-      }
-    };
-
-    const parseFeishuUrl = () => {
-      if (!feishuDocUrl.value) showToast("文档URL不能为空", "warning");
-
-      const u = feishuDocUrl.value.replace(/\/$/, "");
-
-      const baseMatch = u.match(/\/base\/([a-zA-Z0-9]+)\?.*table=([a-zA-Z0-9]+)/);
-      if (baseMatch) {
-        return { appToken: baseMatch[1], tableId: baseMatch[2] };
-      }
-
-      const pathMatch = u.match(/\/([a-zA-Z0-9]+)\/table\/([a-zA-Z0-9]+)/);
-      if (pathMatch) {
-        return { appToken: pathMatch[1], tableId: pathMatch[2] };
-      }
-      showToast("无法解析飞书文档URL，请检查格式", "error");
-    };
 
     // 查看日志的弹窗相关数据
     const logDialogVisible = ref(false);
@@ -2230,7 +2073,7 @@ export default {
     const handleSelectionChange = (selection) => {
       console.log(isConverting.value);
       console.log(selectedRowsAll.value);
-      if (isConverting.value) {
+      if (isConverting.value || isDebugRunning.value) {
         return;
       }
 
@@ -2278,20 +2121,21 @@ export default {
       }
     };
 
-    // 分页变化处理
-    const handlePageChange = (newPage) => {
+    const handlePageChange = async (newPage) => {
       currentPage.value = newPage;
       changePage.value = true;
       showToast(`切换到第 ${newPage} 页`, "info");
-      nextTick(() => {
-        paginatedCases.value.forEach((row) => {
-          changePage.value = true;
-          const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
-          //console.log(isSelected)
-          proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
-        });
-        changePage.value = false;
+
+      // 等待表格渲染完成
+      await nextTick();
+
+      // 恢复当前页的选中状态（但不触发滚动）
+      paginatedCases.value.forEach((row) => {
+        const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
+        proxy.$refs.caseTable?.toggleRowSelection(row, isSelected);
       });
+
+      changePage.value = false;
     };
 
     const handlePageChange1 = (newPage) => {
@@ -2737,11 +2581,158 @@ export default {
     const startTime = ref();
     const endTime = ref();
 
-    // 开始测试
+    const scrollToCase = async (caseId) => {
+      const caseIndex = cases.value.findIndex((c) => c.id === caseId);
+      if (caseIndex === -1) return;
+
+      const targetPage = Math.floor(caseIndex / pageSize.value) + 1;
+      const rowInPage = caseIndex % pageSize.value;
+
+      // 翻页
+      if (targetPage !== currentPage.value) {
+        currentPage.value = targetPage;
+        changePage.value = true;
+
+        await nextTick();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        changePage.value = false;
+      }
+
+      await nextTick();
+      const table = proxy.$refs.caseTable;
+      if (table) {
+        paginatedCases.value.forEach((row) => {
+          const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
+          console.log(`[restore] ${row.id}: ${isSelected}`);
+          table.toggleRowSelection(row, isSelected);
+        });
+      }
+      if (!table) return;
+      const rowData = paginatedCases.value[rowInPage];
+      if (rowData) {
+        table.setCurrentRow(rowData);
+      }
+
+      await nextTick();
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const bodyWrapper = table.$el.querySelector(
+        ".el-table__body-wrapper .el-scrollbar__wrap"
+      );
+      if (!bodyWrapper) {
+        console.log("[scrollToCase] 未找到滚动容器");
+        return;
+      }
+
+      const rows = table.$el.querySelectorAll(".el-table__body tbody tr");
+      if (!rows || rows.length === 0) {
+        console.log("[scrollToCase] 未找到行元素");
+        return;
+      }
+      const targetRow = rows[rowInPage];
+      if (!targetRow) {
+        console.log(`[scrollToCase] 未找到第 ${rowInPage} 行`);
+        return;
+      }
+
+      const wrapperRect = bodyWrapper.getBoundingClientRect();
+      const rowRect = targetRow.getBoundingClientRect();
+
+      const currentRelativeTop = rowRect.top - wrapperRect.top;
+
+      const tableHeader = table.$el.querySelector(".el-table__header-wrapper");
+      const headerHeight = tableHeader ? tableHeader.getBoundingClientRect().height : 0;
+      const offset = 10; 
+
+      const scrollOffset = currentRelativeTop - headerHeight - offset;
+
+      const currentScrollTop = bodyWrapper.scrollTop;
+      const targetScrollTop = currentScrollTop + scrollOffset;
+
+      console.log(
+        `[scrollToCase] 当前滚动: ${currentScrollTop}, 需要偏移: ${scrollOffset}, 目标: ${targetScrollTop}`
+      );
+      console.log(
+        `[scrollToCase] 行当前位置: ${currentRelativeTop}, 表头高: ${headerHeight}`
+      );
+
+      bodyWrapper.scrollTo({
+        top: Math.max(0, targetScrollTop),
+        behavior: "smooth",
+      });
+    };
+
+    // 模拟模式开关
+    const isMockMode = ref(false); 
+
+    const runMockTestCase = (id, row) => {
+      return new Promise((resolve) => {
+        const mockTime = 2000;
+
+        if (!executionLogs.value[id]) {
+          executionLogs.value[id] = [];
+        }
+        executionLogs.value[id].push({
+          log_id: 1,
+          time: new Date().toLocaleString("zh-CN", { hour12: false }).replace(/\//g, "-"),
+          message: `[模拟模式] 开始执行用例 ${id}`,
+        });
+
+        const steps = row.ActionTestSequences
+          ? row.ActionTestSequences.split("\n").filter(Boolean)
+          : ["模拟步骤1", "模拟步骤2"];
+        let stepIndex = 0;
+
+        const stepInterval = setInterval(() => {
+          if (stepIndex < steps.length) {
+            executionLogs.value[id].push({
+              log_id: executionLogs.value[id].length + 1,
+              time: new Date()
+                .toLocaleString("zh-CN", { hour12: false })
+                .replace(/\//g, "-"),
+              message: `[模拟步骤${stepIndex + 1}] ${steps[stepIndex]}`,
+            });
+            stepIndex++;
+          }
+        }, 500);
+
+        setTimeout(() => {
+          clearInterval(stepInterval);
+
+          const isPass = Math.random() > 0.2;
+          const result = isPass ? "Pass" : "Fail";
+
+          const index = cases.value.findIndex((c) => c.id === id);
+          if (index !== -1) {
+            cases.value[index].Result = result;
+            cases.value[index].Testid = `mock_${id}_${Date.now()}`;
+          }
+
+          executionLogs.value[id].push({
+            log_id: executionLogs.value[id].length + 1,
+            time: new Date()
+              .toLocaleString("zh-CN", { hour12: false })
+              .replace(/\//g, "-"),
+            message: `[模拟模式] 执行完成，结果：${result}`,
+          });
+
+          resolve({ result });
+        }, mockTime);
+      });
+    };
+
     const startDebugging = async () => {
       if (selectedRowsAll.value.length === 0) {
         showToast("请先选择要调试的测试用例", "warning");
         return;
+      }
+
+      if (isMockMode.value) {
+        showToast(
+          `[模拟模式] 开始执行 ${selectedRowsAll.value.length} 条用例，不调用真实接口`,
+          "info"
+        );
       }
       activeName.value = "third";
       isDebugRunning.value = true;
@@ -2752,7 +2743,8 @@ export default {
       while (index < selectedRowsAll.value.length && isDebugRunning.value) {
         const row = selectedRowsAll.value[index];
         currentExecutingId.value = row.id;
-        tableKey.value++;
+        await scrollToCase(row.id);
+
         try {
           if (!debugRows.value.some((dr) => dr.id === row.id)) {
             debugRows.value.push(row);
@@ -2760,16 +2752,26 @@ export default {
           selectedCase.value = row.id;
           const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
           const baseurl = url.value;
-
-          await runTestCase(query, baseurl, row.id, row);
+          if (isMockMode.value) {
+            await runMockTestCase(row.id, row);
+          } else {
+            await runTestCase(query, baseurl, row.id, row);
+          }
+          // await runTestCase(query, baseurl, row.id, row);
         } catch (error) {
           showToast(`测试用例${row.id}调试失败`, "error");
         } finally {
-          // 关键修复：每个用例执行完成后，清空 currentExecutingId
-          // 这样只有当前正在执行的用例会显示绿色，执行完的就恢复原色
           if (isDebugRunning.value) {
+            const table = proxy.$refs.caseTable;
+            const bodyWrapper = table?.$el.querySelector(
+              ".el-table__body-wrapper .el-scrollbar__wrap"
+            );
+            const savedScrollTop = bodyWrapper ? bodyWrapper.scrollTop : 0;
             currentExecutingId.value = "";
-            tableKey.value++;
+            await nextTick();
+            if (bodyWrapper && savedScrollTop > 0) {
+              bodyWrapper.scrollTop = savedScrollTop;
+            }
           }
         }
 
@@ -2780,11 +2782,7 @@ export default {
       endTime.value = parseInt(Date.now());
       currentExecutingId.value = "";
       showToast("调试已完成", "info");
-      // console.log(autoSyncToFeishu.value);
-
-      // if (autoSyncToFeishu.value) {
-      //   await sendSynchronizeTestResultsRequest();
-      // }
+      
     };
 
     // 运行测试用例
@@ -2808,8 +2806,16 @@ export default {
     const isDebugRunning = ref(false);
     const currentExecutingId = ref("");
 
+    // const rowClassName = ({ row }) => {
+    //   if (row._executing || row.id === currentExecutingId.value) {
+    //     return "executing-row";
+    //   }
+    //   return "";
+    // };
+
     const rowClassName = ({ row }) => {
-      if (row._executing || row.id === currentExecutingId.value) {
+      // 只根据 currentExecutingId 判断，不依赖其他状态
+      if (row.id === currentExecutingId.value) {
         return "executing-row";
       }
       return "";
@@ -2819,6 +2825,7 @@ export default {
     const stopDebugging = async () => {
       isDebugRunning.value = false;
       currentExecutingId.value = "";
+      tableKey.value++;
       debugRows.value = [];
       selectedCase.value = "";
       stopPolling();
@@ -3287,7 +3294,7 @@ export default {
     };
 
     const convertRow = (row) => {
-      ccontextMenu.visible = false;
+      contextMenu.visible = false;
       if (!row) return;
 
       conversionTotal.value = 1;
@@ -3390,7 +3397,6 @@ export default {
       });
     };
 
-    // 停止所有轮询
     const stopPolling = () => {
       Object.keys(pollingIntervals).forEach((test_id) => {
         clearInterval(pollingIntervals[test_id]);
@@ -3398,7 +3404,6 @@ export default {
       });
     };
 
-    // 获取测试用例列表
     const fetchTestList = (page) => {
       fetch(`/dev-api/test_list?page=${page}&page_size=10`)
         .then((response) => response.json())
@@ -3424,13 +3429,11 @@ export default {
         });
     };
 
-    // 获取测试日志
     const fetchTestLogs = (test_id) => {
       fetch(`/dev-api/test_logs/${test_id}`)
         .then((response) => response.json())
         .then((data) => {
           if (data.code === "200") {
-            // 直接赋值接口返回的日志内容
             logDetails.logs = data.result.logs.chat_log;
             logDetails.code_files = data.result.logs.code_files;
             logDetails.images = data.result.logs.images;
@@ -3483,7 +3486,6 @@ export default {
       const file = event.target.files[0];
       if (!file) return;
 
-      // 验证文件类型
       if (!file.name.endsWith(".dbc")) {
         showToast("请选择.dbc格式的文件", "error");
         return;
@@ -3492,15 +3494,12 @@ export default {
       dbcUploadLoading.value = true;
 
       try {
-        // 创建 FormData 对象
         const formData = new FormData();
         formData.append("file", file); // 接口参数名为 file
 
-        // 调用上传接口
         const response = await fetch("/dev-api/upload", {
           method: "POST",
           body: formData,
-          // 注意：fetch 会自动设置 Content-Type: multipart/form-data 并添加 boundary
         });
 
         const data = await response.json();
@@ -3737,6 +3736,7 @@ export default {
       stopPolling,
       fetchTestList,
       fetchTestLogs,
+      scrollToCase,
       tableKey,
       fetchActualResult,
       logDialogVisible,
@@ -3755,13 +3755,6 @@ export default {
       caseIdOptions,
       startId,
       endId,
-      feishuDocUrl,
-      xmmc,
-      autoSyncToFeishu,
-      saveSetting,
-      SynchronizeTestResults,
-      SynchronizeTestResultsDialogVisible,
-      sendSynchronizeTestResultsRequest,
       startTime,
       endTime,
       getRowStyle,
@@ -3810,6 +3803,8 @@ export default {
       clearTestResults,
       currentExecutingId,
       rowClassName,
+      isMockMode,
+      runMockTestCase,
     };
   },
 };
@@ -3840,14 +3835,10 @@ body {
 
 .header {
   position: fixed;
-  /* 固定定位 */
   top: 0;
-  /* 贴在顶部 */
   left: 0;
   width: 100%;
-  /* 占满宽度 */
   z-index: 1000;
-  /* 确保在最上层 */
   background: linear-gradient(to right, #1e4976, #2c6a9e);
   color: white;
   padding: 0 15px;
@@ -3867,7 +3858,6 @@ body {
 .nav-buttons {
   display: flex;
   justify-content: space-between;
-  /* 关键 */
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
@@ -3880,14 +3870,12 @@ body {
 
 .nav-right {
   margin-left: auto;
-  /* 或者 flex: 1 + text-align: right; 也可以 */
 }
 
 .content-layout {
   display: grid;
   gap: 20px;
   margin-top: 55px;
-  /* 等于 header 的高度 */
   padding: 20px;
 }
 
@@ -4034,21 +4022,13 @@ pre {
 
 .file-name {
   font-size: 14px;
-  /* 文件名的字体大小 */
   color: #ffffff;
-  /* 文件名的颜色，与按钮文字颜色一致 */
   padding: 5px 10px;
-  /* 文件名的内边距 */
   background-color: #409eff;
-  /* 文件名的背景颜色，与按钮背景颜色一致 */
   border-radius: 4px;
-  /* 文件名的圆角 */
   vertical-align: middle;
-  /* 垂直对齐按钮 */
   display: inline-block;
-  /* 确保文件名能够与其他元素在同一行显示 */
   max-width: 160px;
-  /* 你可以根据实际布局调整 */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4058,15 +4038,12 @@ pre {
 .file-button-group {
   display: flex;
   align-items: center;
-  /* 垂直对齐按钮和文件名 */
   gap: 5px;
-  /* 调整按钮和文件名之间的间距 */
 }
 
 .control-container {
   display: flex;
   gap: 10px;
-  /* 两个控件之间的间距 */
 }
 
 .half-width {
@@ -4169,16 +4146,15 @@ pre {
 }
 
 :deep(.executing-row) {
-  background-color: #d4edda !important; /* 浅绿色背景 */
+  background-color: #d4edda !important; 
 }
 
 :deep(.executing-row td) {
   background-color: #d4edda !important;
-  color: #155724 !important; /* 深绿色文字 */
+  color: #155724 !important; 
   font-weight: 600;
 }
 
-/* 可选：添加动画效果 */
 :deep(.executing-row) {
   animation: pulse-green 2s infinite;
 }
@@ -4195,7 +4171,6 @@ pre {
   }
 }
 
-/* 进度条动画 */
 :deep(.el-progress-bar__outer) {
   border-radius: 10px;
   background-color: #e4e7ed;
@@ -4204,5 +4179,13 @@ pre {
 :deep(.el-progress-bar__inner) {
   border-radius: 10px;
   transition: width 0.3s ease;
+}
+
+:deep(.el-table__row.executing-row) {
+  background-color: #d4edda !important;
+}
+
+:deep(.el-table__row.executing-row ~ .executing-row) {
+  background-color: transparent !important;
 }
 </style>
