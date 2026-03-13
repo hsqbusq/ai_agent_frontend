@@ -121,6 +121,15 @@
                         <img src="../assets/02.svg" alt="" style="width: 14px;height: 14px" /> 读取dbc
                     </el-button>
                     <span v-if="dbcFileName" class="file-name">已选择：{{ dbcFileName.name }}</span> -->
+            <el-button
+              type="primary"
+              size="small"
+              @click="openUploadRecordDialog"
+              style="padding: 15px"
+            >
+              <img src="../assets/02.svg" alt="" style="width: 14px; height: 14px" />
+              上传测试记录
+            </el-button>
             <div class="file-button-group">
               <el-button
                 type="primary"
@@ -151,6 +160,17 @@
                 :value="item.label"
               />
             </el-select>
+
+            <div v-if="userDisplayName || projectDisplayName" class="user-meta">
+              <el-divider direction="vertical" />
+              <el-tooltip v-if="projectDisplayName" :content="projectDisplayName" placement="bottom">
+                <span class="meta-item">项目：{{ projectDisplayName }}</span>
+              </el-tooltip>
+              <el-tooltip v-if="userDisplayName" :content="userDisplayName" placement="bottom">
+                <span class="meta-item">用户：{{ userDisplayName }}</span>
+              </el-tooltip>
+              <el-button type="danger" size="small" plain @click="handleLogout">退出</el-button>
+            </div>
           </div>
         </div>
       </div>
@@ -1383,6 +1403,134 @@
         />
       </el-tabs>
     </el-dialog>
+    <!-- 上传测试记录弹窗 -->
+    <el-dialog v-model="uploadRecordDialogVisible" title="上传测试记录" width="600px">
+      <el-form
+        :model="uploadForm"
+        label-width="120px"
+        ref="uploadFormRef"
+        :rules="uploadRules"
+      >
+        <el-alert
+          type="info"
+          :closable="false"
+          style="margin-bottom: 20px"
+          show-icon
+        >
+          <template #title>
+            <div style="display: flex; gap: 20px">
+              <span>总用例数: {{ uploadForm.totalCases }}</span>
+              <span style="color: #67c23a">通过数: {{ uploadForm.passedCases }}</span>
+              <span style="color: #f56c6c">失败数: {{ uploadForm.failedCases }}</span>
+            </div>
+          </template>
+        </el-alert>
+
+        <el-form-item label="名称" prop="name">
+          <el-input v-model="uploadForm.name" placeholder="请输入测试名称" disabled />
+        </el-form-item>
+
+        <el-form-item label="测试类型" prop="type">
+          <el-input v-model="uploadForm.type" placeholder="例如：稳定测试" />
+        </el-form-item>
+
+        <el-form-item label="测试结果" prop="result">
+          <el-select v-model="uploadForm.result" style="width: 100%">
+            <el-option label="通过" value="通过" />
+            <el-option label="失败" value="失败" />
+          </el-select>
+        </el-form-item>
+
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="开始时间" prop="startTime">
+              <el-date-picker
+                v-model="uploadForm.startTime"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="结束时间" prop="endTime">
+              <el-date-picker
+                v-model="uploadForm.endTime"
+                type="datetime"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <el-form-item label="项目ID" prop="projectId">
+          <el-input v-model="uploadForm.projectId" disabled />
+        </el-form-item>
+
+        <el-form-item label="用户UID" prop="uid">
+          <el-input v-model="uploadForm.uid" disabled />
+        </el-form-item>
+
+        <el-collapse>
+          <el-collapse-item title="更多信息 (非必填)">
+            <el-form-item label="英文名称" prop="nickname">
+              <el-input v-model="uploadForm.nickname" />
+            </el-form-item>
+            <el-form-item label="持续时间(天)" prop="duration">
+              <el-input-number
+                v-model="uploadForm.duration"
+                :precision="6"
+                :step="0.0001"
+                style="width: 100%"
+              />
+            </el-form-item>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="QNX版本" prop="qnxVersion">
+                  <el-input v-model="uploadForm.qnxVersion" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="SOC版本" prop="socVersion">
+                  <el-input v-model="uploadForm.socVersion" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-row :gutter="20">
+              <el-col :span="12">
+                <el-form-item label="MCU版本" prop="mcuVersion">
+                  <el-input v-model="uploadForm.mcuVersion" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="模块名称" prop="moduleName">
+                  <el-input v-model="uploadForm.moduleName" />
+                </el-form-item>
+              </el-col>
+            </el-row>
+            <el-form-item label="缺陷数量" prop="bugCount">
+              <el-input-number v-model="uploadForm.bugCount" :min="0" />
+            </el-form-item>
+            <el-form-item label="主机名" prop="hostname">
+              <el-input v-model="uploadForm.hostname" />
+            </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="uploadRecordDialogVisible = false">取消</el-button>
+          <el-button
+            type="primary"
+            @click="submitUpload"
+            :loading="isUploading"
+          >
+            发送
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
     <!-- 底部栏 -->
   </div>
 </template>
@@ -1399,6 +1547,7 @@ import {
   watch,
 } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
+import { useRouter } from "vue-router";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { Buffer } from "buffer";
@@ -1412,6 +1561,186 @@ window.Buffer = Buffer;
 export default {
   components: {},
   setup() {
+    const router = useRouter();
+    // 本次登录的项目 *重要*
+    const model_name = ref("");
+
+    const currentUserInfo = ref(null);
+    const currentProject = ref(null);
+
+    const userDisplayName = computed(() => {
+      const raw = currentUserInfo.value;
+      if (raw?.nickName) return raw.nickName;
+      if (raw?.userName) return raw.userName;
+      return localStorage.getItem("currentUser") ?? "";
+    });
+
+    // 上传测试记录相关逻辑
+    const uploadRecordDialogVisible = ref(false);
+    const uploadFormRef = ref(null);
+    const isUploading = ref(false);
+
+    const uploadForm = reactive({
+      uid: "",
+      name: "",
+      nickname: "",
+      type: "稳定测试",
+      result: "通过",
+      startTime: "",
+      endTime: "",
+      duration: 0,
+      projectId: "",
+      bugCount: 0,
+      qnxVersion: "",
+      socVersion: "",
+      mcuVersion: "",
+      moduleName: "",
+      totalCases: 0,
+      passedCases: 0,
+      failedCases: 0,
+      hostname: "",
+    });
+
+    const uploadRules = {
+      name: [{ required: true, message: "请输入测试名称", trigger: "blur" }],
+      type: [{ required: true, message: "请输入测试类型", trigger: "blur" }],
+      result: [{ required: true, message: "请选择测试结果", trigger: "change" }],
+      startTime: [{ required: true, message: "请选择开始时间", trigger: "change" }],
+      endTime: [{ required: true, message: "请选择结束时间", trigger: "change" }],
+      projectId: [{ required: true, message: "项目ID不能为空", trigger: "blur" }],
+      uid: [{ required: true, message: "用户UID不能为空", trigger: "blur" }],
+    };
+
+    const openUploadRecordDialog = () => {
+      // 1. 统计数据
+      const list = cases.value.filter(
+        (c) => c.Result !== undefined && c.Result !== ""
+      );
+      const total = list.length;
+      const pass = list.filter((c) => /pass/i.test(c.Result)).length;
+      const fail = total - pass;
+
+      // 2. 填充表单
+      uploadForm.totalCases = total;
+      uploadForm.passedCases = pass;
+      uploadForm.failedCases = fail;
+
+      // 3. 自动判断结果
+      uploadForm.result = fail > 0 ? "失败" : "通过";
+
+      // 4. 用户/项目信息
+      const userInfo = currentUserInfo.value;
+      uploadForm.uid =
+        userInfo?.userName || localStorage.getItem("currentUser") || "";
+      uploadForm.projectId = model_name.value || "";
+      uploadForm.name =
+        currentProject.value?.label ||
+        currentProject.value?.projectName ||
+        "测试应用";
+
+      uploadForm.type = uploadForm.type || "稳定测试";
+
+      // 5. 时间处理
+      const formatTime = (ts) => {
+        if (!ts) return "";
+        const d = new Date(ts);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+          d.getDate()
+        )} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+
+      const now = Date.now();
+      uploadForm.startTime =
+        formatTime(startTime.value) || formatTime(now);
+      uploadForm.endTime = formatTime(endTime.value) || formatTime(now);
+
+      // 6. 持续时间 (天)
+      if (startTime.value && endTime.value) {
+        const diffMs = endTime.value - startTime.value;
+        uploadForm.duration = parseFloat(
+          (diffMs / (1000 * 60 * 60 * 24)).toFixed(6)
+        );
+      } else {
+        uploadForm.duration = 0;
+      }
+
+      uploadRecordDialogVisible.value = true;
+    };
+
+    const submitUpload = async () => {
+      if (!uploadFormRef.value) return;
+      await uploadFormRef.value.validate(async (valid) => {
+        if (valid) {
+          isUploading.value = true;
+          try {
+            const response = await fetch("/dev-api/icdqm/test_record", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(uploadForm),
+            });
+
+            if (response.ok) {
+              ElMessage.success("上传成功");
+              uploadRecordDialogVisible.value = false;
+            } else {
+              ElMessage.error("上传失败");
+            }
+          } catch (error) {
+            ElMessage.error("网络异常: " + error.message);
+          } finally {
+            isUploading.value = false;
+          }
+        }
+      });
+    };
+
+    const projectDisplayName = computed(() => {
+      const name = localStorage.getItem("currentProjectName");
+      if (name) return name;
+      const raw = currentProject.value;
+      return raw?.label ?? raw?.projectName ?? raw?.name ?? "";
+    });
+
+    const loadAuthContext = () => {
+      try {
+        currentUserInfo.value = JSON.parse(localStorage.getItem("currentUserInfo") ?? "null");
+      } catch {
+        currentUserInfo.value = null;
+      }
+
+      try {
+        currentProject.value = JSON.parse(localStorage.getItem("currentProject") ?? "null");
+      } catch {
+        currentProject.value = null;
+      }
+
+      const projectId = localStorage.getItem("currentProjectId") ?? "";
+      const projectName = localStorage.getItem("currentProjectName") ?? "";
+      model_name.value = projectId || projectName;
+    };
+
+    const handleLogout = async () => {
+      try {
+        await ElMessageBox.confirm("确认退出登录？", "提示", {
+          type: "warning",
+          confirmButtonText: "退出",
+          cancelButtonText: "取消",
+        });
+
+        localStorage.removeItem("isAuthenticated");
+        localStorage.removeItem("currentUser");
+        localStorage.removeItem("currentUserInfo");
+        localStorage.removeItem("currentProjectId");
+        localStorage.removeItem("currentProjectName");
+        localStorage.removeItem("currentProject");
+
+        ElMessage.success("已退出登录");
+        router.replace("/");
+      } catch {
+        return;
+      }
+    };
     const selectedCase = ref("");
     const selectedSheet = ref("");
     const infoType = ref("all");
@@ -1486,6 +1815,10 @@ export default {
 
     watch(url, (newVal) => {
       localStorage.setItem("TEST_URL", newVal);
+    });
+
+    onMounted(() => {
+      loadAuthContext();
     });
 
     const reslutCases = ref([]);
@@ -2761,18 +3094,8 @@ export default {
         } catch (error) {
           showToast(`测试用例${row.id}调试失败`, "error");
         } finally {
-          if (isDebugRunning.value) {
-            const table = proxy.$refs.caseTable;
-            const bodyWrapper = table?.$el.querySelector(
-              ".el-table__body-wrapper .el-scrollbar__wrap"
-            );
-            const savedScrollTop = bodyWrapper ? bodyWrapper.scrollTop : 0;
-            currentExecutingId.value = "";
-            await nextTick();
-            if (bodyWrapper && savedScrollTop > 0) {
-              bodyWrapper.scrollTop = savedScrollTop;
-            }
-          }
+          currentExecutingId.value = "";
+          await nextTick();
         }
 
         index++;
@@ -3222,6 +3545,7 @@ export default {
           query: query,
           baseurl: baseurl,
           lang: value,
+          model_name: model_name.value,
           detect_before_timeout: testConfig.preWaitSec + "",
           detect_timeout: testConfig.timeoutSec + "",
         })
@@ -3646,6 +3970,9 @@ export default {
     });
 
     return {
+      userDisplayName,
+      projectDisplayName,
+      handleLogout,
       currentLang,
       langOptions,
       contextMenu,
@@ -3805,6 +4132,13 @@ export default {
       rowClassName,
       isMockMode,
       runMockTestCase,
+      uploadRecordDialogVisible,
+      openUploadRecordDialog,
+      submitUpload,
+      uploadForm,
+      uploadRules,
+      uploadFormRef,
+      isUploading,
     };
   },
 };
@@ -3870,6 +4204,43 @@ body {
 
 .nav-right {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.meta-item {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 4px 8px;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+}
+
+.user-meta :deep(.el-divider--vertical) {
+  border-left-color: rgba(255, 255, 255, 0.35);
+}
+
+.user-meta :deep(.el-button) {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.user-meta :deep(.el-button--danger.is-plain) {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(245, 108, 108, 0.18);
 }
 
 .content-layout {
