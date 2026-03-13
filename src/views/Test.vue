@@ -1632,7 +1632,7 @@ export default {
       const userInfo = currentUserInfo.value;
       uploadForm.uid =
         userInfo?.userName || localStorage.getItem("currentUser") || "";
-      uploadForm.projectId = model_name.value || "";
+      uploadForm.projectId = localStorage.getItem("currentProjectId") ?? "";
       uploadForm.name =
         currentProject.value?.label ||
         currentProject.value?.projectName ||
@@ -1717,7 +1717,7 @@ export default {
 
       const projectId = localStorage.getItem("currentProjectId") ?? "";
       const projectName = localStorage.getItem("currentProjectName") ?? "";
-      model_name.value = projectId || projectName;
+      model_name.value = projectName || projectId;
     };
 
     const handleLogout = async () => {
