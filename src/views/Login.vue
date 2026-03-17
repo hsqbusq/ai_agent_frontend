@@ -1,15 +1,9 @@
 <template>
   <div class="login-container">
     <div class="login-card">
-      <h2 class="login-title">{{ step === "login" ? "登录" : "选择项目" }}</h2>
+      <h2 class="login-title">登录</h2>
 
-      <!-- 第一步：登录表单 -->
-      <el-form
-        v-if="step === 'login'"
-        :model="loginForm"
-        @submit.prevent="handleLogin"
-        label-width="0"
-      >
+      <el-form :model="loginForm" @submit.prevent="handleLogin" label-width="0">
         <el-form-item>
           <el-input
             v-model="loginForm.username"
@@ -28,6 +22,20 @@
             show-password
           />
         </el-form-item>
+
+        <el-form-item>
+          <el-autocomplete
+            v-model="projectKeyword"
+            placeholder="请输入关键字搜索并选择项目"
+            size="large"
+            style="width: 100%"
+            :fetch-suggestions="fetchProjectSuggestions"
+            :loading="projectLoading"
+            clearable
+            @select="handleProjectSelect"
+          />
+        </el-form-item>
+
         <el-button
           type="primary"
           size="large"
@@ -38,42 +46,6 @@
           登录
         </el-button>
       </el-form>
-
-      <!-- 第二步：选择项目 -->
-      <div v-else-if="step === 'selectProject'">
-        <el-alert
-          title="请选择要进入的项目"
-          type="info"
-          :closable="false"
-          style="margin-bottom: 16px"
-        />
-        <el-select
-          v-model="selectedProject"
-          placeholder="请选择项目"
-          size="large"
-          style="width: 100%; margin-bottom: 16px"
-          filterable
-        >
-          <el-option
-            v-for="project in projectList"
-            :key="project.id"
-            :label="project.label"
-            :value="project.id"
-          />
-        </el-select>
-        <div class="project-actions">
-          <el-button size="large" @click="step = 'login'">返回</el-button>
-          <el-button
-            type="primary"
-            size="large"
-            @click="confirmProject"
-            :loading="loading"
-            :disabled="!selectedProject"
-          >
-            确认进入
-          </el-button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -84,9 +56,11 @@ import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 
 const router = useRouter();
-const step = ref("login"); // 'login' | 'selectProject'
 const projectList = ref([]);
+const projectKeyword = ref("");
 const selectedProject = ref("");
+const selectedProjectLabel = ref("");
+const projectLoading = ref(false);
 
 const loginForm = reactive({
   username: "",
@@ -152,8 +126,15 @@ const verifyUser = async (inputUsername) => {
   }
 };
 
-// 获取项目列表
-const fetchProjects = async () => {
+// 获取项目列表（按关键字模糊匹配）
+const fetchProjects = async (keyword) => {
+  const q = (keyword ?? "").trim();
+  if (!q) {
+    projectList.value = [];
+    return true;
+  }
+
+  projectLoading.value = true;
   try {
     const response = await fetch("/dev-api/icdqm/projects", {
       method: "POST",
@@ -166,7 +147,7 @@ const fetchProjects = async () => {
           {
             fieldName: "projectName",
             operator: "LIKE",
-            value: ["测试"],
+            value: [q],
           },
         ],
       }),
@@ -178,17 +159,7 @@ const fetchProjects = async () => {
 
     const data = await response.json();
     if (data.result && Array.isArray(data.result)) {
-      projectList.value = data.result.map((p) => {
-        const projectUuid = p.id;
-        const id = p.value ?? projectUuid ?? p.projectId ?? p.projectCode ?? p.projectName ?? p.name;
-        const label = p.label ?? p.projectName ?? p.name ?? p.projectCode ?? String(id ?? "");
-        return {
-          ...p,
-          projectUuid,
-          id,
-          label,
-        };
-      });
+      projectList.value = data.result;
       return true;
     }
     return false;
@@ -196,13 +167,55 @@ const fetchProjects = async () => {
     console.error("获取项目错误:", error);
     ElMessage.error("获取项目列表失败，请稍后重试");
     return false;
+  } finally {
+    projectLoading.value = false;
   }
+};
+
+let projectSearchTimer = null;
+const fetchProjectSuggestions = (queryString, cb) => {
+  if (projectSearchTimer) window.clearTimeout(projectSearchTimer);
+  projectSearchTimer = window.setTimeout(async () => {
+    await fetchProjects(queryString);
+    cb(
+      projectList.value.map((p) => ({
+        value: p.label,
+        label: p.label,
+        projectValue: p.value,
+        raw: p,
+      }))
+    );
+  }, 300);
+};
+
+const handleProjectSelect = (item) => {
+  selectedProject.value = item.projectValue;
+  selectedProjectLabel.value = item.label;
+  projectKeyword.value = item.label;
 };
 
 const handleLogin = async () => {
   if (!loginForm.username.trim() || !loginForm.password.trim()) {
     ElMessage.warning("请输入用户名和密码");
     return;
+  }
+
+  if (!selectedProject.value) {
+    const keyword = projectKeyword.value.trim();
+    if (!keyword) {
+      ElMessage.warning("请选择项目");
+      return;
+    }
+
+    await fetchProjects(keyword);
+    const exact = projectList.value.find((p) => p.label === keyword);
+    if (exact) {
+      selectedProject.value = exact.value;
+      selectedProjectLabel.value = exact.label;
+    } else {
+      ElMessage.warning("请从下拉建议中选择项目");
+      return;
+    }
   }
 
   loading.value = true;
@@ -220,43 +233,20 @@ const handleLogin = async () => {
     localStorage.setItem("currentUserInfo", JSON.stringify(userInfo));
     localStorage.setItem("currentUser", userInfo.userName ?? loginForm.username);
 
-    // 获取项目列表
-    const success = await fetchProjects();
-    if (success && projectList.value.length > 0) {
-      step.value = "selectProject";
-      ElMessage.success("验证成功，请选择项目");
-    } else {
-      ElMessage.warning("暂无可用项目，请联系管理员");
-    }
+    const project = projectList.value.find((p) => p.value === selectedProject.value);
+
+    localStorage.setItem("isAuthenticated", "true");
+    localStorage.setItem("currentProjectId", selectedProject.value);
+    localStorage.setItem("currentProjectName", selectedProjectLabel.value || project?.label || "");
+    localStorage.setItem("currentProject", JSON.stringify(project ?? null));
+
+    ElMessage.success(`欢迎进入项目：${project?.label ?? ""}`);
+    router.push("/test");
   } catch (error) {
     ElMessage.error("登录失败，请稍后重试");
   } finally {
     loading.value = false;
   }
-};
-
-const confirmProject = () => {
-  if (!selectedProject.value) {
-    ElMessage.warning("请选择一个项目");
-    return;
-  }
-
-  loading.value = true;
-
-  setTimeout(() => {
-    const project = projectList.value.find((p) => p.id === selectedProject.value);
-
-    // 保存登录信息和项目信息
-    localStorage.setItem("isAuthenticated", "true");
-    localStorage.setItem("currentProjectId", selectedProject.value);
-    localStorage.setItem("currentProjectName", project ? project.label : "");
-    localStorage.setItem("currentProject", JSON.stringify(project ?? null));
-
-    ElMessage.success(`欢迎进入项目：${project ? project.label : ""}`);
-    router.push("/test");
-
-    loading.value = false;
-  }, 500);
 };
 </script>
 
@@ -290,13 +280,4 @@ const confirmProject = () => {
   margin-top: 8px;
 }
 
-.project-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.project-actions .el-button {
-  flex: 1;
-}
 </style>
