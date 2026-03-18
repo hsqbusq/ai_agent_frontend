@@ -233,6 +233,7 @@
               <el-table-column
                 type="selection"
                 :selectable="selectable"
+                reserve-selection
                 width="55"
               ></el-table-column>
 
@@ -1795,10 +1796,13 @@ export default {
       contextMenu.visible = false;
       if (!row) return;
 
-      selectedRowsAll.value = [row];
+      selectedRowIds.value = new Set([row.id]);
+      syncSelectedRowsAll();
       await nextTick(() => {
+        changePage.value = true;
         proxy.$refs.caseTable.clearSelection();
         proxy.$refs.caseTable.toggleRowSelection(row, true);
+        changePage.value = false;
       });
       await scrollToCase(row.id);
 
@@ -2037,10 +2041,13 @@ export default {
       showToast(`每页显示 ${newSize} 条`, "info");
       // 重新设置选中状态
       nextTick(() => {
+        changePage.value = true;
+        proxy.$refs.caseTable?.clearSelection();
         paginatedCases.value.forEach((row) => {
-          const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
+          const isSelected = selectedRowIds.value.has(row.id);
           proxy.$refs.caseTable?.toggleRowSelection(row, isSelected);
         });
+        changePage.value = false;
       });
     };
 
@@ -2237,6 +2244,7 @@ export default {
       });
 
       selectedRowsAll.value = [];
+      selectedRowIds.value = new Set();
 
       showToast("测试用例已删除", "success");
     };
@@ -2269,6 +2277,7 @@ export default {
       await saveCasesTable([]);
 
       currentPage.value = 1;
+      selectedRowIds.value = new Set();
       selectedRowsAll.value = [];
       proxy.$refs.caseTable?.clearSelection();
 
@@ -2313,6 +2322,7 @@ export default {
       selectedCase.value = "";
 
       // 清除选中状态
+      selectedRowIds.value = new Set();
       selectedRowsAll.value = [];
       proxy.$refs.caseTable?.clearSelection();
 
@@ -2330,6 +2340,13 @@ export default {
 
     // 选中的行
     const selectedRowsAll = ref([]);
+    const selectedRowIds = ref(new Set());
+
+    const syncSelectedRowsAll = () => {
+      selectedRowsAll.value = Array.from(selectedRowIds.value)
+        .map((id) => cases.value.find((c) => c.id === id))
+        .filter(Boolean);
+    };
     const debugRows = ref([]);
     const printInfo = () => {
       console.log(selectedCase.value);
@@ -2357,6 +2374,7 @@ export default {
     };
 
     const clearAllSelection = () => {
+      selectedRowIds.value = new Set();
       selectedRowsAll.value = [];
       proxy.$refs.caseTable.clearSelection();
       showToast("已取消所有选中用例", "info");
@@ -2367,9 +2385,6 @@ export default {
     );
 
     const selectRowsHandle = () => {
-      const newSelectedRowsAll1 = [];
-      console.log(cases.value);
-
       const start = cases.value.findIndex((caseItem) => caseItem.id === startId.value);
       const end = cases.value.findIndex((caseItem) => caseItem.id === endId.value);
       console.log(start, end);
@@ -2382,21 +2397,14 @@ export default {
         return;
       }
 
+      const nextSet = new Set(selectedRowIds.value);
       for (let i = start; i <= end; i++) {
-        newSelectedRowsAll1.push(cases.value[i]);
+        const row = cases.value[i];
+        if (row?.id) nextSet.add(row.id);
       }
+      selectedRowIds.value = nextSet;
+      syncSelectedRowsAll();
 
-      changePage.value = true;
-      paginatedCases.value.forEach((row) => {
-        selectedRowsAll.value = [];
-        const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
-        proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
-      });
-      changePage.value = false;
-      console.log(selectedRowsAll.value);
-      newSelectedRowsAll1.forEach((row) => {
-        selectedRowsAll.value.push(row);
-      });
       selectRowsdialogVisible.value = false;
       const targetPage = Math.floor(start / pageSize.value) + 1;
       handlePageChange(targetPage);
@@ -2404,54 +2412,21 @@ export default {
 
     // 处理选中改变事件
     const handleSelectionChange = (selection) => {
-      console.log(isConverting.value);
-      console.log(selectedRowsAll.value);
+      if (changePage.value) return;
       if (isConverting.value || isDebugRunning.value) {
         return;
       }
+      const selectedIdsOnPage = new Set(selection.map((r) => r.id));
+      const nextSet = new Set(selectedRowIds.value);
 
-      selection.forEach((row) => {
-        if (!selectedRowsAll.value.some((r) => r.id === row.id)) {
-          selectedRowsAll.value.push(row);
-        }
+      paginatedCases.value.forEach((row) => {
+        if (!row?.id) return;
+        if (selectedIdsOnPage.has(row.id)) nextSet.add(row.id);
+        else nextSet.delete(row.id);
       });
-      if (isDebugRunning.value) {
-        paginatedCases.value.forEach((row) => {
-          const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
-          proxy.$refs.caseTable.toggleRowSelection(row, isSelected);
-        });
-        return;
-      }
 
-      // 移除不再选中的行
-      if (selection.length == 0) {
-        if (changePage.value) {
-          changePage.value = false;
-        } else {
-          let newSelectedRowsAll = [];
-          selectedRowsAll.value.forEach((row) => {
-            if (!paginatedCases.value.some((r) => r.id === row.id)) {
-              newSelectedRowsAll.push(row);
-            }
-          });
-          selectedRowsAll.value = newSelectedRowsAll;
-        }
-      } else {
-        if (!changePage.value) {
-          let newSelectedRowsAll = [];
-          selectedRowsAll.value.forEach((row) => {
-            if (
-              paginatedCases.value.some((r) => r.id === row.id) &&
-              selection.some((r) => r.id === row.id)
-            ) {
-              newSelectedRowsAll.push(row);
-            } else if (!paginatedCases.value.some((r) => r.id === row.id)) {
-              newSelectedRowsAll.push(row);
-            }
-          });
-          selectedRowsAll.value = newSelectedRowsAll;
-        }
-      }
+      selectedRowIds.value = nextSet;
+      syncSelectedRowsAll();
     };
 
     const handlePageChange = async (newPage) => {
@@ -2462,9 +2437,11 @@ export default {
       // 等待表格渲染完成
       await nextTick();
 
+      proxy.$refs.caseTable?.clearSelection();
+
       // 恢复当前页的选中状态（但不触发滚动）
       paginatedCases.value.forEach((row) => {
-        const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
+        const isSelected = selectedRowIds.value.has(row.id);
         proxy.$refs.caseTable?.toggleRowSelection(row, isSelected);
       });
 
@@ -2935,11 +2912,14 @@ export default {
       await nextTick();
       const table = proxy.$refs.caseTable;
       if (table) {
+        changePage.value = true;
+        table.clearSelection();
         paginatedCases.value.forEach((row) => {
-          const isSelected = selectedRowsAll.value.some((r) => r.id === row.id);
+          const isSelected = selectedRowIds.value.has(row.id);
           console.log(`[restore] ${row.id}: ${isSelected}`);
           table.toggleRowSelection(row, isSelected);
         });
+        changePage.value = false;
       }
       if (!table) return;
       const rowData = paginatedCases.value[rowInPage];
@@ -2997,7 +2977,7 @@ export default {
     };
 
     // 模拟模式开关
-    const isMockMode = ref(false); 
+    const isMockMode = ref(true); 
 
     const runMockTestCase = (id, row) => {
       return new Promise((resolve) => {
