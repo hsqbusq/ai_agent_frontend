@@ -3128,21 +3128,21 @@ export default {
     const stopDebugging = async () => {
       isDebugRunning.value = false;
       currentExecutingId.value = "";
+      currentPage.value = 1;
       tableKey.value++;
       debugRows.value = [];
       selectedCase.value = "";
       stopPolling();
       executionLogs.value = {};
 
+      selectedRowIds.value = new Set();
+      syncSelectedRowsAll();
+
       await nextTick();
       const table = proxy.$refs.caseTable;
       if (table) {
         changePage.value = true;
         table.clearSelection();
-        paginatedCases.value.forEach((row) => {
-          const isSelected = selectedRowIds.value.has(row.id);
-          table.toggleRowSelection(row, isSelected);
-        });
         changePage.value = false;
       }
 
