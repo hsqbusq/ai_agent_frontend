@@ -2499,14 +2499,12 @@ export default {
     const exportTestReport = async () => {
       showToast("正在生成测试报告，请稍后...", "info");
 
-      // 直接过滤出已有结果的用例，不再获取实际结果图片
-      reslutCases.value = cases.value.filter(
-        (c) => c.Result !== undefined && c.Result !== ""
-      );
-      const list = reslutCases.value;
+      const list = cases.value;
       const total = list.length;
-      const pass = list.filter((c) => /pass/i.test(c.Result)).length;
-      const fail = total - pass;
+      const tested = list.filter((c) => c.Result !== undefined && c.Result !== "");
+      const pass = tested.filter((c) => /pass/i.test(c.Result)).length;
+      const fail = tested.length - pass;
+      const untested = total - tested.length;
 
       const clip = (val) =>
         `<td class="td-clip" title="${(val ?? "").replace(/"/g, "&quot;")}">${
@@ -2534,9 +2532,15 @@ export default {
             ${clip(c.ActionTestSequences)}
             <td>${c.ExpectedTestSequences}</td>
             <td style="background:${
-              /pass/i.test(c.Result) ? "#d4f8d4" : "#ffe1e1"
-            };font-weight:600;">
-                ${c.Result ?? ""}
+              c.Result === undefined || c.Result === ""
+                ? "#f2f3f5"
+                : /pass/i.test(c.Result)
+                  ? "#d4f8d4"
+                  : "#ffe1e1"
+            };font-weight:600;color:${
+              c.Result === undefined || c.Result === "" ? "#909399" : "#303133"
+            }">
+                ${c.Result ?? "未测试"}
             </td>
             <!-- 直接显示“暂无图片” -->
             <td><span class="empty-img">暂无图片</span></td>
@@ -2555,6 +2559,7 @@ export default {
         .replaceAll("{{TOTAL}}", total)
         .replaceAll("{{PASS}}", pass)
         .replaceAll("{{FAIL}}", fail)
+        .replaceAll("{{UNTESTED}}", untested)
         .replace("{{ROWS}}", rowsHtml);
 
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });

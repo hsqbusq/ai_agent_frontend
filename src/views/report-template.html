@@ -69,6 +69,10 @@
             color: #F56C6C;
         }
 
+        .summary .untested {
+            color: #909399;
+        }
+
         .table-box {
             flex: 1 1 auto;
             overflow: auto;
@@ -202,6 +206,10 @@
             <div class="label">失败数</div>
             <div class="value fail">{{FAIL}}</div>
         </div>
+        <div data-untested>
+            <div class="label">未测试数</div>
+            <div class="value untested">{{UNTESTED}}</div>
+        </div>
     </div>
     <table cellspacing="0">
         <thead>
@@ -246,6 +254,7 @@
         const total = Number(document.querySelector('[data-total] .value').textContent);
         const pass = Number(document.querySelector('[data-pass]  .value').textContent);
         const fail = Number(document.querySelector('[data-fail]  .value').textContent);
+        const untested = Number(document.querySelector('[data-untested]  .value').textContent);
 
         const table = document.querySelector('table');
         const headerRow = Array.from(table.tHead.rows[0].cells).map(th => th.innerText.trim());
@@ -286,7 +295,8 @@
         ws.insertRow(1, { id: '测试总数', SyRDIDFSRD: total });
         ws.insertRow(2, { id: '测试成功数', SyRDIDFSRD: pass });
         ws.insertRow(3, { id: '测试失败数', SyRDIDFSRD: fail });
-        for (let i = 1; i <= 3; i++) {
+        ws.insertRow(4, { id: '未测试数', SyRDIDFSRD: untested });
+        for (let i = 1; i <= 4; i++) {
             const r = ws.getRow(i);
             r.font = { bold: true, size: 13, color: { argb: 'FFFFFF' } };
             r.alignment = { horizontal: 'left' };
@@ -295,7 +305,7 @@
             r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
         }
 
-        const headerExcelRow = ws.getRow(4);
+        const headerExcelRow = ws.getRow(5);
         headerExcelRow.font = { bold: true };
         headerExcelRow.eachCell(cell => {
             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
