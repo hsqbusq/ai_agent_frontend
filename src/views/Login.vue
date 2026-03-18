@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { reactive, ref } from "vue";
+import { reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { useRouter } from "vue-router";
 
@@ -61,6 +61,13 @@ const projectKeyword = ref("");
 const selectedProject = ref("");
 const selectedProjectLabel = ref("");
 const projectLoading = ref(false);
+
+watch(projectKeyword, (val) => {
+  if (val !== selectedProjectLabel.value) {
+    selectedProject.value = "";
+    selectedProjectLabel.value = "";
+  }
+});
 
 const loginForm = reactive({
   username: "",

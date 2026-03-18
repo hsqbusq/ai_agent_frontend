@@ -2977,7 +2977,7 @@ export default {
     };
 
     // 模拟模式开关
-    const isMockMode = ref(true); 
+    const isMockMode = ref(false); 
 
     const runMockTestCase = (id, row) => {
       return new Promise((resolve) => {
@@ -3133,6 +3133,19 @@ export default {
       selectedCase.value = "";
       stopPolling();
       executionLogs.value = {};
+
+      await nextTick();
+      const table = proxy.$refs.caseTable;
+      if (table) {
+        changePage.value = true;
+        table.clearSelection();
+        paginatedCases.value.forEach((row) => {
+          const isSelected = selectedRowIds.value.has(row.id);
+          table.toggleRowSelection(row, isSelected);
+        });
+        changePage.value = false;
+      }
+
       if (currentTestId.value) {
         try {
           await fetch(`/dev-api/cancelsession`, {
