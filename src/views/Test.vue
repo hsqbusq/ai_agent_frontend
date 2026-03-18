@@ -1729,6 +1729,20 @@ export default {
           cancelButtonText: "取消",
         });
 
+        try {
+          ElMessageBox.close();
+        } catch {
+          // ignore
+        }
+
+        try {
+          document.body.classList.remove("el-popup-parent--hidden");
+          document.body.style.removeProperty("overflow");
+          document.querySelectorAll(".el-overlay").forEach((el) => el.remove());
+        } catch {
+          // ignore
+        }
+
         localStorage.removeItem("isAuthenticated");
         localStorage.removeItem("currentUser");
         localStorage.removeItem("currentUserInfo");
@@ -1737,7 +1751,9 @@ export default {
         localStorage.removeItem("currentProject");
 
         ElMessage.success("已退出登录");
-        router.replace("/");
+        window.setTimeout(() => {
+          router.replace("/");
+        }, 0);
       } catch {
         return;
       }

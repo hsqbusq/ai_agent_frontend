@@ -31,10 +31,16 @@
             style="width: 100%"
             :fetch-suggestions="fetchProjectSuggestions"
             :loading="projectLoading"
+            :disabled="!!selectedProject"
             clearable
             @select="handleProjectSelect"
           />
         </el-form-item>
+
+        <div v-if="selectedProject" class="project-picked">
+          <el-tag type="success" effect="light">已选项目：{{ selectedProjectLabel }}</el-tag>
+          <el-button link type="primary" @click="clearSelectedProject">重新选择</el-button>
+        </div>
 
         <el-button
           type="primary"
@@ -61,6 +67,13 @@ const projectKeyword = ref("");
 const selectedProject = ref("");
 const selectedProjectLabel = ref("");
 const projectLoading = ref(false);
+
+const clearSelectedProject = () => {
+  selectedProject.value = "";
+  selectedProjectLabel.value = "";
+  projectKeyword.value = "";
+  projectList.value = [];
+};
 
 watch(projectKeyword, (val) => {
   if (val !== selectedProjectLabel.value) {
@@ -285,6 +298,14 @@ const handleLogin = async () => {
 .login-btn {
   width: 100%;
   margin-top: 8px;
+}
+
+.project-picked {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0 6px;
 }
 
 </style>
