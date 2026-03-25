@@ -1088,9 +1088,11 @@
       v-model="conversionDialogVisible"
       title="用例转化中..."
       width="400px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-      :show-close="false"
+      :close-on-click-modal="isConversionPaused"
+      :close-on-press-escape="isConversionPaused"
+      :show-close="isConversionPaused"
+      :modal="!isConversionPaused"
+      :lock-scroll="!isConversionPaused"
     >
       <div style="padding: 20px 0">
         <!-- 进度条 -->
@@ -1105,11 +1107,21 @@
         <!-- 进度信息 -->
         <div style="margin-top: 15px; text-align: center; color: #666">
           <div style="font-size: 14px; margin-bottom: 8px">
-            正在转化：{{ conversionCurrentId || "准备中..." }}
+            正在转化：{{ conversionStatusText }}
           </div>
           <div style="font-size: 13px">
             进度：{{ conversionCurrent }} / {{ conversionTotal }} 条
           </div>
+        </div>
+
+        <div style="margin-top: 14px; text-align: center">
+          <el-button
+            size="small"
+            @click="toggleConversionPause"
+            :disabled="!isConverting"
+          >
+            {{ isConversionPaused ? "继续转换" : "暂停转换" }}
+          </el-button>
         </div>
 
         <!-- 转化提示 -->
@@ -1128,6 +1140,17 @@
         </div>
       </div>
     </el-dialog>
+
+    <div
+      v-if="isConverting && isConversionPaused && !conversionDialogVisible"
+      class="conversion-paused-float"
+    >
+      <el-tag type="warning" effect="dark">转换已暂停</el-tag>
+      <div class="conversion-paused-actions">
+        <el-button size="small" type="primary" @click="toggleConversionPause">继续转换</el-button>
+        <el-button size="small" @click="conversionDialogVisible = true">查看进度</el-button>
+      </div>
+    </div>
 
     <el-dialog v-model="dialogVisible" title="增加用例" width="50%">
       <el-form :model="newCase" label-width="120px">
@@ -3567,11 +3590,44 @@ export default {
     };
 
     const isConverting = ref(false);
+    const isConversionPaused = ref(false);
     const conversionProgress = ref(0); // 当前进度百分比
     const conversionCurrent = ref(0); // 当前处理数量
     const conversionTotal = ref(0); // 总数量
     const conversionCurrentId = ref(""); // 当前正在转化的用例ID
     const conversionDialogVisible = ref(false); // 进度弹窗显示状态
+
+    const conversionStatusText = computed(() => {
+      if (isConversionPaused.value) return "已暂停";
+      return conversionCurrentId.value || "准备中...";
+    });
+
+    const toggleConversionPause = () => {
+      isConversionPaused.value = !isConversionPaused.value;
+      if (isConversionPaused.value) {
+        conversionDialogVisible.value = false;
+      } else {
+        conversionDialogVisible.value = true;
+      }
+      showToast(isConversionPaused.value ? "已暂停转换" : "继续转换", "info");
+    };
+
+    const waitIfConversionPaused = async () => {
+      while (isConversionPaused.value) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    };
+
+    const getErrorMessage = (err) => {
+      if (!err) return "未知错误";
+      if (typeof err === "string") return err;
+      if (typeof err.message === "string" && err.message) return err.message;
+      try {
+        return JSON.stringify(err);
+      } catch {
+        return String(err);
+      }
+    };
     const caseConversion = async () => {
       caseConversionDialogVisible.value = false;
       if (selectedRowsAll.value.length === 0) {
@@ -3581,6 +3637,7 @@ export default {
 
       // 初始化进度
       isConverting.value = true;
+      isConversionPaused.value = false;
       conversionTotal.value = selectedRowsAll.value.length;
       conversionCurrent.value = 0;
       conversionProgress.value = 0;
@@ -3592,6 +3649,7 @@ export default {
       const failedIds = [];
 
       for (let i = 0; i < selectedRowsAll.value.length; i++) {
+        await waitIfConversionPaused();
         const row = selectedRowsAll.value[i];
 
         conversionCurrentId.value = row.id;
@@ -3603,7 +3661,9 @@ export default {
             runCaseConversion(row, resolve, reject);
           });
         } catch (error) {
+          const msg = getErrorMessage(error);
           console.error(`用例 ${row.id} 转换失败:`, error);
+          showToast(`用例 ${row.id} 转换失败：${msg}`, "error");
           failedIds.push(row.id);
         }
       }
@@ -3611,6 +3671,7 @@ export default {
       setTimeout(() => {
         conversionDialogVisible.value = false;
         isConverting.value = false;
+        isConversionPaused.value = false;
         conversionProgress.value = 0;
 
         if (failedIds.length > 0) {
@@ -3640,6 +3701,7 @@ export default {
       conversionProgress.value = 0;
       conversionDialogVisible.value = true;
       isConverting.value = true;
+      isConversionPaused.value = false;
       conversionCurrentId.value = row.id;
 
       runCaseConversion(
@@ -3656,7 +3718,8 @@ export default {
         (err) => {
           conversionDialogVisible.value = false;
           isConverting.value = false;
-          showToast(`用例 ${row.id} 转换失败`, "error");
+          const msg = getErrorMessage(err);
+          showToast(`用例 ${row.id} 转换失败：${msg}`, "error");
         }
       );
 
@@ -3675,6 +3738,7 @@ export default {
 
     const startCaseConversion = async (row, resolve, reject) => {
       try {
+        await waitIfConversionPaused();
         await callApi(
           row.id,
           row.Initial_Condition,
@@ -3683,6 +3747,8 @@ export default {
           "A",
           row.Expected_Result
         );
+
+        await waitIfConversionPaused();
         await callApi(row.id, row.Action, "B", false, "B", row.Expected_Result);
 
         const index = cases.value.findIndex((c) => c.id === row.id);
@@ -4101,6 +4167,9 @@ export default {
       getRowStyle,
       changeColor,
       isConverting,
+      isConversionPaused,
+      conversionStatusText,
+      toggleConversionPause,
       conversionProgress,
       conversionCurrent,
       conversionTotal,
@@ -4255,6 +4324,26 @@ body {
 .user-meta :deep(.el-button--danger.is-plain) {
   color: rgba(255, 255, 255, 0.92);
   background: rgba(245, 108, 108, 0.18);
+}
+
+.conversion-paused-float {
+  position: fixed;
+  right: 16px;
+  top: 70px;
+  z-index: 2200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.conversion-paused-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .content-layout {
