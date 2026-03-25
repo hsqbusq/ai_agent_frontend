@@ -1122,6 +1122,14 @@
           >
             {{ isConversionPaused ? "继续转换" : "暂停转换" }}
           </el-button>
+          <el-button
+            size="small"
+            type="danger"
+            @click="cancelConversion"
+            :disabled="!isConverting"
+          >
+            取消转换
+          </el-button>
         </div>
 
         <!-- 转化提示 -->
@@ -1149,6 +1157,7 @@
       <div class="conversion-paused-actions">
         <el-button size="small" type="primary" @click="toggleConversionPause">继续转换</el-button>
         <el-button size="small" @click="conversionDialogVisible = true">查看进度</el-button>
+        <el-button size="small" type="danger" @click="cancelConversion">取消</el-button>
       </div>
     </div>
 
@@ -3591,6 +3600,8 @@ export default {
 
     const isConverting = ref(false);
     const isConversionPaused = ref(false);
+    const isConversionCanceled = ref(false);
+    const conversionActiveXhr = ref(null);
     const conversionProgress = ref(0); // 当前进度百分比
     const conversionCurrent = ref(0); // 当前处理数量
     const conversionTotal = ref(0); // 总数量
@@ -3612,10 +3623,45 @@ export default {
       showToast(isConversionPaused.value ? "已暂停转换" : "继续转换", "info");
     };
 
+    const cancelConversion = async () => {
+      if (!isConverting.value) return;
+      try {
+        await ElMessageBox.confirm("确认取消当前转换？", "提示", {
+          type: "warning",
+          confirmButtonText: "取消转换",
+          cancelButtonText: "返回",
+        });
+      } catch {
+        return;
+      }
+
+      isConversionCanceled.value = true;
+      isConversionPaused.value = false;
+      conversionDialogVisible.value = false;
+
+      const xhr = conversionActiveXhr.value;
+      if (xhr && xhr.readyState !== 4) {
+        try {
+          xhr.abort();
+        } catch {
+          // ignore
+        }
+      }
+
+      isConverting.value = false;
+      conversionCurrentId.value = "";
+      showToast("已取消转换", "info");
+    };
+
     const waitIfConversionPaused = async () => {
       while (isConversionPaused.value) {
         await new Promise((r) => setTimeout(r, 200));
       }
+    };
+
+    const isCanceledError = (err) => {
+      const msg = getErrorMessage(err);
+      return isConversionCanceled.value || msg === "CONVERSION_CANCELED";
     };
 
     const getErrorMessage = (err) => {
@@ -3630,6 +3676,19 @@ export default {
     };
     const caseConversion = async () => {
       caseConversionDialogVisible.value = false;
+
+      if (isConverting.value) {
+        if (isConversionPaused.value) {
+          isConversionPaused.value = false;
+          conversionDialogVisible.value = true;
+          showToast("继续转换", "info");
+        } else {
+          conversionDialogVisible.value = true;
+          showToast("转换进行中", "info");
+        }
+        return;
+      }
+
       if (selectedRowsAll.value.length === 0) {
         showToast("请先选择要转换的测试用例", "warning");
         return;
@@ -3638,6 +3697,7 @@ export default {
       // 初始化进度
       isConverting.value = true;
       isConversionPaused.value = false;
+      isConversionCanceled.value = false;
       conversionTotal.value = selectedRowsAll.value.length;
       conversionCurrent.value = 0;
       conversionProgress.value = 0;
@@ -3650,6 +3710,7 @@ export default {
 
       for (let i = 0; i < selectedRowsAll.value.length; i++) {
         await waitIfConversionPaused();
+        if (isConversionCanceled.value) break;
         const row = selectedRowsAll.value[i];
 
         conversionCurrentId.value = row.id;
@@ -3661,6 +3722,7 @@ export default {
             runCaseConversion(row, resolve, reject);
           });
         } catch (error) {
+          if (isCanceledError(error)) break;
           const msg = getErrorMessage(error);
           console.error(`用例 ${row.id} 转换失败:`, error);
           showToast(`用例 ${row.id} 转换失败：${msg}`, "error");
@@ -3673,6 +3735,11 @@ export default {
         isConverting.value = false;
         isConversionPaused.value = false;
         conversionProgress.value = 0;
+
+        if (isConversionCanceled.value) {
+          isConversionCanceled.value = false;
+          return;
+        }
 
         if (failedIds.length > 0) {
           showToast(`部分用例转换失败: ${failedIds.join(", ")}`, "error");
@@ -3696,12 +3763,25 @@ export default {
       contextMenu.visible = false;
       if (!row) return;
 
+      if (isConverting.value) {
+        if (isConversionPaused.value) {
+          isConversionPaused.value = false;
+          conversionDialogVisible.value = true;
+          showToast("继续转换", "info");
+        } else {
+          conversionDialogVisible.value = true;
+          showToast("转换进行中", "info");
+        }
+        return;
+      }
+
       conversionTotal.value = 1;
       conversionCurrent.value = 0;
       conversionProgress.value = 0;
       conversionDialogVisible.value = true;
       isConverting.value = true;
       isConversionPaused.value = false;
+      isConversionCanceled.value = false;
       conversionCurrentId.value = row.id;
 
       runCaseConversion(
@@ -3716,6 +3796,7 @@ export default {
           }, 300);
         },
         (err) => {
+          if (isCanceledError(err)) return;
           conversionDialogVisible.value = false;
           isConverting.value = false;
           const msg = getErrorMessage(err);
@@ -3739,6 +3820,7 @@ export default {
     const startCaseConversion = async (row, resolve, reject) => {
       try {
         await waitIfConversionPaused();
+        if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
         await callApi(
           row.id,
           row.Initial_Condition,
@@ -3749,6 +3831,7 @@ export default {
         );
 
         await waitIfConversionPaused();
+        if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
         await callApi(row.id, row.Action, "B", false, "B", row.Expected_Result);
 
         const index = cases.value.findIndex((c) => c.id === row.id);
@@ -3762,12 +3845,17 @@ export default {
     const callApi = (id, input, task, stream, step, predict) => {
       return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        conversionActiveXhr.value = xhr;
         xhr.open("POST", "/dev-api/v1/chat/completions", true);
         xhr.setRequestHeader("Content-Type", "application/json");
         xhr.setRequestHeader("Accept", "text/event-stream");
 
         xhr.onreadystatechange = function () {
           if (xhr.readyState !== 4) return;
+
+          if (conversionActiveXhr.value === xhr) {
+            conversionActiveXhr.value = null;
+          }
 
           if (xhr.status === 200) {
             try {
@@ -3792,7 +3880,16 @@ export default {
             reject(new Error(`用例 ${id} 请求失败：HTTP ${xhr.status}`));
           }
         };
+        xhr.onabort = function () {
+          if (conversionActiveXhr.value === xhr) {
+            conversionActiveXhr.value = null;
+          }
+          reject(new Error("CONVERSION_CANCELED"));
+        };
         xhr.onerror = function () {
+          if (conversionActiveXhr.value === xhr) {
+            conversionActiveXhr.value = null;
+          }
           reject(new Error(`用例 ${id} 网络错误，请检查服务是否可用`));
         };
         const dbc = dbcFileName.value.name;
@@ -4170,6 +4267,7 @@ export default {
       isConversionPaused,
       conversionStatusText,
       toggleConversionPause,
+      cancelConversion,
       conversionProgress,
       conversionCurrent,
       conversionTotal,
