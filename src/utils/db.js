@@ -6,6 +6,12 @@ export const CASES_KEY = 'cases'
 export const CASES_TABLE_KEY = 'casesTable'
 const MIGRATE_FLAG = 'migrated_from_ls'   
 
+function scopedKey(baseKey, projectKey) {
+  const scope = (projectKey ?? '').trim()
+  if (!scope) return baseKey
+  return `${baseKey}__proj__${scope}`
+}
+
 async function migrateOnce() {
   if (localStorage.getItem(MIGRATE_FLAG) === '1') return
 
@@ -24,30 +30,56 @@ async function migrateOnce() {
   }
 }
 
-export async function saveCases(list) {
+export async function saveCases(list, projectKey) {
   try {
     const plain = cloneDeep(toRaw(list))
-    await set(CASES_KEY, plain)
+    await set(scopedKey(CASES_KEY, projectKey), plain)
   } catch (e) {
     console.warn('IndexedDB 写入失败', e)
   }
 }
 
-export async function saveCasesTable(list) {
+export async function saveCasesTable(list, projectKey) {
   try {
     const plain = cloneDeep(toRaw(list))
-    await set(CASES_TABLE_KEY, plain)
+    await set(scopedKey(CASES_TABLE_KEY, projectKey), plain)
   } catch (e) {
     console.warn('IndexedDB 写入失败', e)
   }
 }
 
-export async function loadCases() {
+export async function loadCases(projectKey) {
   await migrateOnce()         
-  return (await get(CASES_KEY)) ?? []
+  const scoped = await get(scopedKey(CASES_KEY, projectKey))
+  if (Array.isArray(scoped)) return scoped
+
+  const legacy = await get(CASES_KEY)
+  if (Array.isArray(legacy) && legacy.length && (projectKey ?? '').trim()) {
+    try {
+      await set(scopedKey(CASES_KEY, projectKey), legacy)
+    } catch (e) {
+      console.warn('IndexedDB 写入失败', e)
+    }
+    return legacy
+  }
+
+  return []
 }
 
-export async function loadCasesTable() {
+export async function loadCasesTable(projectKey) {
   await migrateOnce()
-  return (await get(CASES_TABLE_KEY)) ?? []
+  const scoped = await get(scopedKey(CASES_TABLE_KEY, projectKey))
+  if (Array.isArray(scoped)) return scoped
+
+  const legacy = await get(CASES_TABLE_KEY)
+  if (Array.isArray(legacy) && legacy.length && (projectKey ?? '').trim()) {
+    try {
+      await set(scopedKey(CASES_TABLE_KEY, projectKey), legacy)
+    } catch (e) {
+      console.warn('IndexedDB 写入失败', e)
+    }
+    return legacy
+  }
+
+  return []
 }

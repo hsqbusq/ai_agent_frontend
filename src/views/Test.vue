@@ -1735,6 +1735,12 @@ export default {
       return raw?.label ?? raw?.projectName ?? raw?.name ?? "";
     });
 
+    const projectScopeKey = ref("default");
+    const getProjectLocalStorageKey = (suffix) => {
+      const scope = projectScopeKey.value || "default";
+      return `PROJ__${scope}__${suffix}`;
+    };
+
     const loadAuthContext = () => {
       try {
         currentUserInfo.value = JSON.parse(localStorage.getItem("currentUserInfo") ?? "null");
@@ -1751,6 +1757,8 @@ export default {
       const projectId = localStorage.getItem("currentProjectId") ?? "";
       const projectName = localStorage.getItem("currentProjectName") ?? "";
       model_name.value = projectName || projectId;
+
+      projectScopeKey.value = encodeURIComponent((projectName || projectId || "default").trim());
     };
 
     const handleLogout = async () => {
@@ -1795,7 +1803,7 @@ export default {
     const infoType = ref("all");
     const default_url = ref("http://172.23.96.54:8000");
 
-    const url = ref(localStorage.getItem("TEST_URL") ?? default_url);
+    const url = ref(default_url.value);
     const showTestKey = ref(true); // 控制“测试功能点”列的显示
     const showTestidColumn = false;
     const currentLang = ref("中文");
@@ -1858,19 +1866,17 @@ export default {
       showToast(`用例 ${row.id} 开始执行`, "info");
     };
 
-    watch(cases, async () => await saveCases(cases.value), { deep: true });
-    watch(casesTable, async () => await saveCasesTable(casesTable.value), { deep: true });
+    watch(cases, async () => await saveCases(cases.value, projectScopeKey.value), { deep: true });
+    watch(casesTable, async () => await saveCasesTable(casesTable.value, projectScopeKey.value), {
+      deep: true,
+    });
 
     watch(currentLang, (val) => {
       showToast(`已切换到 ${val}`, "info");
     });
 
     watch(url, (newVal) => {
-      localStorage.setItem("TEST_URL", newVal);
-    });
-
-    onMounted(() => {
-      loadAuthContext();
+      localStorage.setItem(getProjectLocalStorageKey("TEST_URL"), newVal);
     });
 
     const reslutCases = ref([]);
@@ -2321,8 +2327,8 @@ export default {
       cases.value = [];
       casesTable.value = [];
 
-      await saveCases([]);
-      await saveCasesTable([]);
+      await saveCases([], projectScopeKey.value);
+      await saveCasesTable([], projectScopeKey.value);
 
       currentPage.value = 1;
       selectedRowIds.value = new Set();
@@ -2375,7 +2381,7 @@ export default {
       proxy.$refs.caseTable?.clearSelection();
 
       // 保存到本地存储
-      await saveCases(cases.value);
+      await saveCases(cases.value, projectScopeKey.value);
 
       showToast("所有测试结果已清除", "success");
     };
@@ -4011,6 +4017,14 @@ export default {
             path: data.result?.save_path || "",
             size: data.result?.file_size || file.size,
           };
+          try {
+            localStorage.setItem(
+              getProjectLocalStorageKey("DBC_FILE_META"),
+              JSON.stringify(dbcFileName.value)
+            );
+          } catch {
+            // ignore
+          }
           showToast(`DBC文件上传成功: ${file.name}`, "success");
         } else {
           throw new Error(data.description || "上传失败");
@@ -4036,25 +4050,39 @@ export default {
 
     const loadTestConfig = () => {
       try {
-        const str = localStorage.getItem("TEST_CONFIG");
+        const str = localStorage.getItem(getProjectLocalStorageKey("TEST_CONFIG"));
         if (str) Object.assign(testConfig, JSON.parse(str));
       } catch {}
     };
-    loadTestConfig();
 
     const openTestConfigDialog = () => {
       testConfigVisible.value = true;
     };
 
     const saveTestConfig = () => {
-      localStorage.setItem("TEST_CONFIG", JSON.stringify(testConfig));
+      localStorage.setItem(getProjectLocalStorageKey("TEST_CONFIG"), JSON.stringify(testConfig));
       testConfigVisible.value = false;
       showToast("测试配置已保存", "success");
     };
 
     // 模拟组件加载
     onMounted(async () => {
-      cases.value = await loadCases().then((list) =>
+      loadAuthContext();
+
+      url.value =
+        localStorage.getItem(getProjectLocalStorageKey("TEST_URL")) ??
+        default_url.value;
+
+      loadTestConfig();
+
+      try {
+        const meta = localStorage.getItem(getProjectLocalStorageKey("DBC_FILE_META"));
+        if (meta) dbcFileName.value = JSON.parse(meta);
+      } catch {
+        // ignore
+      }
+
+      cases.value = await loadCases(projectScopeKey.value).then((list) =>
         list.length
           ? list
           : [
@@ -4113,7 +4141,7 @@ export default {
               },
             ]
       );
-      casesTable.value = await loadCasesTable();
+      casesTable.value = await loadCasesTable(projectScopeKey.value);
       setTimeout(() => {
         fetchTestList(1);
       }, 500);
