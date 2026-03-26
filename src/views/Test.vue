@@ -1008,6 +1008,14 @@
             />
             <div style="font-size: 12px; color: #999">单位：秒</div>
           </el-form-item>
+
+          <el-form-item label="执行前重置信号">
+            <el-switch
+              v-model="testConfig.isReset"
+              active-text="是"
+              inactive-text="否"
+            />
+          </el-form-item>
         </el-card>
         <!-- <el-card shadow="never">
                     <template #header>
@@ -3600,6 +3608,7 @@ export default {
           model_name: model_name.value,
           detect_before_timeout: testConfig.preWaitSec + "",
           detect_timeout: testConfig.timeoutSec + "",
+          is_reset: testConfig.isReset ? "true" : "false",
         })
       );
     };
@@ -4044,6 +4053,7 @@ export default {
       waitStrategy: "fixed_and_poll",
       preWaitSec: 0,
       timeoutSec: 0,
+      isReset: false,
       continueOnFail: false,
       defaultAllIn: false,
     });
