@@ -1874,10 +1874,57 @@ export default {
       showToast(`用例 ${row.id} 开始执行`, "info");
     };
 
-    watch(cases, async () => await saveCases(cases.value, projectScopeKey.value), { deep: true });
-    watch(casesTable, async () => await saveCasesTable(casesTable.value, projectScopeKey.value), {
-      deep: true,
-    });
+    const suspendAutoSave = ref(false);
+    const pendingCasesSave = ref(false);
+    const pendingCasesTableSave = ref(false);
+    let casesSaveTimer = null;
+    let casesTableSaveTimer = null;
+
+    const scheduleCasesSave = (delayMs = 800) => {
+      if (suspendAutoSave.value) {
+        pendingCasesSave.value = true;
+        return;
+      }
+      if (casesSaveTimer) window.clearTimeout(casesSaveTimer);
+      casesSaveTimer = window.setTimeout(async () => {
+        casesSaveTimer = null;
+        await saveCases(cases.value, projectScopeKey.value);
+      }, delayMs);
+    };
+
+    const scheduleCasesTableSave = (delayMs = 800) => {
+      if (suspendAutoSave.value) {
+        pendingCasesTableSave.value = true;
+        return;
+      }
+      if (casesTableSaveTimer) window.clearTimeout(casesTableSaveTimer);
+      casesTableSaveTimer = window.setTimeout(async () => {
+        casesTableSaveTimer = null;
+        await saveCasesTable(casesTable.value, projectScopeKey.value);
+      }, delayMs);
+    };
+
+    const flushAutoSave = async () => {
+      if (casesSaveTimer) {
+        window.clearTimeout(casesSaveTimer);
+        casesSaveTimer = null;
+      }
+      if (casesTableSaveTimer) {
+        window.clearTimeout(casesTableSaveTimer);
+        casesTableSaveTimer = null;
+      }
+      if (pendingCasesSave.value) {
+        pendingCasesSave.value = false;
+        await saveCases(cases.value, projectScopeKey.value);
+      }
+      if (pendingCasesTableSave.value) {
+        pendingCasesTableSave.value = false;
+        await saveCasesTable(casesTable.value, projectScopeKey.value);
+      }
+    };
+
+    watch(cases, () => scheduleCasesSave(), { deep: true });
+    watch(casesTable, () => scheduleCasesTableSave(), { deep: true });
 
     watch(currentLang, (val) => {
       showToast(`已切换到 ${val}`, "info");
@@ -3665,6 +3712,8 @@ export default {
 
       isConverting.value = false;
       conversionCurrentId.value = "";
+      suspendAutoSave.value = false;
+      await flushAutoSave();
       showToast("已取消转换", "info");
     };
 
@@ -3713,6 +3762,7 @@ export default {
       isConverting.value = true;
       isConversionPaused.value = false;
       isConversionCanceled.value = false;
+      suspendAutoSave.value = true;
       conversionTotal.value = selectedRowsAll.value.length;
       conversionCurrent.value = 0;
       conversionProgress.value = 0;
@@ -3720,7 +3770,6 @@ export default {
 
       showToast("开始转换测试用例", "info");
 
-      const selectedIds = selectedRowsAll.value.map((row) => row.id);
       const failedIds = [];
 
       for (let i = 0; i < selectedRowsAll.value.length; i++) {
@@ -3743,7 +3792,18 @@ export default {
           showToast(`用例 ${row.id} 转换失败：${msg}`, "error");
           failedIds.push(row.id);
         }
+
+        if ((i + 1) % 10 === 0) {
+          await flushAutoSave();
+        }
+
+        if ((i + 1) % 5 === 0) {
+          await new Promise((r) => setTimeout(r, 0));
+        }
       }
+
+      suspendAutoSave.value = false;
+      await flushAutoSave();
 
       setTimeout(() => {
         conversionDialogVisible.value = false;
@@ -3762,14 +3822,15 @@ export default {
           showToast(`所有用例转换完成`, "success");
         }
 
-        // 恢复选中状态
         nextTick(() => {
-          selectedIds.forEach((id) => {
-            const row = cases.value.find((c) => c.id === id);
-            if (row) {
-              proxy.$refs.caseTable.toggleRowSelection(row, true);
-            }
+          const table = proxy.$refs.caseTable;
+          if (!table) return;
+          changePage.value = true;
+          table.clearSelection();
+          paginatedCases.value.forEach((row) => {
+            table.toggleRowSelection(row, selectedRowIds.value.has(row.id));
           });
+          changePage.value = false;
         });
       }, 500);
     };
@@ -3797,6 +3858,7 @@ export default {
       isConverting.value = true;
       isConversionPaused.value = false;
       isConversionCanceled.value = false;
+      suspendAutoSave.value = true;
       conversionCurrentId.value = row.id;
 
       runCaseConversion(
@@ -3807,6 +3869,8 @@ export default {
           setTimeout(() => {
             conversionDialogVisible.value = false;
             isConverting.value = false;
+            suspendAutoSave.value = false;
+            flushAutoSave();
             showToast(`用例 ${row.id} 转换成功`, "success");
           }, 300);
         },
@@ -3814,6 +3878,8 @@ export default {
           if (isCanceledError(err)) return;
           conversionDialogVisible.value = false;
           isConverting.value = false;
+          suspendAutoSave.value = false;
+          flushAutoSave();
           const msg = getErrorMessage(err);
           showToast(`用例 ${row.id} 转换失败：${msg}`, "error");
         }
@@ -3884,7 +3950,9 @@ export default {
                   cases.value[index].InitTestSequences = content;
                 } else if (step === "B") {
                   cases.value[index].ActionTestSequences = content;
-                  showToast(`用例 ${id} 转换成功`, "success");
+                  if (conversionTotal.value <= 1) {
+                    showToast(`用例 ${id} 转换成功`, "success");
+                  }
                 }
               }
               resolve();
