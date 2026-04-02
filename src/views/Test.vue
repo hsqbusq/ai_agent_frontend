@@ -528,13 +528,22 @@
                 </template>
               </el-table-column>
 
-              <!-- 测试结果 - 不可编辑 -->
+              <!-- 测试结果 - 可编辑 -->
               <el-table-column prop="Result" label="测试结果" min-width="180">
                 <template #default="scope">
-                  <span>{{ scope.row.Result }}</span>
+                  <el-select
+                    v-if="scope.row.Result !== undefined && scope.row.Result !== ''"
+                    v-model="scope.row.Result"
+                    size="small"
+                    style="width: 120px"
+                  >
+                    <el-option label="Pass" value="Pass" />
+                    <el-option label="Fail" value="Fail" />
+                  </el-select>
+                  <span v-else>{{ scope.row.Result }}</span>
                   <br />
                   <el-button
-                    v-if="scope.row.Result !== undefined"
+                    v-if="scope.row.Testid && scope.row.Result !== undefined && scope.row.Result !== ''"
                     type="primary"
                     size="small"
                     @click="fetchTestLogs(scope.row.Testid)"
@@ -555,7 +564,7 @@
                 <template #default="scope">
                   <br />
                   <el-button
-                    v-if="scope.row.Result !== undefined"
+                    v-if="scope.row.Testid && scope.row.Result !== undefined && scope.row.Result !== ''"
                     type="primary"
                     size="small"
                     @click="
@@ -4160,10 +4169,16 @@ export default {
         // ignore
       }
 
-      cases.value = await loadCases(projectScopeKey.value).then((list) =>
-        list.length
-          ? list
-          : [
+      cases.value = await loadCases(projectScopeKey.value).then((list) => {
+        if (list.length) {
+          list.forEach((c) => {
+            if (c.Result === "PASS") c.Result = "Pass";
+            else if (c.Result === "FAIL") c.Result = "Fail";
+          });
+          return list;
+        }
+
+        return [
               {
                 id: "001",
                 TestCaseID: "",
@@ -4217,8 +4232,8 @@ export default {
                 Remark: "",
                 Result: undefined,
               },
-            ]
-      );
+            ];
+      });
       casesTable.value = await loadCasesTable(projectScopeKey.value);
       setTimeout(() => {
         fetchTestList(1);
