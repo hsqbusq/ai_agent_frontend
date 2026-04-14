@@ -1006,16 +1006,8 @@
             />
             <div style="font-size: 12px; color: #999">单位：秒</div>
           </el-form-item>
-          <el-form-item label="检测超时时间">
-            <el-input-number
-              v-model="testConfig.timeoutSec"
-              :min="1"
-              :max="999"
-              :step="1"
-              :precision="0"
-              style="width: 100%"
-            />
-            <div style="font-size: 12px; color: #999">单位：秒</div>
+          <el-form-item label="是否 检测超时时间">
+            <el-switch v-model="testConfig.isClip" active-text="是" inactive-text="否" />
           </el-form-item>
 
           <el-form-item label="执行前重置信号">
@@ -3158,6 +3150,8 @@ export default {
       });
     };
 
+    const isCarryOverInit = (val) => (val ?? "").includes("接上一case");
+
     const startDebugging = async () => {
       if (selectedRowsAll.value.length === 0) {
         showToast("请先选择要调试的测试用例", "warning");
@@ -3186,7 +3180,8 @@ export default {
             debugRows.value.push(row);
           }
           selectedCase.value = row.id;
-          const query = `前提条件: ${row.InitTestSequences} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
+          const initSeq = isCarryOverInit(row.InitTestSequences) ? "" : row.InitTestSequences;
+          const query = `前提条件: ${initSeq} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
           const baseurl = url.value;
           if (isMockMode.value) {
             await runMockTestCase(row.id, row);
@@ -3395,9 +3390,10 @@ export default {
     ) => {
       showToast("发送调试请求成功，日志将在下方测试执行日志展示！", "success");
       userLogs.value = [];
-      const steps = row.InitTestSequences.split("\n")
-        .filter(Boolean)
-        .concat(row.ActionTestSequences.split("\n").filter(Boolean));
+      const initSteps = isCarryOverInit(row.InitTestSequences)
+        ? []
+        : (row.InitTestSequences ?? "").split("\n").filter(Boolean);
+      const steps = initSteps.concat((row.ActionTestSequences ?? "").split("\n").filter(Boolean));
       const logList = steps.map((text, idx) => ({
         step_id: idx + 1,
         msg: `${text}`,
@@ -3663,8 +3659,8 @@ export default {
           lang: value,
           model_name: model_name.value,
           detect_before_timeout: testConfig.preWaitSec + "",
-          detect_timeout: testConfig.timeoutSec + "",
           is_reset: testConfig.isReset ? "true" : "false",
+          is_clip: testConfig.isClip ? "true" : "false",
         })
       );
     };
@@ -3911,14 +3907,20 @@ export default {
       try {
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
-        await callApi(
-          row.id,
-          row.Initial_Condition,
-          "A",
-          false,
-          "A",
-          row.Expected_Result
-        );
+        const skipInit = isCarryOverInit(row.InitTestSequences) || isCarryOverInit(row.Initial_Condition);
+        if (skipInit) {
+          const index = cases.value.findIndex((c) => c.id === row.id);
+          if (index !== -1) cases.value[index].InitTestSequences = "";
+        } else {
+          await callApi(
+            row.id,
+            row.Initial_Condition,
+            "A",
+            false,
+            "A",
+            row.Expected_Result
+          );
+        }
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
@@ -4129,8 +4131,8 @@ export default {
     const testConfig = reactive({
       waitStrategy: "fixed_and_poll",
       preWaitSec: 0,
-      timeoutSec: 0,
       isReset: false,
+      isClip: false,
       continueOnFail: false,
       defaultAllIn: false,
     });
@@ -4138,7 +4140,20 @@ export default {
     const loadTestConfig = () => {
       try {
         const str = localStorage.getItem(getProjectLocalStorageKey("TEST_CONFIG"));
-        if (str) Object.assign(testConfig, JSON.parse(str));
+        if (str) {
+          const parsed = JSON.parse(str);
+          Object.assign(testConfig, parsed);
+          if (typeof parsed?.isClip === "undefined" && typeof parsed?.timeoutSec === "number") {
+            testConfig.isClip = parsed.timeoutSec > 0;
+          }
+          if ("timeoutSec" in testConfig) {
+            try {
+              delete testConfig.timeoutSec;
+            } catch {
+              // ignore
+            }
+          }
+        }
       } catch {}
     };
 
