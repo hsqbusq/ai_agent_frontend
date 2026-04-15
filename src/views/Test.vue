@@ -3907,20 +3907,20 @@ export default {
       try {
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
-        const skipInit = isCarryOverInit(row.InitTestSequences) || isCarryOverInit(row.Initial_Condition);
-        if (skipInit) {
-          const index = cases.value.findIndex((c) => c.id === row.id);
-          if (index !== -1) cases.value[index].InitTestSequences = "";
-        } else {
-          await callApi(
-            row.id,
-            row.Initial_Condition,
-            "A",
-            false,
-            "A",
-            row.Expected_Result
-          );
+        const shouldSkip = isCarryOverInit(row.InitTestSequences) || isCarryOverInit(row.Initial_Condition);
+        if (shouldSkip) {
+          resolve();
+          return;
         }
+
+        await callApi(
+          row.id,
+          row.Initial_Condition,
+          "A",
+          false,
+          "A",
+          row.Expected_Result
+        );
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
