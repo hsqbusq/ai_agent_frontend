@@ -3905,29 +3905,29 @@ export default {
 
     const startCaseConversion = async (row, resolve, reject) => {
       try {
+        const skipA = isCarryOverInit(row.Initial_Condition) || isCarryOverInit(row.InitTestSequences);
+        const skipB = isCarryOverInit(row.Action) || isCarryOverInit(row.ActionTestSequences);
+        const skipE = isCarryOverInit(row.Expected_Result) || isCarryOverInit(row.ExpectedTestSequences);
+        const predict = skipE ? "" : row.Expected_Result;
+
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
-        const shouldSkip = isCarryOverInit(row.InitTestSequences) || isCarryOverInit(row.Initial_Condition);
-        if (shouldSkip) {
-          resolve();
-          return;
+        if (!skipA) {
+          await callApi(row.id, row.Initial_Condition, "A", false, "A", predict);
         }
 
-        await callApi(
-          row.id,
-          row.Initial_Condition,
-          "A",
-          false,
-          "A",
-          row.Expected_Result
-        );
+        await waitIfConversionPaused();
+        if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
+        if (!skipB) {
+          await callApi(row.id, row.Action, "B", false, "B", predict);
+        }
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
-        await callApi(row.id, row.Action, "B", false, "B", row.Expected_Result);
-
-        const index = cases.value.findIndex((c) => c.id === row.id);
-        cases.value[index].ExpectedTestSequences = row.Expected_Result;
+        if (!skipE) {
+          const index = cases.value.findIndex((c) => c.id === row.id);
+          if (index !== -1) cases.value[index].ExpectedTestSequences = row.Expected_Result;
+        }
         resolve();
       } catch (error) {
         reject(error);
