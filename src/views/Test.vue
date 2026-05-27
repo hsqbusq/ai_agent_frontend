@@ -1610,6 +1610,220 @@ export default {
     const currentUserInfo = ref(null);
     const currentProject = ref(null);
 
+    // 核心状态变量
+    const isAutoPolling = ref(true);
+    const currentTask = ref(null);
+    const isProcessingTask = ref(false);
+    const isDebugRunning = ref(false);
+    const currentExecutingId = ref("");
+    const pollingIntervals = {};
+    let pollingInterval = null;
+
+    const default_url = ref("http://172.23.96.54:8000");
+    const url = ref(default_url.value);
+    const taskBaseUrl = "http://127.0.0.1:8000";
+
+    const stopPolling = () => {
+      Object.keys(pollingIntervals).forEach((test_id) => {
+        clearInterval(pollingIntervals[test_id]);
+        delete pollingIntervals[test_id]; // 清除引用
+      });
+    };
+
+    // 自动化任务处理
+    const fetchTasks = async () => {
+      // 只有在开启自动轮询、没有正在执行调试、且当前没有正在处理的任务时才轮询
+      if (!isAutoPolling.value || isDebugRunning.value || isProcessingTask.value) return;
+      
+      try {
+        const response = await fetch(`${taskBaseUrl}/task-stream/tasks`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.state && data.data.tasks && data.data.tasks.length > 0) {
+          const task = data.data.tasks.find(t => t.status === "pending");
+          // 如果获取到了新任务（ID不同），则加载
+          if (task && task.test_task_id !== currentTask.value?.test_task_id) {
+            await handleNewTask(task);
+          }
+        }
+      } catch (e) {
+        console.error("轮询任务失败:", e);
+      }
+    };
+
+    const handleNewTask = async (task) => {
+      isProcessingTask.value = true; // 标记正在处理任务
+      currentTask.value = task;
+      showToast(`获取到新自动化任务: ${task.name}`, "info");
+
+      try {
+        const fileUrl = `${taskBaseUrl}/${task.test_case_file}`;
+        const res = await fetch(fileUrl);
+        if (!res.ok) throw new Error("无法获取用例文件");
+        const arrayBuffer = await res.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+
+        const newCases = [];
+        const newCasesTable = [];
+
+        // 自动化任务专用解析逻辑，匹配甲方提供的表头 (xlsx 格式，第一行为表头)
+        const parseRow = (row, index) => {
+          return {
+            id: `${String(index + 1).padStart(3, "0")}`,
+            TestCaseID: (row["Test Case ID测试caseID"] ?? "").toString().trim(),
+            SyRDIDFSRD: (row["RD ID/(FSR/TSR）需求ID"] ?? "").toString().trim(),
+            Auto_testID: (row["ALM编号"] ?? "").toString().trim(),
+            TSR: "",
+            CasePriority: (row["Case_Priority优先级"] ?? "").toString().trim(),
+            DesignMethod: (row["Design Method 设计方法"] ?? "").toString().trim(),
+            TestMethod: (row["Test Method 测试方法"] ?? "").toString().trim(),
+            TestStrategy: (row["Test Goal测试目的"] ?? "").toString().trim(),
+            TestKey: (row["Function Module功能模块"] ?? "").toString().trim(),
+            Initial_Condition: (row["Pre-condition前提条件"] ?? "").toString().trim(),
+            Action: (row["Test Steps测试步骤"] ?? "").toString().trim(),
+            Expected_Result: (row["Expected Result期望结果"] ?? "").toString().trim(),
+            InitTestSequences: (row["Init Test Sequences测试序列前置条件"] ?? "").toString().trim(),
+            ActionTestSequences: (row["Action Test Sequences动作测试序列"] ?? "").toString().trim(),
+            ExpectedTestSequences: (row["Expected Test Sequences预期测试序列结果"] ?? "").toString().trim(),
+            Selected: (row["Auto_Test Selected是否选择自动化测试"] ?? "").toString().trim(),
+            Result: "",
+            ActualResult: "",
+            PRNo: "",
+            TestLogs: "",
+            Numberoftests: "",
+            TestDate: "",
+            Remark: "",
+          };
+        };
+
+        // 遍历所有工作表，假设所有工作表的第一行都是表头
+        let start = 0;
+        workbook.SheetNames.forEach((sheetName) => {
+          const worksheet = workbook.Sheets[sheetName];
+          // 使用 range: 0 (默认)，因为自动化导出的 xlsx 第一行就是表头
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+          if (json.length > 0) {
+            newCasesTable.push({
+              sheetName: sheetName,
+              start: start,
+              end: start + json.length - 1,
+              length: json.length,
+            });
+            json.forEach((row, index) => {
+              newCases.push(parseRow(row, start + index));
+            });
+            start += json.length;
+          }
+        });
+
+        if (newCasesTable.length > 1) {
+          newCasesTable.unshift({
+            sheetName: "全选",
+            start: 0,
+            end: newCases.length - 1,
+            length: newCases.length,
+          });
+        }
+
+        // 更新状态
+        cases.value = newCases;
+        casesTable.value = newCasesTable;
+
+        if (newCases.length > 0) {
+          // 自动全选所有加载的用例
+          selectedRowIds.value = new Set(newCases.map((c) => c.id));
+          syncSelectedRowsAll();
+
+          await nextTick();
+          showToast("自动化任务用例加载完成，即将自动开始测试...", "success");
+
+          // 延迟一小会儿确保 UI 更新
+          setTimeout(async () => {
+            if (isProcessingTask.value) {
+              await startDebugging();
+            }
+          }, 1000);
+        }
+      } catch (e) {
+        isProcessingTask.value = false; // 加载失败则重置状态
+        console.error("加载自动化任务用例失败:", e);
+        ElMessage.error("加载自动化任务用例失败: " + e.message);
+      }
+    };
+
+    const reportCaseResult = async (row, durationMs) => {
+      if (!currentTask.value) return;
+
+      const payload = {
+        test_task_id: currentTask.value.test_task_id,
+        sub_task_id: currentTask.value.sub_task_id || (currentTask.value.test_task_id + "01"),
+        case_id: row.TestCaseID || row.id,
+        case_name: row.TestKey || row.TestCaseID || "自动化用例",
+        case_result: (row.Result === "Pass" || row.Result === "通过") ? "成功" : "失败",
+        actual_result: row.ActualResult || row.Result || "执行完成",
+        case_duration: parseFloat((durationMs / 1000).toFixed(2)),
+        case_error_message: (row.Result === "Pass" || row.Result === "通过") ? null : "测试执行未达预期",
+        case_steps: row.ActionTestSequences || "",
+        state: "正常",
+        exception: null
+      };
+
+      try {
+        const response = await fetch(`${taskBaseUrl}/task-stream/tasks/case-result`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (data.state) {
+          console.log(`用例 ${payload.case_id} 结果上报成功`);
+        }
+      } catch (e) {
+        console.error("上报用例结果失败:", e);
+      }
+    };
+
+    const reportTaskComplete = async () => {
+      if (!currentTask.value) return;
+
+      const list = cases.value.filter(
+        (c) => c.Result !== undefined && c.Result !== ""
+      );
+      const total = list.length;
+      const pass = list.filter((c) => /pass|通过/i.test(c.Result)).length;
+      const fail = total - pass;
+      
+      let durationSec = 0;
+      if (startTime.value && endTime.value) {
+        durationSec = parseFloat(((endTime.value - startTime.value) / 1000).toFixed(2));
+      }
+
+      const payload = {
+        test_task_id: currentTask.value.test_task_id,
+        sub_task_id: currentTask.value.sub_task_id || (currentTask.value.test_task_id + "01"),
+        result: fail > 0 ? "fail" : "pass",
+        duration: durationSec,
+        total_cases: total,
+        passed_cases: pass,
+        failed_cases: fail
+      };
+
+      try {
+        const response = await fetch(`${taskBaseUrl}/task-stream/tasks/complete`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (data.state) {
+          showToast(`任务汇总上报成功: ${payload.result}`, "success");
+        }
+      } catch (e) {
+        console.error("任务汇总上报失败:", e);
+      }
+    };
+
     const userDisplayName = computed(() => {
       const raw = currentUserInfo.value;
       if (raw?.nickName) return raw.nickName;
@@ -1810,9 +2024,7 @@ export default {
     const selectedCase = ref("");
     const selectedSheet = ref("");
     const infoType = ref("all");
-    const default_url = ref("http://172.23.96.54:8000");
 
-    const url = ref(default_url.value);
     const showTestKey = ref(true); // 控制“测试功能点”列的显示
     const showTestidColumn = false;
     const currentLang = ref("中文");
@@ -1827,6 +2039,7 @@ export default {
 
     const activeName = ref("first");
     const activeDevice = ref("five");
+    
     // 测试用例数据
     const cases = ref([]);
 
@@ -2382,6 +2595,10 @@ export default {
 
       cases.value = [];
       casesTable.value = [];
+      currentTask.value = null;
+      isProcessingTask.value = false;
+      isDebugRunning.value = false; // 确保停止调试状态，以便触发轮询
+      stopPolling(); // 停止可能的轮询过程
 
       await saveCases([], projectScopeKey.value);
       await saveCasesTable([], projectScopeKey.value);
@@ -2392,6 +2609,9 @@ export default {
       proxy.$refs.caseTable?.clearSelection();
 
       showToast("全部测试用例已清空", "success");
+      
+      // 立即触发一次任务轮询
+      fetchTasks();
     };
 
     // 清除所有测试结果
@@ -3172,6 +3392,7 @@ export default {
       let index = 0;
       while (index < selectedRowsAll.value.length && isDebugRunning.value) {
         const row = selectedRowsAll.value[index];
+        const caseStartTime = Date.now(); // 记录单条用例开始时间
         currentExecutingId.value = row.id;
         await scrollToCase(row.id);
 
@@ -3188,7 +3409,12 @@ export default {
           } else {
             await runTestCase(query, baseurl, row.id, row);
           }
-          // await runTestCase(query, baseurl, row.id, row);
+          
+          // 自动化任务：每执行完一条上报一次结果
+          if (currentTask.value) {
+            const durationMs = Date.now() - caseStartTime;
+            await reportCaseResult(row, durationMs);
+          }
         } catch (error) {
           showToast(`测试用例${row.id}调试失败`, "error");
         } finally {
@@ -3203,7 +3429,18 @@ export default {
       endTime.value = parseInt(Date.now());
       currentExecutingId.value = "";
       showToast("调试已完成", "info");
-      
+
+      // 检查自动化任务是否全部执行完毕
+      if (currentTask.value) {
+        const allFinished = cases.value.every(
+          (c) => c.Result !== undefined && c.Result !== ""
+        );
+        if (allFinished) {
+          await reportTaskComplete();
+          isProcessingTask.value = false;
+          showToast("自动化任务所有用例执行完毕，恢复任务轮询", "success");
+        }
+      }
     };
 
     // 运行测试用例
@@ -3223,9 +3460,6 @@ export default {
     const promptCaseConversion = () => {
       caseConversionDialogVisible.value = true;
     };
-
-    const isDebugRunning = ref(false);
-    const currentExecutingId = ref("");
 
     // const rowClassName = ({ row }) => {
     //   if (row._executing || row.id === currentExecutingId.value) {
@@ -3293,7 +3527,6 @@ export default {
       stopPolling();
     };
 
-    const pollingIntervals = {};
     const userLogs = ref([]);
     const getRowStyle = ({ row }) => row.rowStyle || {};
     const changeColor = (caseId, finalColor, succ, fail, index) => {
@@ -3992,13 +4225,6 @@ export default {
       });
     };
 
-    const stopPolling = () => {
-      Object.keys(pollingIntervals).forEach((test_id) => {
-        clearInterval(pollingIntervals[test_id]);
-        delete pollingIntervals[test_id]; // 清除引用
-      });
-    };
-
     const fetchTestList = (page) => {
       fetch(`/dev-api/test_list?page=${page}&page_size=10`)
         .then((response) => response.json())
@@ -4275,11 +4501,16 @@ export default {
           mobileCanvas.value.style.height = box.height + "px";
         }
       });
+
+      // 启动自动化任务轮询
+      pollingInterval = setInterval(fetchTasks, 5 * 60 * 1000);
+      fetchTasks();
     });
 
     // 组件卸载时停止轮询
     onUnmounted(() => {
       stopPolling();
+      if (pollingInterval) clearInterval(pollingInterval);
     });
 
     return {
@@ -4456,6 +4687,12 @@ export default {
       uploadRules,
       uploadFormRef,
       isUploading,
+      isAutoPolling,
+      currentTask,
+      isProcessingTask,
+      fetchTasks,
+      reportCaseResult,
+      reportTaskComplete,
     };
   },
 };
