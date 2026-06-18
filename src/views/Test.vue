@@ -1000,8 +1000,8 @@
               v-model="testConfig.preWaitSec"
               :min="0"
               :max="999"
-              :step="1"
-              :precision="0"
+              :step="0.1"
+              :precision="3"
               style="width: 100%"
             />
             <div style="font-size: 12px; color: #999">单位：秒</div>
@@ -3788,7 +3788,7 @@ export default {
                 currentTestId.value = test_id;
                 testIdFound = true;
                 const pollForResult = async () => {
-                  const maxPollingTime = 600000; // 300s
+                  const maxPollingTime = 300000; // 300s
                   const interval = 5000; // 5s
                   let elapsedTime = 0;
 
