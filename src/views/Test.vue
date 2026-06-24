@@ -3788,7 +3788,7 @@ export default {
                 currentTestId.value = test_id;
                 testIdFound = true;
                 const pollForResult = async () => {
-                  const maxPollingTime = 300000; // 300s
+                  const maxPollingTime = 600000; // 600s
                   const interval = 5000; // 5s
                   let elapsedTime = 0;
 
@@ -3798,7 +3798,7 @@ export default {
                       const response = await fetch(`/dev-api/result/${test_id}`);
                       const data = await response.json();
                       if (data.result !== null) {
-                        if (index !== -1) {
+                        if (index !== -1) { 
                           cases.value[index].Result = data.result;
                           cases.value[index].Testid = test_id;
                         }
