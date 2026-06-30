@@ -3372,7 +3372,9 @@ export default {
 
     const isCarryOverInit = (val) => {
       const strVal = val ?? "";
-      return strVal.includes("接上一case") || strVal.trim() === "";
+      const result = strVal.includes("接上一case") || strVal.trim() === "";
+      console.log('isCarryOverInit 被调用，输入值:', val, 'strVal:', JSON.stringify(strVal), '结果:', result);
+      return result;
     };
 
     const startDebugging = async () => {
@@ -4141,21 +4143,36 @@ export default {
 
     const startCaseConversion = async (row, resolve, reject) => {
       try {
-        const skipA = isCarryOverInit(row.Initial_Condition) || isCarryOverInit(row.InitTestSequences);
-        const skipB = isCarryOverInit(row.Action) || isCarryOverInit(row.ActionTestSequences);
-        const skipE = isCarryOverInit(row.Expected_Result) || isCarryOverInit(row.ExpectedTestSequences);
+        console.log('开始转换用例，row 数据:', row);
+        console.log('Initial_Condition:', row.Initial_Condition, '类型:', typeof row.Initial_Condition);
+        console.log('Action:', row.Action, '类型:', typeof row.Action);
+        console.log('Expected_Result:', row.Expected_Result, '类型:', typeof row.Expected_Result);
+        
+        // 只需要判断源字段是否为空或"接上一case"，不需要判断目标字段（目标字段是用来保存结果的）
+        const skipA = isCarryOverInit(row.Initial_Condition);
+        const skipB = isCarryOverInit(row.Action);
+        const skipE = isCarryOverInit(row.Expected_Result);
+        
+        console.log('判断结果 - skipA:', skipA, 'skipB:', skipB, 'skipE:', skipE);
+        
         const predict = skipE ? "" : row.Expected_Result;
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
         if (!skipA) {
+          console.log('准备调用 Task A');
           await callApi(row.id, row.Initial_Condition, "A", false, "A", predict);
+        } else {
+          console.log('跳过 Task A');
         }
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
         if (!skipB) {
+          console.log('准备调用 Task B');
           await callApi(row.id, row.Action, "B", false, "B", predict);
+        } else {
+          console.log('跳过 Task B');
         }
 
         await waitIfConversionPaused();
