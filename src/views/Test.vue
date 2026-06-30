@@ -3370,7 +3370,10 @@ export default {
       });
     };
 
-    const isCarryOverInit = (val) => (val ?? "").includes("接上一case");
+    const isCarryOverInit = (val) => {
+      const strVal = val ?? "";
+      return strVal.includes("接上一case") || strVal.trim() === "";
+    };
 
     const startDebugging = async () => {
       if (selectedRowsAll.value.length === 0) {
@@ -4169,6 +4172,14 @@ export default {
 
     const callApi = (id, input, task, stream, step, predict) => {
       return new Promise((resolve, reject) => {
+        // 安全检查：如果 input 为空，直接跳过，不发送请求
+        const safeInput = input ?? "";
+        if (safeInput.trim() === "") {
+          console.log(`用例 ${id} 步骤 ${step} 的 input 为空，跳过 API 调用`);
+          resolve();
+          return;
+        }
+
         const xhr = new XMLHttpRequest();
         conversionActiveXhr.value = xhr;
         xhr.open("POST", "/dev-api/v1/chat/completions", true);
@@ -4204,7 +4215,24 @@ export default {
               reject(e);
             }
           } else {
-            reject(new Error(`用例 ${id} 请求失败：HTTP ${xhr.status}`));
+            let errorMsg = `用例 ${id} 请求失败：HTTP ${xhr.status}`;
+            try {
+              const errorResponse = JSON.parse(xhr.responseText);
+              console.error("服务器返回的错误详情:", errorResponse);
+              if (errorResponse.message) {
+                errorMsg += ` - ${errorResponse.message}`;
+              } else if (errorResponse.detail) {
+                errorMsg += ` - ${errorResponse.detail}`;
+              } else if (typeof errorResponse === 'object') {
+                errorMsg += ` - ${JSON.stringify(errorResponse)}`;
+              }
+            } catch (e) {
+              console.error("原始错误响应:", xhr.responseText);
+              if (xhr.responseText) {
+                errorMsg += ` - ${xhr.responseText}`;
+              }
+            }
+            reject(new Error(errorMsg));
           }
         };
         xhr.onabort = function () {
@@ -4219,9 +4247,24 @@ export default {
           }
           reject(new Error(`用例 ${id} 网络错误，请检查服务是否可用`));
         };
-        const dbc = dbcFileName.value.name;
-        const prompt = prompt1.value;
-        xhr.send(JSON.stringify({ input, task, stream, dbc, prompt, predict }));
+        
+        // 安全处理所有参数，确保不会发送 undefined 或 null
+        const dbc = dbcFileName.value?.name ?? "";
+        const prompt = prompt1.value ?? "";
+        const safePredict = predict ?? "";
+        const safeTask = task ?? "A";
+        const safeStream = stream ?? false;
+        
+        const requestData = { 
+          input: safeInput, 
+          task: safeTask, 
+          stream: safeStream, 
+          dbc: dbc, 
+          prompt: prompt, 
+          predict: safePredict 
+        };
+        console.log(`发送请求 (用例${id}, 步骤${step}):`, requestData);
+        xhr.send(JSON.stringify(requestData));
       });
     };
 
@@ -4238,7 +4281,7 @@ export default {
             logs.value = testCases;
             logs_total.value = data.result.total;
             currentPage1.value = data.result.page;
-            pageSize1.value = data.result.page_size;
+            pageSize1.value = data.result.page_size; 
             showToast("测试用例列表加载成功", "success");
           } else {
             showToast("测试用例列表加载失败", "error");
