@@ -1,6 +1,7 @@
 FROM node:22 AS build-stage
 WORKDIR /app
 COPY package*.json ./
+RUN npm config set registry https://registry.npmmirror.com
 RUN rm -rf node_modules && rm -f package-lock.json && npm install
 RUN npm install
 COPY . .
