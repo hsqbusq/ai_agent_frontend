@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <script src="https://cdn.bootcdn.net/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <meta charset="utf-8" />
+    <title>{{TITLE}}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+        }
+
+        body {
+            background: #f5f7fa;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        h1 {
+            flex: 0 0 auto;
+            padding: 20px;
+            text-align: center;
+            font-weight: 500;
+            font-size: 28px;
+        }
+
+        .summary {
+            flex: 0 0 auto;
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            padding: 0 20px 20px;
+        }
+
+        .summary div {
+            text-align: center;
+            background: #fff;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+        }
+
+        .summary .label {
+            font-size: 14px;
+            color: #909399;
+            margin-bottom: 4px;
+        }
+
+        .summary .value {
+            font-size: 32px;
+            font-weight: 600;
+        }
+
+        .summary .total {
+            color: #409EFF;
+        }
+
+        .summary .pass {
+            color: #67C23A;
+        }
+
+        .summary .fail {
+            color: #F56C6C;
+        }
+
+        .summary .untested {
+            color: #909399;
+        }
+
+        .table-box {
+            flex: 1 1 auto;
+            overflow: auto;
+            padding: 0 20px 20px;
+        }
+
+        table {
+            table-layout: fixed;
+            width: 100%;
+            min-width: max-content;
+            background: #fff;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .06);
+        }
+
+        th {
+            position: sticky;
+            top: 0;
+            background: #fafafa;
+            font-weight: 500;
+            color: #606266;
+            z-index: 1;
+        }
+
+        th,
+        td {
+            padding: 8px 12px;
+            text-align: left;
+            font-size: 13px;
+            border-bottom: 1px solid #eee;
+            word-break: break-word;
+        }
+
+        .td-clip {
+            max-width: 180px;
+            /* 想再窄就调 120~150 */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            cursor: pointer;
+            position: relative;
+            /* 给 ::after 定位用 */
+        }
+
+        .td-clip[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            left: 0;
+            top: 100%;
+            z-index: 10;
+            background: #333;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            max-width: 400px;
+            word-break: break-all;
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        tr:nth-child(even) {
+            background: #fafafa;
+        }
+
+        img {
+            max-width: 120px;
+            border-radius: 4px;
+        }
+
+        .empty-img {
+            color: #C0C4CC;
+            font-size: 12px;
+        }
+
+        .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+
+        .header-row h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 500;
+        }
+
+        .export-btn {
+            position: absolute;
+            right: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            background-color: #52c41a;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .export-btn:hover {
+            background-color: #389e0d;
+        }
+
+        .excel-only {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header-row">
+        <h1>{{TITLE}}</h1>
+        <button onclick="exportTestReport()" class="export-btn">
+            导出为 Excel
+        </button>
+    </div>
+    <div class="summary">
+        <div data-total>
+            <div class="label">测试总数</div>
+            <div class="value total">{{TOTAL}}</div>
+        </div>
+        <div data-pass>
+            <div class="label">通过数</div>
+            <div class="value pass">{{PASS}}</div>
+        </div>
+        <div data-fail>
+            <div class="label">失败数</div>
+            <div class="value fail">{{FAIL}}</div>
+        </div>
+        <div data-untested>
+            <div class="label">未测试数</div>
+            <div class="value untested">{{UNTESTED}}</div>
+        </div>
+    </div>
+    <table cellspacing="0">
+        <thead>
+            <tr>
+                <th>id</th>
+                <th>TestCaseID</th>
+                <th>SyRDIDFSRD</th>
+                <th>Auto_testID</th>
+                <th>TSR</th>
+                <th>CasePriority</th>
+                <th>TestMethod</th>
+                <th>TestStrategy</th>
+                <th>DesignMethod</th>
+                <th>TestKey</th>
+                <th>Initial_Condition</th>
+                <th>Action</th>
+                <th>Expected_Result</th>
+                <th>InitTestSequences</th>
+                <th>ActionTestSequences</th>
+                <th>ExpectedTestSequences</th>
+                <th>Result</th>
+                <th>ActualResult</th>
+                <th>Selected</th>
+                <th>PRNo</th>
+                <th>TestLogs</th>
+                <th>Numberoftests</th>
+                <th>TestDate</th>
+                <th>Remark</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ROWS}}
+        </tbody>
+    </table>
+</body>
+
+</html>
+
+<script>
+
+    async function exportTestReport() {
+        const total = Number(document.querySelector('[data-total] .value').textContent);
+        const pass = Number(document.querySelector('[data-pass]  .value').textContent);
+        const fail = Number(document.querySelector('[data-fail]  .value').textContent);
+        const untested = Number(document.querySelector('[data-untested]  .value').textContent);
+
+        const table = document.querySelector('table');
+        const headerRow = Array.from(table.tHead.rows[0].cells).map(th => th.innerText.trim());
+        const dataRows = Array.from(table.tBodies[0].rows).map(tr =>
+            Array.from(tr.cells).map(td => td.innerText.trim())
+        );
+
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('测试报告');
+
+        ws.columns = [
+            { header: 'Case ID', key: 'id', width: 10 },
+            { header: '测试用例ID', key: 'TestCaseID', width: 15 },
+            { header: 'SyRD/FSRD ID', key: 'SyRDIDFSRD', width: 15 },
+            { header: '自动测试ID', key: 'Auto_testID', width: 15 },
+            { header: 'TSR', key: 'TSR', width: 10 },
+            { header: '用例优先级', key: 'CasePriority', width: 10 },
+            { header: '测试方法', key: 'TestMethod', width: 10 },
+            { header: '测试策略', key: 'TestStrategy', width: 10 },
+            { header: '设计方法', key: 'DesignMethod', width: 10 },
+            { header: '测试功能点', key: 'TestKey', width: 20 },
+            { header: '初始条件', key: 'Initial_Condition', width: 30 },
+            { header: '动作', key: 'Action', width: 20 },
+            { header: '预期结果', key: 'Expected_Result', width: 20 },
+            { header: '初始条件序列', key: 'InitTestSequences', width: 30 },
+            { header: '操作步骤序列', key: 'ActionTestSequences', width: 30 },
+            { header: '预期结果序列', key: 'ExpectedTestSequences', width: 30 },
+            { header: '测试结果', key: 'Result', width: 10 },
+            { header: '实际结果', key: 'ActualResult', width: 20 },
+            { header: '是否选中', key: 'Selected', width: 10 },
+            { header: 'PR号', key: 'PRNo', width: 10 },
+            { header: '测试日志', key: 'TestLogs', width: 20 },
+            { header: '测试次数', key: 'Numberoftests', width: 10 },
+            { header: '测试日期', key: 'TestDate', width: 15 },
+            { header: '备注', key: 'Remark', width: 20 }
+        ];
+
+        ws.insertRow(1, { id: '测试总数', SyRDIDFSRD: total });
+        ws.insertRow(2, { id: '测试成功数', SyRDIDFSRD: pass });
+        ws.insertRow(3, { id: '测试失败数', SyRDIDFSRD: fail });
+        ws.insertRow(4, { id: '未测试数', SyRDIDFSRD: untested });
+        for (let i = 1; i <= 4; i++) {
+            const r = ws.getRow(i);
+            r.font = { bold: true, size: 13, color: { argb: 'FFFFFF' } };
+            r.alignment = { horizontal: 'left' };
+            r.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+            r.getCell(2).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+            r.getCell(3).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2C6A9E' } };
+        }
+
+        const headerExcelRow = ws.getRow(5);
+        headerExcelRow.font = { bold: true };
+        headerExcelRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        dataRows.forEach((trData, idx) => {
+            const rowObj = {};
+            headerRow.forEach((key, i) => {
+                rowObj[key] = trData[i] || '';
+            });
+
+            const excelRow = ws.addRow(rowObj);
+            
+            excelRow.eachCell({ includeEmpty: false }, (cell) => {
+                cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+            });
+
+            const tdActual = table.tBodies[0].rows[idx].cells[17];
+            console.log(tdActual);
+            
+            const img = tdActual && tdActual.querySelector('img');
+            if (img && img.src.startsWith('data:image/png;base64,')) {
+                const base64 = img.src.split(',')[1];
+                const imgId = wb.addImage({
+                    base64: base64,
+                    extension: 'png',
+                });
+                ws.addImage(imgId, {
+                    tl: { col: 17, row: excelRow.number - 1 },
+                    ext: { width: 160, height: 100 },
+                    editAs: 'oneCell'
+                });
+                excelRow.height = 90;
+            } else {
+                excelRow.getCell(18).value = '无图片';
+            }
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buffer], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const timeStamp = new Date()
+            .toLocaleString('zh-CN', { hour12: false })
+            .replace(/[/: ]/g, '');
+        saveAs(blob, `TestReport_${timeStamp}.xlsx`);
+    }
+</script>
