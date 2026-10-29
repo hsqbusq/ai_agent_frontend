@@ -11,7 +11,7 @@ export default defineConfig({
     Markdown() as Plugin,
     Binary() as Plugin
   ],
-  base: '/ai_agent_frontend/',
+  base: process.env.NODE_ENV === 'production' ? '/ai_agent_frontend/' : '/',
 
   server: {
     port: 3000,
