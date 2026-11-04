@@ -141,9 +141,32 @@
                 <img src="../assets/02.svg" alt="" style="width: 14px; height: 14px" />
                 {{ dbcUploadLoading ? "上传中..." : "读取DBC" }}
               </el-button>
-              <el-tooltip v-if="dbcFileName" :content="dbcFileName.name" placement="top">
-                <span class="file-name">已选择：{{ dbcFileName.name }}</span>
-              </el-tooltip>
+              <el-button
+                type="success"
+                size="small"
+                @click="selectUePdfFile"
+                style="padding: 15px"
+                :loading="uePdfLoading"
+              >
+                <img src="../assets/02.svg" alt="" style="width: 14px; height: 14px" />
+                {{ uePdfLoading ? "导入中..." : "导入UE文件" }}
+              </el-button>
+              <div v-if="dbcFiles.length" class="dbc-file-list">
+                <el-select v-model="selectedDbcName" placeholder="已加载 DBC（点击查看）" size="small" class="dbc-summary">
+                  <el-option v-for="file in dbcFiles" :key="file.name" :label="dbcDisplayName(file.name)" :value="file.name">
+                    <span :title="file.name">{{ dbcDisplayName(file.name) }}</span>
+                  </el-option>
+                </el-select>
+                <span class="dbc-count">{{ dbcFiles.length }} 个文件</span>
+                <el-button
+                  v-if="selectedDbcName"
+                  link
+                  type="danger"
+                  size="small"
+                  title="删除当前 DBC"
+                  @click="removeDbcFile(selectedDbcName)"
+                >删除</el-button>
+              </div>
             </div>
           </div>
 
@@ -187,9 +210,42 @@
       type="file"
       ref="dbcFileInput"
       accept=".dbc"
+      multiple
       @change="handleDbcFileUpload"
       style="display: none"
     />
+    <input
+      type="file"
+      ref="uePdfFileInput"
+      accept=".pdf"
+      @change="handleUePdfUpload"
+      style="display: none"
+    />
+
+    <!-- UE 知识图谱弹窗 -->
+    <el-dialog
+      v-model="ueKgDialogVisible"
+      title="UE 知识图谱（可编辑）"
+      width="70%"
+      :close-on-click-modal="false"
+    >
+      <div style="margin-bottom: 8px; color: #606266; font-size: 13px;">
+        以下是 LLM 从 UE 文件生成的知识图谱 JSON，可直接编辑。保存时会校验 JSON 格式。
+      </div>
+      <el-input
+        v-model="ueKgJsonContent"
+        type="textarea"
+        :rows="22"
+        style="font-family: monospace; font-size: 13px;"
+        placeholder="知识图谱 JSON"
+      />
+      <template #footer>
+        <el-button @click="ueReupload">重新上传</el-button>
+        <el-button type="primary" :loading="ueKgSaveLoading" @click="ueSaveToSession">
+          保存到当前会话
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- 主内容区 -->
     <div class="content-layout">
@@ -559,6 +615,25 @@
                 </template>
               </el-table-column>
 
+              <!-- 📹 ADB 操作序列录制（新增） -->
+              <el-table-column label="ADB 录制" width="200" align="center" fixed="right">
+                <template #default="scope">
+                  <div style="display: flex; flex-direction: column; gap: 6px; align-items: center;">
+                    <div style="font-size: 12px; line-height: 1.2;">
+                      <el-tag v-if="scope.row._adb_recorded" size="small" type="success">✅ 已录制</el-tag>
+                    </div>
+                    <el-button
+                      type="primary"
+                      plain
+                      size="small"
+                      @click="openRecordWizard(scope.row)"
+                    >
+                      🎬 {{ scope.row._adb_recorded ? '重新录制' : '录制 ADB 序列' }}
+                    </el-button>
+                  </div>
+                </template>
+              </el-table-column>
+
               <!-- 实际结果 - 不可编辑 -->
               <el-table-column prop="ActualResult" label="实际结果" min-width="180">
                 <template #default="scope">
@@ -845,7 +920,28 @@
                       prop="message"
                       label="消息"
                       min-width="260"
-                    ></el-table-column>
+                    >
+                      <template #default="{ row }">
+                        <div class="execution-log-message">{{ row.message }}</div>
+                        <el-collapse
+                          v-if="row.imageId"
+                          class="step-screenshot-collapse"
+                          @change="(names) => handleStepScreenshotExpand(row, names)"
+                        >
+                          <el-collapse-item title="查看步骤截图" name="image">
+                            <div v-if="row.imageLoading">截图加载中...</div>
+                            <el-alert v-else-if="row.imageError" :title="row.imageError" type="error" :closable="false" />
+                            <el-image
+                              v-else-if="row.imageUrl"
+                              :src="row.imageUrl"
+                              :preview-src-list="[row.imageUrl]"
+                              fit="contain"
+                              class="execution-step-screenshot"
+                            />
+                          </el-collapse-item>
+                        </el-collapse>
+                      </template>
+                    </el-table-column>
                   </el-table>
                 </div>
                 <div v-else>请选择一个测试用例以查看其执行日志。</div>
@@ -908,6 +1004,7 @@
                 </div>
 
                 <div class="video-container">
+                  <el-input v-model="mobileVideoUrl" size="small" placeholder="车机视频流地址（仅用于连接视频）" class="video-url-input" />
                   <!-- 视频流 -->
                   <iframe
                     ref="videoPlayer"
@@ -918,30 +1015,6 @@
                     allowfullscreen
                   >
                   </iframe>
-                  <!-- 标点画布 -->
-                  <canvas
-                    ref="mobileCanvas"
-                    class="overlay-canvas"
-                    @click="onVideoClick($event, 'mobile')"
-                  ></canvas>
-
-                  <!-- 红点提示 -->
-                  <div
-                    v-if="mobilePoint"
-                    class="pin-dot"
-                    :style="{
-                      left: mobilePoint.left + 'px',
-                      top: mobilePoint.top + 'px',
-                    }"
-                  >
-                    <el-tooltip
-                      :content="`(${mobilePoint.x}, ${mobilePoint.y})`"
-                      placement="top"
-                    >
-                      <span class="pin-index">1</span>
-                    </el-tooltip>
-                  </div>
-
                   <!-- 连接按钮 -->
                   <div class="device-controls">
                     <el-button type="primary" @click="connectMobileStream">
@@ -954,6 +1027,7 @@
               <!-- 仪表设备 -->
               <el-tab-pane label="仪表设备" name="six">
                 <div class="video-container">
+                  <el-input v-model="instrumentVideoUrl" size="small" placeholder="仪表视频流地址（仅用于连接视频）" class="video-url-input" />
                   <iframe
                     ref="instrumentVideoPlayer"
                     width="100%"
@@ -980,21 +1054,14 @@
     <el-dialog
       v-model="testConfigVisible"
       title="测试配置"
-      width="440px"
+      width="480px"
       :close-on-click-modal="true"
     >
-      <el-form label-width="150px" style="padding: 0 8px">
+      <el-form label-width="160px" style="padding: 0 8px">
         <el-card shadow="never" style="margin-bottom: 16px">
           <template #header>
             <div style="font-weight: 600">图像匹配相关设置</div>
           </template>
-          <!-- <el-form-item label="图像等待策略">
-                        <el-select v-model="testConfig.waitStrategy" style="width:100%">
-                            <el-option label="固定时间+持续判断" value="fixed_and_poll" />
-                            <el-option label="仅固定时间" value="fixed_only" />
-                            <el-option label="仅持续判断" value="poll_only" />
-                        </el-select>
-                    </el-form-item> -->
           <el-form-item label="前置等待时间">
             <el-input-number
               v-model="testConfig.preWaitSec"
@@ -1016,6 +1083,49 @@
               active-text="是"
               inactive-text="否"
             />
+          </el-form-item>
+          <el-form-item label="安卓执行模式">
+            <el-radio-group v-model="testConfig.explorationMode">
+              <el-radio-button value="approval">审批模式</el-radio-button>
+              <el-radio-button value="exploration">探索模式</el-radio-button>
+            </el-radio-group>
+            <div style="font-size: 12px; color: #999">
+              探索模式自动执行滑动、等待等探索动作；坐标图标点击仍需确认，XML 明确文字继续免审批。
+            </div>
+          </el-form-item>
+        </el-card>
+
+        <el-card shadow="never" style="margin-bottom: 16px">
+          <template #header>
+            <div style="font-weight: 600">ADB 录制服务设置</div>
+          </template>
+          <el-form-item label="ADB 设备 ID">
+            <div style="display: flex; gap: 8px">
+              <el-select
+                v-model="testConfig.recordMachineId"
+                placeholder="请选择或手动输入"
+                style="flex: 1"
+                filterable
+                allow-create
+                default-first-option
+              >
+                <el-option
+                  v-for="d in adbDeviceList"
+                  :key="d.id"
+                  :label="`${d.id} (${d.state})`"
+                  :value="d.id"
+                />
+              </el-select>
+              <el-button
+                type="primary"
+                plain
+                :loading="adbDeviceLoading"
+                @click="fetchAdbDeviceList"
+              >
+                刷新列表
+              </el-button>
+            </div>
+            <div style="font-size: 12px; color: #999">设备唯一标识（ADB 序列号），作为录制记录的唯一索引之一</div>
           </el-form-item>
         </el-card>
         <!-- <el-card shadow="never">
@@ -1218,7 +1328,7 @@
     </el-dialog>
 
     <!-- 图标配置弹窗 -->
-    <el-dialog v-model="iconConfigDialogVisible" title="图标配置" width="55%">
+    <el-dialog v-model="iconConfigDialogVisible" title="图标配置" width="60%">
       <el-alert
         v-if="iconConfigTip"
         :title="iconConfigTip"
@@ -1227,32 +1337,158 @@
         style="margin-bottom: 12px"
       >
       </el-alert>
-      <!-- 图片+画布容器 -->
-      <div style="position: relative; text-align: center; line-height: 0">
-        <!-- 1. 真实截图，保证能看见 -->
-        <img
-          ref="iconRealImg"
-          style="max-width: 100%; height: auto; border: 1px solid #ccc; cursor: crosshair"
-          @click="onImgClick"
-          alt="截图"
-        />
-        <!-- 2. 透明画布，只画点和序号 -->
-        <canvas
-          ref="iconOverlayCanvas"
-          style="
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-          "
-        >
-        </canvas>
+
+      <!-- 模式切换 + 操作按钮 -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <el-radio-group v-model="iconMode" size="default">
+          <el-radio-button value="dots">描点模式</el-radio-button>
+          <el-radio-button value="control">操作模式 (ADB)</el-radio-button>
+        </el-radio-group>
+
+        <div>
+          <el-button size="small" @click="loadIconConfigShot">
+            {{ iconConfigLoading ? '加载中...' : '🔄 刷新画面' }}
+          </el-button>
+        </div>
       </div>
 
-      <!-- 已标点列表 -->
-      <el-table :data="iconDots" style="margin-top: 12px" max-height="220">
+      <!-- 操作模式提示 -->
+      <el-alert
+        v-if="iconMode === 'control'"
+        title="操作模式：单击=Tap，按下拖动=Swipe"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px; font-size: 13px;"
+      />
+
+      <!-- 画面容器（wrap 统一控制精确像素尺寸，内部 img/canvas/事件层 全部 100% 填满 wrap） -->
+      <div style="display: flex; justify-content: center;">
+        <div
+          ref="iconWrap"
+          style="position: relative; line-height: 0;"
+        >
+          <!-- 画面：直接用 <img> 指向 /adb/video（已确认返回的就是 img 元素）
+               好处：1. 没有 iframe 跨域问题 2. 能读到 natural/client 尺寸 3. 没有内部 padding/滚动条占位 -->
+          <img
+            ref="iconVideoPlayer"
+            :src="iconVideoSrc"
+            crossorigin="anonymous"
+            style="display: block; width: 100%; height: 100%; object-fit: contain; background: #000; user-select: none; -webkit-user-drag: none;"
+            alt="adb-video"
+          />
+
+          <!-- 事件层：100% 填满 wrap，永远和画面等大 → wrap 外的空白（右侧/下方）根本没事件层，不可能点到 -->
+          <div
+            ref="iconEventLayer"
+            style="position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%;"
+            :style="{ cursor: iconMode === 'dots' ? 'crosshair' : 'pointer' }"
+            @mousedown="onScreenMouseDown"
+            @mouseup="onScreenMouseUp"
+            @mousemove="onScreenMouseMove"
+            @mouseleave="onScreenMouseUp"
+          ></div>
+
+          <!-- 画布：100% 填满 wrap -->
+          <canvas
+            ref="iconOverlayCanvas"
+            style="position: absolute; inset: 0; z-index: 3; pointer-events: none; width: 100%; height: 100%;"
+          ></canvas>
+        </div>
+      </div>
+
+      <!-- ADB 操作日志 / 操作序列录制（操作模式下） -->
+      <div v-if="iconMode === 'control'" style="margin-top: 10px;">
+        <el-collapse>
+          <el-collapse-item title="ADB 操作记录（可勾选以录制操作序列）" name="1" :disabled="!adbOpLogs.length">
+            <!-- 顶部工具栏 -->
+            <div v-if="adbOpLogs.length" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <el-button size="small" type="primary" plain :disabled="!adbOpLogs.length" @click="clearAdbLogs">
+                  🗑 清空
+                </el-button>
+                <el-button size="small" plain :disabled="!adbOpLogs.length" @click="toggleSelectAllAdbLogs">
+                  {{ isAllAdbLogsSelected ? '取消全选' : '全选' }}
+                </el-button>
+                <el-tag size="small" type="info">
+                  共 {{ adbOpLogs.length }} 条，已选 {{ adbOpSelectedIds.length }} 条
+                </el-tag>
+              </div>
+            </div>
+            <!-- 操作记录表格 -->
+            <el-table
+              v-if="adbOpLogs.length"
+              :data="adbOpLogs"
+              size="small"
+              max-height="320"
+              border
+              stripe
+              style="width: 100%;"
+              @selection-change="onAdbSelectionChange"
+              ref="adbLogsTableRef"
+            >
+              <el-table-column type="selection" width="48" align="center" />
+              <el-table-column type="index" label="序号" width="60" align="center" />
+              <el-table-column label="时间" width="88" align="center">
+                <template #default="{ row }">
+                  <span style="font-size: 12px; color: #909399;">{{ row.time }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作类型" width="90" align="center">
+                <template #default="{ row }">
+                  <el-tag size="small" :type="row.success ? 'success' : 'danger'" style="margin-right: 4px;">
+                    {{ row.type }}
+                  </el-tag>
+                  <el-icon v-if="!row.success" :size="14" color="#F56C6C" title="执行失败">
+                    <WarningFilled />
+                  </el-icon>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作详情">
+                <template #default="{ row }">
+                  <div style="font-size: 13px; line-height: 1.6;">
+                    <template v-if="row.type === 'TAP'">
+                      <strong>点击坐标：</strong>
+                      <code style="background:#f4f4f5; padding: 0 6px; border-radius: 3px;">({{ row.x }}, {{ row.y }})</code>
+                    </template>
+                    <template v-else-if="row.type === 'SWIPE'">
+                      <strong>滑动：</strong>
+                      <code style="background:#f4f4f5; padding: 0 6px; border-radius: 3px;">
+                        ({{ row.x1 }}, {{ row.y1 }}) → ({{ row.x2 }}, {{ row.y2 }})
+                      </code>
+                      <span style="margin-left: 8px; color: #909399;">时长 {{ row.duration }}ms</span>
+                    </template>
+                    <template v-else-if="row.type === 'KEY'">
+                      <strong>按键：</strong>
+                      <code style="background:#f4f4f5; padding: 0 6px; border-radius: 3px;">{{ row.keyCode }}</code>
+                      <span style="margin-left: 8px; color: #909399;">({{ row.keyName }})</span>
+                    </template>
+                    <template v-else>
+                      {{ row.msg }}
+                    </template>
+                    <div style="color: #909399; font-size: 12px; margin-top: 2px;">
+                      ADB 命令：<code style="background:#fffbe6; padding: 0 4px;">{{ row.cmd }}</code>
+                    </div>
+                  </div>
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="72" align="center">
+                <template #default="{ $index }">
+                  <el-button size="small" type="danger" plain link @click="deleteAdbLogAt($index)">
+                    删除
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div v-else style="color: #909399; font-size: 13px; padding: 12px 0; text-align: center;">
+              暂无 ADB 操作记录，在上方画面点击或滑动即可生成
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+
+      <!-- 已标点列表（仅描点模式） -->
+      <el-table v-if="iconMode === 'dots'" :data="iconDots" style="margin-top: 12px" max-height="220">
         <el-table-column label="序号" width="60" type="index" />
         <el-table-column label="名称" min-width="140">
           <template #default="{ row }">
@@ -1270,8 +1506,402 @@
 
       <template #footer>
         <el-button @click="iconConfigDialogVisible = false">关 闭</el-button>
-        <el-button type="primary" @click="submitIconDots">保存坐标</el-button>
+        <el-button v-if="iconMode === 'dots'" type="primary" @click="submitIconDots">保存坐标</el-button>
       </template>
+    </el-dialog>
+
+    <!-- ===================================================================== -->
+    <!-- 🎬 案例 ADB 操作序列录制向导（方案 A：独立 Dialog，与图标配置解耦）     -->
+    <!-- ===================================================================== -->
+    <el-dialog v-model="recDialogVisible" title="ADB录制" width="90%" top="4vh">
+      <el-steps :active="recStep" finish-status="success" align-center style="margin-bottom:18px;">
+        <el-step title="① 初始条件" :description="(() => {
+          const done = (recInitialParsed || []).filter(s => s.seq).length;
+          const skipped = (recInitialParsed || []).filter(s => s.skipped && !s.seq).length;
+          const total = (recInitialParsed || []).length || 1;
+          const finished = done + skipped;
+          const tag = skipped > 0 ? `（含跳过${skipped}）` : '';
+          return finished >= total && total > 0
+            ? `✅ 已完成 ${done}/${total}${tag}`
+            : `录制初始条件（${done}/${total}${tag}）`;
+        })()" />
+        <el-step title="② 操作步骤" :description="(() => {
+          const done = (recActionParsed || []).filter(s => s.seq).length;
+          const skipped = (recActionParsed || []).filter(s => s.skipped && !s.seq).length;
+          const total = (recActionParsed || []).length || 1;
+          const finished = done + skipped;
+          const tag = skipped > 0 ? `（含跳过${skipped}）` : '';
+          return finished >= total && total > 0
+            ? `✅ 已完成 ${done}/${total}${tag}`
+            : `录制操作步骤（${done}/${total}${tag}）`;
+        })()" />
+        <el-step title="③ 预期结果（人工判断）" :description="(recRebooting ? '🔄 车机重启中…' : '判断结果是否符合')" />
+      </el-steps>
+
+      <!-- 案例信息（顶部提示条） -->
+      <el-alert v-if="recCase" type="info" :closable="false" show-icon style="margin-bottom:14px;">
+        <template #title> 
+          当前案例：
+          <b style="margin:0 8px;">[{{ recCase.id }}] {{ recCase.TestCaseID || recCase.TestKey || '(未命名)' }}</b>
+          <span style="font-size:12px; margin-left:10px; color:#606266;">
+            初始条件：{{ (recInitialParsed||[]).filter(s=>s.seq).length }}/{{ (recInitialParsed||[]).length || 0 }} 子步骤
+            <span v-if="(recInitialParsed||[]).filter(s=>s.skipped && !s.seq).length > 0" style="color:#909399;">（跳过{{ (recInitialParsed||[]).filter(s=>s.skipped && !s.seq).length }}）</span>
+            &nbsp;|&nbsp;
+            操作步骤：{{ (recActionParsed||[]).filter(s=>s.seq).length }}/{{ (recActionParsed||[]).length || 0 }} 子步骤
+            <span v-if="(recActionParsed||[]).filter(s=>s.skipped && !s.seq).length > 0" style="color:#909399;">（跳过{{ (recActionParsed||[]).filter(s=>s.skipped && !s.seq).length }}）</span>
+          </span>
+        </template>
+      </el-alert>
+
+      <!-- ====== 阶段1：初始条件 ====== -->
+      <el-card v-if="recStep === 1" shadow="never" style="margin-bottom:12px;">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center; flex-wrap:wrap; gap:8px;">
+            <b style="color:#409EFF;">
+              📝 阶段 1 / 3：录制【初始条件】
+              <span style="font-weight:normal; font-size:13px; margin-left:6px;">
+                · 子步骤 {{ recCurrentInitialStep }} / {{ (recInitialParsed||[]).length || 1 }}
+              </span>
+            </b>
+            <el-tag type="success" effect="plain">初始条件 文本</el-tag>
+          </div>
+        </template>
+
+        <!-- 子步骤导航（可点击跳转） -->
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+          <el-tooltip
+            v-for="(sub, idx) in (recInitialParsed || [])"
+            :key="'init-step-' + idx"
+            :content="sub.text"
+            placement="top"
+            :show-after="300"
+          >
+            <el-tag
+              style="cursor:pointer; padding:4px 10px; font-size:13px;"
+              :effect="(recCurrentInitialStep === sub.idx) ? 'dark' : 'plain'"
+              :type="sub.seq ? 'success' : (sub.skipped ? 'info' : (recCurrentInitialStep === sub.idx ? 'primary' : 'info'))"
+              @click="recJumpInitialStep(sub.idx)"
+            >
+              {{ sub.seq ? '✓ ' : (sub.skipped ? '⏭ ' : '') }}步骤{{ sub.idx }}
+              <span v-if="sub.seq" style="margin-left:4px; font-size:11px; opacity:0.85;">
+                ({{ sub.seq.total_steps }}步)
+              </span>
+              <span v-else-if="sub.skipped" style="margin-left:4px; font-size:11px; opacity:0.85;">
+                (已跳过)
+              </span>
+            </el-tag>
+          </el-tooltip>
+        </div>
+
+        <!-- 当前子步骤文本（高亮显示） -->
+        <div style="background:#f5f7fa;padding:12px 16px;border-radius:6px;white-space:pre-wrap;font-size:13px;line-height:1.7;color:#303133;">
+          <b style="color:#409EFF; margin-right:6px;">
+            ▶ 子步骤{{ recCurrentInitialStep }}：
+          </b>
+          {{ (recInitialParsed || [])[recCurrentInitialStep - 1]?.text || '(无文本)' }}
+        </div>
+
+        <!-- 整段初始条件（折叠显示） -->
+        <el-collapse style="margin-top:10px;">
+          <el-collapse-item title="查看完整初始条件文本" name="full-init">
+            <div style="white-space:pre-wrap; font-size:12px; line-height:1.7; color:#606266;">
+              {{ recCase?.Initial_Condition || '(未填写初始条件)' }}
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </el-card>
+
+      <!-- ====== 阶段2：操作步骤 ====== -->
+      <el-card v-if="recStep === 2" shadow="never" style="margin-bottom:12px;">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center; flex-wrap:wrap; gap:8px;">
+            <b style="color:#E6A23C;">
+              📝 阶段 2 / 3：录制【操作步骤】
+              <span style="font-weight:normal; font-size:13px; margin-left:6px;">
+                · 子步骤 {{ recCurrentActionStep }} / {{ (recActionParsed||[]).length || 1 }}
+              </span>
+            </b>
+            <el-tag type="warning" effect="plain">操作步骤 文本</el-tag>
+          </div>
+        </template>
+
+        <!-- 子步骤导航（可点击跳转） -->
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+          <el-tooltip
+            v-for="(sub, idx) in (recActionParsed || [])"
+            :key="'act-step-' + idx"
+            :content="sub.text"
+            placement="top"
+            :show-after="300"
+          >
+            <el-tag
+              style="cursor:pointer; padding:4px 10px; font-size:13px;"
+              :effect="(recCurrentActionStep === sub.idx) ? 'dark' : 'plain'"
+              :type="sub.seq ? 'success' : (sub.skipped ? 'info' : (recCurrentActionStep === sub.idx ? 'warning' : 'info'))"
+              @click="recJumpActionStep(sub.idx)"
+            >
+              {{ sub.seq ? '✓ ' : (sub.skipped ? '⏭ ' : '') }}步骤{{ sub.idx }}
+              <span v-if="sub.seq" style="margin-left:4px; font-size:11px; opacity:0.85;">
+                ({{ sub.seq.total_steps }}步)
+              </span>
+              <span v-else-if="sub.skipped" style="margin-left:4px; font-size:11px; opacity:0.85;">
+                (已跳过)
+              </span>
+            </el-tag>
+          </el-tooltip>
+        </div>
+
+        <!-- 当前子步骤文本（高亮显示） -->
+        <div style="background:#fdf6ec;padding:12px 16px;border-radius:6px;white-space:pre-wrap;font-size:13px;line-height:1.7;color:#303133;">
+          <b style="color:#E6A23C; margin-right:6px;">
+            ▶ 子步骤{{ recCurrentActionStep }}：
+          </b>
+          {{ (recActionParsed || [])[recCurrentActionStep - 1]?.text || '(无文本)' }}
+        </div>
+
+        <!-- 整段操作步骤（折叠显示） -->
+        <el-collapse style="margin-top:10px;">
+          <el-collapse-item title="查看完整操作步骤文本" name="full-action">
+            <div style="white-space:pre-wrap; font-size:12px; line-height:1.7; color:#606266;">
+              {{ recCase?.Action || '(未填写操作步骤)' }}
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </el-card>
+
+      <!-- ====== 阶段3：预期结果（二选一） ====== -->
+      <el-card v-if="recStep === 3" shadow="never" style="margin-bottom:12px;">
+        <template #header>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <b style="color:#67C23A;">🔍 阶段 3 / 3：请人工核对【预期结果】</b>
+            <el-tag type="success" effect="plain">预期结果 文本</el-tag>
+          </div>
+        </template>
+        <div style="background:#f0f9eb;padding:12px 16px;border-radius:6px;white-space:pre-wrap;font-size:13px;line-height:1.7;color:#303133;">
+          {{ recCase?.Expected_Result || '(未填写预期结果)' }}
+        </div>
+        <el-alert v-if="recRebooting" type="warning" :closable="false" show-icon style="margin-top:14px;">
+          <template #title>
+            🔄 车机重启中… 剩余 {{ recRebootCountdown }}s
+            <span v-if="recRebootResult" style="margin-left:10px; font-size:12px;">（{{ recRebootResult }}）</span>
+          </template>
+          <el-progress :percentage="Math.max(0, Math.min(100, 100 - recRebootCountdown*100/90))" :stroke-width="10" />
+        </el-alert>
+      </el-card>
+
+      <!-- ====== 画面区域（阶段1/阶段2可操作；阶段3只读显示用于核对预期结果） ====== -->
+      <div style="margin-bottom:12px;">
+        <div style="display:flex; justify-content:center; background:#111; padding:10px; border-radius:6px;">
+          <div ref="recWrap" style="position:relative; line-height:0;">
+            <img ref="recImg" :src="recVideoSrc" crossorigin
+                 style="width:100%; height:100%; object-fit:contain; background:#000;"
+                 @load="recOnImgLoaded" />
+            <div v-if="recStep !== 3" ref="recEvLayer" style="position:absolute; inset:0; z-index:2; width:100%; height:100%;"
+                 @mousedown="recOnMouseDown" @mouseup="recOnMouseUp" @mousemove="recOnMouseMove" @mouseleave="recOnMouseUp"></div>
+            <canvas ref="recCanvas" style="position:absolute; inset:0; z-index:3; pointer-events:none; width:100%; height:100%;"></canvas>
+          </div>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; justify-content:center;">
+          <template v-if="recStep !== 3">
+            <el-tag type="info" effect="plain">💡 点击画面 = TAP；按住拖拽 = SWIPE</el-tag>
+            <el-button size="small" @click="recSendKey('KEYCODE_HOME', 'HOME')">🏠 HOME</el-button>
+            <el-button size="small" @click="recSendKey('KEYCODE_BACK', 'BACK')">⬅ BACK</el-button>
+            <el-button size="small" @click="recSendKey('KEYCODE_ENTER', 'ENTER')">⤴ ENTER</el-button>
+            <el-button size="small" @click="recSendKey('KEYCODE_VOLUME_UP', 'VOL+')">🔊 VOL+</el-button>
+            <el-button size="small" @click="recSendKey('KEYCODE_VOLUME_DOWN', 'VOL-')">🔉 VOL-</el-button>
+          </template>
+          <template v-else>
+            <el-tag type="success" effect="plain">💡 仅用于观察画面，核对预期结果是否正确</el-tag>
+          </template>
+          <el-button size="small" :loading="recIsSending" @click="recReloadVideo">🔄 刷新画面</el-button>
+        </div>
+      </div>
+
+      <!-- ====== 操作日志表（阶段1/阶段2显示，阶段3不显示） ====== -->
+      <el-card v-if="recStep !== 3" shadow="never" style="margin-bottom:12px;">
+        <template #header>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <b>📋 ADB 操作日志</b>
+              <el-tag size="small" type="primary">共 {{ recLogs.length }} 条</el-tag>
+              <el-tag v-if="recLogs.length" size="small" type="success" effect="plain">
+                ✅ 成功 {{ recLogs.filter(l=>l.success).length }}
+              </el-tag>
+              <el-tag v-if="recLogs.some(l=>!l.success)" size="small" type="danger" effect="plain">
+                ⚠️ 失败 {{ recLogs.filter(l=>!l.success).length }}
+              </el-tag>
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <el-button size="small" type="danger" plain @click="recClearLogs" :disabled="!recLogs.length">🗑 清空日志</el-button>
+              <el-button size="small" @click="recToggleSelectAll" :disabled="!recLogs.length">
+                {{ recLogsAllSelected ? '☑ 取消全选' : '☑ 全选' }}
+              </el-button>
+              <el-tag size="small" type="warning" v-if="recLogsSelected.length">选中 {{ recLogsSelected.length }} 条（保存时按时间升序，默认全量）</el-tag>
+            </div>
+          </div>
+        </template>
+
+        <el-table ref="recLogsTableRef" :data="recLogs" size="small" border stripe max-height="240"
+                  @selection-change="recOnSelectionChange" row-key="id">
+          <el-table-column type="selection" width="42" align="center" reserve-selection />
+          <el-table-column type="index" label="#" width="48" align="center" />
+          <el-table-column prop="tsStr" label="时间" width="82" align="center" />
+          <el-table-column label="类型" width="72" align="center">
+            <template #default="scope">
+              <el-tag size="small" :type="scope.row.success ? 'success' : 'danger'" effect="dark">
+                {{ scope.row.success ? '' : '⚠️ ' }}{{ scope.row.type }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作详情" min-width="280">
+            <template #default="scope">
+              <div style="line-height:1.5;">
+                <b v-if="scope.row.type==='TAP'">{{ scope.row.x }}, {{ scope.row.y }}</b>
+                <b v-else-if="scope.row.type==='SWIPE'">{{ scope.row.x1 }},{{ scope.row.y1 }} → {{ scope.row.x2 }},{{ scope.row.y2 }}
+                  <span style="font-weight:normal;color:#909399; margin-left:6px;">
+                    [{{ scope.row.duration }}ms]
+                  </span>
+                </b>
+                <b v-else-if="scope.row.type==='KEY'">{{ scope.row.keyName }}
+                  <span style="font-weight:normal;color:#909399; margin-left:6px;">(keycode: {{ scope.row.keyCode }})</span>
+                </b>
+                <div style="font-size:11px; color:#909399; margin-top:4px; font-family:Consolas,Monospace; word-break:break-all;">
+                  $ adb {{ scope.row.cmd }}
+                </div>
+                <div v-if="!scope.row.success && scope.row.msg" style="color:#F56C6C; font-size:11px; margin-top:2px;">
+                  ❌ {{ scope.row.msg }}
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="80" align="center" fixed="right">
+            <template #default="scope">
+              <el-button type="danger" link size="small" @click="recDeleteLogAt(scope.$index)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
+      <!-- ====== 阶段底部按钮区 ====== -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; padding-top:12px; border-top:1px dashed #ebeef5;">
+
+        <!-- 阶段1：初始条件 - 支持子步骤切换 -->
+        <div v-if="recStep === 1" style="width:100%; display:flex; justify-content:space-between;">
+          <div style="display:flex; gap:10px;">
+            <el-button @click="recDialogVisible = false">取消录制</el-button>
+            <el-button
+              type="info"
+              plain
+              :disabled="recCurrentInitialStep <= 1"
+              @click="recPrevInitialStep"
+            >
+              ← 上一子步骤
+            </el-button>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <el-button type="warning" plain :disabled="!recLogs.length" @click="recClearLogs">🗑 清空本步日志</el-button>
+            <el-button
+              type="info"
+              plain
+              :disabled="recIsSending || recSubmitting"
+              :loading="recSubmitting"
+              @click="recSkipInitial"
+            >
+              <template v-if="recCurrentInitialStep < (recInitialParsed||[]).length">
+                ⏭ 跳过子步骤{{ recCurrentInitialStep }} → 下一步
+              </template>
+              <template v-else>
+                ⏭ 跳过并完成初始条件 → 进入操作步骤
+              </template>
+            </el-button>
+            <el-button
+              type="primary"
+              :disabled="!recLogs.length || recIsSending || recSubmitting"
+              :loading="recSubmitting"
+              @click="recSaveInitial"
+            >
+              <template v-if="recSubmitting">
+                上传中…
+              </template>
+              <template v-else-if="recCurrentInitialStep < (recInitialParsed||[]).length">
+                ✅ 保存子步骤{{ recCurrentInitialStep }} → 下一步
+              </template>
+              <template v-else>
+                ✅ 完成初始条件（{{ (recInitialParsed||[]).length }}/{{ (recInitialParsed||[]).length }}）→ 进入操作步骤
+              </template>
+            </el-button>
+          </div>
+        </div>
+
+        <!-- 阶段2：操作步骤 - 支持子步骤切换 -->
+        <div v-else-if="recStep === 2" style="width:100%; display:flex; justify-content:space-between;">
+          <div style="display:flex; gap:10px;">
+            <el-button @click="recDialogVisible = false">取消录制</el-button>
+            <template v-if="recCurrentActionStep > 1">
+              <el-button
+                type="info"
+                plain
+                @click="recPrevActionStep"
+              >
+                ← 上一子步骤
+              </el-button>
+            </template>
+            <template v-else>
+              <el-button type="info" plain @click="recBackTo(1)">← 返回初始条件</el-button>
+            </template>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <el-button type="warning" plain :disabled="!recLogs.length" @click="recClearLogs">🗑 清空本步日志</el-button>
+            <el-button
+              type="info"
+              plain
+              :disabled="recIsSending || recSubmitting"
+              :loading="recSubmitting"
+              @click="recSkipAction"
+            >
+              <template v-if="recCurrentActionStep < (recActionParsed||[]).length">
+                ⏭ 跳过子步骤{{ recCurrentActionStep }} → 下一步
+              </template>
+              <template v-else>
+                ⏭ 跳过并完成操作步骤 → 进入预期结果
+              </template>
+            </el-button>
+            <el-button
+              type="primary"
+              :disabled="!recLogs.length || recIsSending || recSubmitting"
+              :loading="recSubmitting"
+              @click="recSaveAction"
+            >
+              <template v-if="recSubmitting">
+                上传中…
+              </template>
+              <template v-else-if="recCurrentActionStep < (recActionParsed||[]).length">
+                ✅ 保存子步骤{{ recCurrentActionStep }} → 下一步
+              </template>
+              <template v-else>
+                ✅ 完成操作步骤（{{ (recActionParsed||[]).length }}/{{ (recActionParsed||[]).length }}）→ 进入预期结果
+              </template>
+            </el-button>
+          </div>
+        </div>
+
+        <!-- 阶段3：预期结果二选一 -->
+        <div v-else-if="recStep === 3" style="width:100%; display:flex; justify-content:space-between;">
+          <div>
+            <el-button @click="recDialogVisible = false">取消</el-button>
+            <el-button type="info" plain :disabled="recRebooting || recSubmitting" @click="recBackTo(2)">← 重录操作步骤</el-button>
+          </div>
+          <div style="display:flex; gap:14px;">
+            <el-button type="danger" size="large" :disabled="recRebooting || recSubmitting" :loading="recSubmitting" @click="recExpectedWrong">
+              🔴 预期结果错误，重新操作（ADB Reboot）
+            </el-button>
+            <el-button type="success" size="large" :disabled="recRebooting || recSubmitting" :loading="recSubmitting" @click="recExpectedCorrect">
+              🟢 预期结果正确，保存录制（上传后台）
+            </el-button>
+          </div>
+        </div>
+
+      </div>
     </el-dialog>
 
     <!-- 知识图谱弹窗组件 -->
@@ -1357,21 +1987,21 @@
           <pre style="text-align: left">{{ logDetails.ignition_logs }}</pre>
         </el-tab-pane>
         <el-tab-pane v-if="logDetails.images" label="测试图片" name="images">
-          <!-- 新增图片展示栏 -->
-          <!-- <div v-for="(image, index) in logDetails.images" :key="index">
-                        <p><strong>{{ image.filename }}</strong></p>
-                        <img :src="'data:image/png;base64,' + image.base64_data" alt="Test Image"
-                            style="width: 100%; margin-bottom: 10px;" />
-                    </div> -->
-          <el-collapse v-model="activeCodeFile">
+          <!-- 测试图片：列表只带 filename（无 base64），展开下拉时才懒加载单张图 -->
+          <el-collapse v-model="activeImageFile" @change="handleImageExpand">
             <el-collapse-item
               v-for="(image, index) in logDetails.images"
               :key="index"
               :title="image.filename"
+              :name="image.filename"
             >
-              <img
-                :src="'data:image/png;base64,' + image.base64_data"
-                alt="Test Image"
+              <div v-if="image.loading" style="padding:8px 0;">加载中...</div>
+              <el-alert v-else-if="image.error" :title="image.error" type="error" :closable="false" />
+              <el-image
+                v-else-if="image.url"
+                :src="image.url"
+                :preview-src-list="[image.url]"
+                fit="contain"
                 style="width: 100%; margin-bottom: 10px"
               />
             </el-collapse-item>
@@ -1573,6 +2203,141 @@
         </span>
       </template>
     </el-dialog>
+    <el-dialog
+      v-model="mobileAgentConfirmVisible"
+      title="请审批 Mobile-Agent 候选点击"
+      width="76%"
+      :close-on-click-modal="false"
+      :close-on-press-escape="false"
+      :show-close="true"
+      :before-close="closeMobileAgentConfirmation"
+      append-to-body
+    >
+      <div v-if="mobileAgentConfirmation" class="mobile-agent-confirmation">
+        <el-alert
+          type="warning"
+          :closable="false"
+          show-icon
+          :title="mobileAgentConfirmation.question"
+        />
+        <div class="mobile-agent-confirm-meta">
+          <span class="mobile-agent-current-purpose">
+            <strong>模型当前目的：</strong>{{ mobileAgentConfirmation.current_purpose || "模型未说明当前目的" }}
+          </span>
+          <span><strong>完整测试任务：</strong>{{ mobileAgentConfirmation.goal }}</span>
+          <span v-if="!['question', 'interaction'].includes(mobileAgentConfirmation.source)"><strong>点击坐标：</strong>{{ mobileAgentConfirmation.coordinate }}</span>
+        </div>
+        <el-alert
+          v-if="mobileAgentConfirmation.source === 'interaction'"
+          :title="mobileAgentConfirmation.question || 'Mobile-Agent 需要用户提供下一步操作'"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="mb-3"
+        />
+        <div v-if="mobileAgentConfirmation.source === 'interaction'" class="mobile-agent-interaction-image">
+          <div class="mobile-agent-image-title">当前页面截图（点击可放大）</div>
+          <el-image
+            :src="mobileAgentConfirmation.screenshot_before_url"
+            :preview-src-list="[mobileAgentConfirmation.screenshot_before_url]"
+            fit="contain"
+            class="mobile-agent-confirm-image mobile-agent-interaction-screenshot"
+          />
+        </div>
+        <el-row v-if="mobileAgentConfirmation.source !== 'interaction'" :gutter="16" class="mobile-agent-confirm-images">
+          <el-col :span="12">
+            <div class="mobile-agent-image-title">当前截图</div>
+            <el-image
+              :src="mobileAgentConfirmation.screenshot_before_url"
+              :preview-src-list="[mobileAgentConfirmation.screenshot_before_url]"
+              fit="contain"
+              class="mobile-agent-confirm-image"
+            />
+          </el-col>
+          <el-col :span="12">
+            <div class="mobile-agent-image-title">
+              {{ mobileAgentConfirmation.source === "history" ? "历史位置（尚未点击）" : "模型候选位置（尚未点击）" }}
+            </div>
+            <div class="mobile-agent-correction-canvas">
+              <img
+                :src="mobileAgentCorrectionMode ? mobileAgentConfirmation.screenshot_before_url : mobileAgentConfirmation.screenshot_after_url"
+                class="mobile-agent-confirm-image mobile-agent-clickable-image"
+                @click="selectMobileAgentCoordinate"
+              />
+              <span
+                v-if="mobileAgentCorrectionMode && mobileAgentCorrectedCoordinate"
+                class="mobile-agent-correction-marker"
+                :style="mobileAgentCorrectionMarkerStyle"
+              />
+            </div>
+          </el-col>
+        </el-row>
+        <el-form label-position="top">
+          <el-form-item
+            v-if="mobileAgentConfirmation.source === 'question'"
+            label="请选择一个准备执行的操作；也可以全部不选"
+          >
+            <el-radio-group v-model="mobileAgentSelectedCandidate" class="mobile-agent-candidate-list">
+              <el-radio
+                v-for="(candidate, index) in mobileAgentConfirmation.candidates || []"
+                :key="index"
+                :value="index"
+                border
+              >
+                候选 {{ index + 1 }}：{{ candidate.label }}
+                （{{ candidate.action === 'swipe' ? `滑动 ${candidate.coordinate} → ${candidate.coordinate2}` : `点击 ${candidate.coordinate}` }}）
+              </el-radio>
+              <el-radio :value="-1" border>全部不选，拒绝这些候选</el-radio>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-else-if="mobileAgentConfirmation.source !== 'interaction'" label="红框位置是否正确，是否允许执行点击？">
+            <el-radio-group v-model="mobileAgentConfirmSuccess">
+              <el-radio-button :value="true">位置正确，执行点击</el-radio-button>
+              <el-radio-button :value="false">位置错误，不要点击</el-radio-button>
+            </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="!['question', 'interaction'].includes(mobileAgentConfirmation.source)">
+            <el-button
+              :type="mobileAgentCorrectionMode ? 'warning' : 'default'"
+              @click="mobileAgentCorrectionMode = !mobileAgentCorrectionMode"
+            >
+              {{ mobileAgentCorrectionMode ? "请直接点击右侧图片选择正确位置" : "纠错并重新定义位置" }}
+            </el-button>
+            <span v-if="mobileAgentCorrectedCoordinate" class="mobile-agent-corrected-coordinate">
+              新坐标：{{ mobileAgentCorrectedCoordinate }}
+            </span>
+          </el-form-item>
+          <el-form-item v-if="!['question', 'interaction'].includes(mobileAgentConfirmation.source) && mobileAgentConfirmSuccess">
+            <span>步骤是否完成由 Mobile-Agent 根据执行结果自动判断；用户只需确认或纠正点击位置。</span>
+          </el-form-item>
+          <el-form-item :label="mobileAgentConfirmation.source === 'interaction' ? '请描述下一步具体操作' : mobileAgentConfirmation.source === 'question' ? '补充说明（全部不选时必填）' : '拒绝时请说明正确图标的外观或位置'">
+            <el-input
+              v-model="mobileAgentConfirmDescription"
+              type="textarea"
+              :rows="3"
+              placeholder="例如：正确按钮在底部导航栏，是地图图标右侧的彩色四宫格"
+            />
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button
+          type="danger"
+          plain
+          :loading="mobileAgentConfirmSubmitting"
+          @click="closeMobileAgentConfirmation"
+        >
+          关闭并终止本次测试
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="mobileAgentConfirmSubmitting"
+          @click="submitMobileAgentConfirmation"
+        >
+          提交审批
+        </el-button>
+      </template>
+    </el-dialog>
     <!-- 底部栏 -->
   </div>
 </template>
@@ -1618,6 +2383,430 @@ export default {
     const currentExecutingId = ref("");
     const pollingIntervals = {};
     let pollingInterval = null;
+
+    // Mobile-Agent 点击前人工审批
+    const mobileAgentConfirmVisible = ref(false);
+    const mobileAgentConfirmation = ref(null);
+    const mobileAgentConfirmSuccess = ref(true);
+    const mobileAgentConfirmDescription = ref("");
+    const mobileAgentCorrectionMode = ref(false);
+    const mobileAgentCorrectedCoordinate = ref(null);
+    const mobileAgentStepCompleted = ref(false);
+    const mobileAgentSelectedCandidate = ref(null);
+    const mobileAgentConfirmSubmitting = ref(false);
+    const displayedMobileAgentConfirmations = new Set();
+    const displayedMobileAgentEvents = new Set();
+    const displayedMobileAgentOutputs = new Set();
+    // Mobile-Agent 事件必须按测试会话写回启动它的用例行，不能使用当前选中行。
+    // 否则并行或前后相邻的测试会把不同 test_id 的日志拼在一起。
+    const mobileAgentSessionCaseIds = new Map();
+    const mobileAgentLastEventTimes = new Map();
+    let mobileAgentConfirmPolling = null;
+    let mobileAgentConfirmationFetching = false;
+    let mobileAgentPollEmptyCount = 0;
+    const MOBILE_AGENT_POLL_BASE_MS = 3000;
+    const MOBILE_AGENT_POLL_MAX_MS = 15000;
+    const MOBILE_AGENT_POLL_INTERVAL_MS = MOBILE_AGENT_POLL_BASE_MS; // kept for reference
+
+    const activeMobileAgentTestIds = () => {
+      const ids = new Set();
+      const currentId = currentTestId.value?.trim();
+      const confirmingId = mobileAgentConfirmation.value?.test_id?.trim();
+      if (currentId) ids.add(currentId);
+      if (confirmingId) ids.add(confirmingId);
+      // currentTestId 有时未同步（SSE 时序/刷新后丢失），用 sessionCaseIds 的 key（真实
+      // test_id，L5463 设置）兜底，确保事件流与审批轮询始终能拉到活跃会话。
+      for (const key of mobileAgentSessionCaseIds.keys()) {
+        const k = String(key || "").trim();
+        if (k) ids.add(k);
+      }
+      return Array.from(ids);
+    };
+
+    const cleanupMobileAgentSession = (testId) => {
+      const normalizedId = testId?.trim();
+      if (!normalizedId) return;
+      mobileAgentSessionCaseIds.delete(normalizedId);
+      mobileAgentLastEventTimes.delete(normalizedId);
+      if (currentTestId.value === normalizedId) currentTestId.value = "";
+    };
+
+    const appendMobileAgentExecutionLog = (message, testId = "", imageId = "") => {
+      const caseId = testId
+        ? (mobileAgentSessionCaseIds.get(testId) || currentExecutingId.value || selectedCase.value)
+        : (selectedCase.value || currentExecutingId.value);
+      if (!caseId || !message) return;
+      if (!executionLogs.value[caseId]) executionLogs.value[caseId] = [];
+      executionLogs.value[caseId].push({
+        log_id: executionLogs.value[caseId].length + 1,
+        time: new Date().toLocaleString("zh-CN", {
+          hour12: false,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        }).replace(/\//g, "-"),
+        message,
+        imageId,
+        testId,
+        imageUrl: "",
+        imageLoading: false,
+        imageError: "",
+      });
+    };
+
+    const handleStepScreenshotExpand = async (row, names) => {
+      const expanded = Array.isArray(names) ? names.includes("image") : names === "image";
+      if (!expanded) {
+        if (row.imageUrl) URL.revokeObjectURL(row.imageUrl);
+        row.imageUrl = "";
+        return;
+      }
+      if (!row.imageId || row.imageUrl || row.imageLoading) return;
+      row.imageLoading = true;
+      row.imageError = "";
+      try {
+        const response = await fetch(
+          `/dev-api/mobile-agent/events/${encodeURIComponent(row.imageId)}/image?test_id=${encodeURIComponent(row.testId || "")}`,
+          { cache: "force-cache" }
+        );
+        if (!response.ok) throw new Error(`截图加载失败（${response.status}）`);
+        row.imageUrl = URL.createObjectURL(await response.blob());
+      } catch (error) {
+        row.imageError = error.message || "截图加载失败";
+      } finally {
+        row.imageLoading = false;
+      }
+    };
+
+    const fetchMobileAgentConfirmations = async () => {
+      if (mobileAgentConfirmVisible.value || mobileAgentConfirmationFetching) return;
+      mobileAgentConfirmationFetching = true;
+      try {
+        const testIds = activeMobileAgentTestIds();
+      // 刷新页面后内存中的 test_id 映射会丢失。此时只恢复后端唯一的 pending
+      // confirmation；若存在多个会话则不跨 session 猜测，仍等待明确 test_id。
+      if (!testIds.length) {
+        try {
+          const response = await fetch(
+            "/dev-api/mobile-agent/confirmations/pending",
+            { cache: "no-store" }
+          );
+          if (!response.ok) return;
+          const payload = await response.json();
+          const allPending = payload?.data || [];
+          const sessionIds = [...new Set(allPending.map((item) => item.test_id).filter(Boolean))];
+          if (sessionIds.length !== 1) return;
+          const restoredTestId = sessionIds[0];
+          currentTestId.value = restoredTestId;
+          testIds.push(restoredTestId);
+        } catch (error) {
+          console.debug("恢复 Mobile-Agent 确认会话失败", error);
+          return;
+        }
+      }
+      try {
+        const responses = await Promise.all(testIds.map(async (testId) => {
+          const response = await fetch(
+            `/dev-api/mobile-agent/confirmations/pending?test_id=${encodeURIComponent(testId)}`,
+            { cache: "no-store" }
+          );
+          if (!response.ok) return null;
+          const payload = await response.json();
+          return payload?.data?.[0] || null;
+        }));
+        const pending = responses.filter(Boolean).sort(
+          (a, b) => Number(a.created_at || 0) - Number(b.created_at || 0)
+        )[0];
+        if (!pending) {
+          // 无 pending：累加空结果计数，用于退避
+          mobileAgentPollEmptyCount++;
+          return;
+        }
+        // 有 pending：重置退避计数
+        mobileAgentPollEmptyCount = 0;
+        // 请求发出后弹窗可能已经打开；旧轮询响应不得覆盖用户正在编辑的表单。
+        if (mobileAgentConfirmVisible.value) return;
+        const testId = pending.test_id;
+        if (pending.test_id !== testId) return;
+        if (!displayedMobileAgentConfirmations.has(pending.confirmation_id)) {
+          displayedMobileAgentConfirmations.add(pending.confirmation_id);
+          const sourceText = pending.source === "history"
+            ? `命中历史坐标 ${pending.coordinate}`
+            : pending.source === "interaction"
+            ? "模型请求用户指导"
+            : `模型候选坐标 ${pending.coordinate}`;
+          const output = pending.agent_output || "模型已生成点击动作";
+          const outputKey = `${testId}:${output}`;
+          if (!displayedMobileAgentOutputs.has(outputKey)) {
+            displayedMobileAgentOutputs.add(outputKey);
+            appendMobileAgentExecutionLog(`[Mobile-Agent 第${pending.step_id || "?"}步]\n${output}`, testId);
+          }
+          appendMobileAgentExecutionLog(`[Mobile-Agent 第${pending.step_id || "?"}步] ${sourceText}，等待用户审批`, testId);
+        }
+        const isNewConfirmation =
+          mobileAgentConfirmation.value?.confirmation_id !== pending.confirmation_id;
+        mobileAgentConfirmation.value = pending;
+        // 同一审批的轮询刷新必须保留用户已选择的 radio 和补充说明。
+        if (isNewConfirmation) {
+          mobileAgentConfirmSuccess.value = pending.source !== "interaction";
+          mobileAgentConfirmDescription.value = "";
+          mobileAgentCorrectionMode.value = false;
+          mobileAgentCorrectedCoordinate.value = null;
+          mobileAgentStepCompleted.value = false;
+          mobileAgentSelectedCandidate.value = pending.source === "question" ? null : 0;
+        }
+        mobileAgentConfirmVisible.value = true;
+      } catch (error) {
+        console.debug("轮询 Mobile-Agent 确认任务失败", error);
+      }
+      } finally {
+        mobileAgentConfirmationFetching = false;
+      }
+    };
+
+    const fetchMobileAgentEvents = async () => {
+      const testIds = activeMobileAgentTestIds();
+      if (!testIds.length) return;
+      try {
+        for (const testId of testIds) {
+          const since = mobileAgentLastEventTimes.get(testId) || (Date.now() / 1000 - 5);
+          const response = await fetch(
+            `/dev-api/mobile-agent/events?since=${encodeURIComponent(since)}&limit=100&test_id=${encodeURIComponent(testId)}`,
+            { cache: "no-store" }
+          );
+          if (!response.ok) continue;
+          const payload = await response.json();
+          for (const event of payload?.data || []) {
+          if (event.test_id !== testId) continue;
+          mobileAgentLastEventTimes.set(
+            testId,
+            Math.max(
+              mobileAgentLastEventTimes.get(testId) || 0,
+              Number(event.created_at || 0)
+            )
+          );
+          if (displayedMobileAgentEvents.has(event.event_id)) continue;
+          displayedMobileAgentEvents.add(event.event_id);
+          const output = event.agent_output || "模型已生成动作";
+          const outputKey = `${testId}:${output}`;
+          const status = event.status || "candidate";
+          if (status === "candidate") {
+            if (displayedMobileAgentOutputs.has(outputKey)) continue;
+            displayedMobileAgentOutputs.add(outputKey);
+          }
+          const statusText = status === "executed"
+            ? "ADB 已执行"
+            : status === "blocked"
+            ? "执行器已拦截"
+            : status === "completed"
+            ? "阶段完成"
+            : "模型候选";
+          const eventPrefix = status === "completed"
+            ? `[安卓执行阶段][${statusText}]`
+            : `[Mobile-Agent 第${event.step_id || "?"}步][${statusText}]`;
+          appendMobileAgentExecutionLog(
+            `${eventPrefix}${event.exploration_mode === "exploration" ? "[探索模式]" : ""}\n${output}`,
+            testId,
+            event.image_id || ""
+          );
+          }
+        }
+      } catch (error) {
+        console.debug("轮询 Mobile-Agent 输出失败", error);
+      }
+    };
+
+    const selectMobileAgentCoordinate = (event) => {
+      if (!mobileAgentCorrectionMode.value) return;
+      const image = event.currentTarget;
+      const rect = image.getBoundingClientRect();
+      if (!rect.width || !rect.height || !image.naturalWidth || !image.naturalHeight) return;
+      const x = Math.round((event.clientX - rect.left) * image.naturalWidth / rect.width);
+      const y = Math.round((event.clientY - rect.top) * image.naturalHeight / rect.height);
+      mobileAgentCorrectedCoordinate.value = [x, y];
+      mobileAgentConfirmSuccess.value = true;
+    };
+
+    const mobileAgentCorrectionMarkerStyle = computed(() => {
+      const coordinate = mobileAgentCorrectedCoordinate.value;
+      const confirmation = mobileAgentConfirmation.value;
+      if (!coordinate || !confirmation) return {};
+      return {
+        left: `${coordinate[0] / confirmation.image_width * 100}%`,
+        top: `${coordinate[1] / confirmation.image_height * 100}%`,
+      };
+    });
+
+    const submitMobileAgentConfirmation = async () => {
+      const confirmation = mobileAgentConfirmation.value;
+      if (!confirmation || mobileAgentConfirmSubmitting.value) return;
+      const confirmationTestId = confirmation.test_id?.trim();
+      if (!confirmationTestId) return;
+      if (mobileAgentCorrectionMode.value && !mobileAgentCorrectedCoordinate.value) {
+        ElMessage.warning("请在右侧图片上点击正确位置");
+        return;
+      }
+      const isQuestion = confirmation.source === "question";
+      const isInteraction = confirmation.source === "interaction";
+      if (isInteraction && !mobileAgentConfirmDescription.value.trim()) {
+        ElMessage.warning("请描述 Mobile-Agent 下一步应执行的具体操作");
+        return;
+      }
+      if (isQuestion && mobileAgentSelectedCandidate.value === null) {
+        ElMessage.warning("请选择一个候选操作，或选择全部不选");
+        return;
+      }
+      if (isQuestion && mobileAgentSelectedCandidate.value === -1 && !mobileAgentConfirmDescription.value.trim()) {
+        ElMessage.warning("全部不选时请说明模型下一步应该怎么做");
+        return;
+      }
+      if (!isInteraction && !mobileAgentConfirmSuccess.value && !mobileAgentConfirmDescription.value.trim()) {
+        ElMessage.warning("拒绝时请补充正确图标的外观或位置");
+        return;
+      }
+      mobileAgentConfirmSubmitting.value = true;
+      try {
+        const response = await fetch(
+          `/dev-api/mobile-agent/confirmations/${encodeURIComponent(confirmation.confirmation_id)}/respond`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              test_id: confirmationTestId,
+              success: isInteraction ? false : isQuestion ? mobileAgentSelectedCandidate.value >= 0 : mobileAgentConfirmSuccess.value,
+              description: mobileAgentConfirmDescription.value.trim(),
+              coordinate: mobileAgentCorrectedCoordinate.value,
+              step_completed: false,
+              selected_index: isQuestion && mobileAgentSelectedCandidate.value >= 0
+                ? mobileAgentSelectedCandidate.value
+                : null,
+            }),
+          }
+        );
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `HTTP ${response.status}`);
+        }
+        ElMessage.success(
+          (isQuestion ? mobileAgentSelectedCandidate.value >= 0 : mobileAgentConfirmSuccess.value)
+            ? "已批准，正在执行点击"
+            : "已拒绝该位置，Mobile-Agent 将重新定位"
+        );
+        const actionText = isInteraction
+          ? `用户提供下一步指导：${mobileAgentConfirmDescription.value.trim()}`
+          : isQuestion
+          ? mobileAgentSelectedCandidate.value >= 0
+            ? `用户选择候选 ${mobileAgentSelectedCandidate.value + 1}，正在执行点击`
+            : `用户拒绝全部候选，反馈：${mobileAgentConfirmDescription.value.trim()}`
+          : mobileAgentCorrectedCoordinate.value
+          ? `用户纠错并批准，新坐标 ${mobileAgentCorrectedCoordinate.value}，正在执行点击`
+          : mobileAgentConfirmSuccess.value
+            ? `用户批准坐标 ${confirmation.coordinate}，正在执行点击`
+            : `用户拒绝坐标 ${confirmation.coordinate}，反馈：${mobileAgentConfirmDescription.value.trim()}。Mobile-Agent 将重新定位，完成纠正前禁止结束任务`;
+        appendMobileAgentExecutionLog(
+          `[Mobile-Agent 第${confirmation.step_id || "?"}步] ${actionText}`,
+          confirmationTestId
+        );
+        mobileAgentConfirmVisible.value = false;
+        mobileAgentConfirmation.value = null;
+        // 提交接口成功后立即释放按钮；下一条审批由后台轮询获取，不阻塞当前交互。
+        mobileAgentConfirmSubmitting.value = false;
+        void fetchMobileAgentConfirmations();
+      } catch (error) {
+        ElMessage.error(`提交点击审批失败：${error.message}`);
+      } finally {
+        mobileAgentConfirmSubmitting.value = false;
+      }
+    };
+
+    const closeMobileAgentConfirmation = async (done) => {
+      const confirmation = mobileAgentConfirmation.value;
+      const testId = confirmation?.test_id?.trim();
+      if (!confirmation || !testId || mobileAgentConfirmSubmitting.value) {
+        if (typeof done === "function") done();
+        return;
+      }
+      try {
+        await ElMessageBox.confirm(
+          "关闭后将视为拒绝继续提供确认，并立即终止当前测试和 Mobile-Agent 推理。是否继续？",
+          "终止当前测试",
+          {
+            confirmButtonText: "拒绝确认并终止",
+            cancelButtonText: "继续审批",
+            type: "warning",
+          }
+        );
+      } catch (_) {
+        return;
+      }
+
+      mobileAgentConfirmSubmitting.value = true;
+      try {
+        const response = await fetch(
+          `/dev-api/mobile-agent/confirmations/${encodeURIComponent(confirmation.confirmation_id)}/dismiss`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              test_id: testId,
+              description: "用户关闭确认弹窗，拒绝继续提供确认并终止当前测试。",
+            }),
+          }
+        );
+        if (!response.ok) {
+          const message = await response.text();
+          throw new Error(message || `HTTP ${response.status}`);
+        }
+        appendMobileAgentExecutionLog(
+          `[Mobile-Agent 第${confirmation.step_id || "?"}步] 用户关闭确认弹窗，已拒绝继续确认并终止当前测试`,
+          testId
+        );
+        mobileAgentConfirmVisible.value = false;
+        mobileAgentConfirmation.value = null;
+        isDebugRunning.value = false;
+        currentExecutingId.value = "";
+        stopPolling();
+        cleanupMobileAgentSession(testId);
+        if (typeof done === "function") done();
+        ElMessage.info("已拒绝确认，当前测试和 Mobile-Agent 已终止");
+      } catch (error) {
+        ElMessage.error(`终止当前测试失败：${error.message}`);
+      } finally {
+        mobileAgentConfirmSubmitting.value = false;
+      }
+    };
+
+    onMounted(() => {
+      fetchMobileAgentEvents();
+      fetchMobileAgentConfirmations();
+      const pollLoop = () => {
+        // 活跃判断改用 activeMobileAgentTestIds()（含 sessionCaseIds 兜底），
+        // 避免 currentTestId 未同步（SSE 时序/刷新后丢失）时误判"无活跃测试"而停拉事件流。
+        const activeIds = activeMobileAgentTestIds();
+        if (!isDebugRunning.value && !mobileAgentConfirmVisible.value && !activeIds.length) {
+          // 无活跃测试：清空退避计数，低频兜底轮询（15s）
+          mobileAgentPollEmptyCount = 0;
+          mobileAgentConfirmPolling = setTimeout(pollLoop, MOBILE_AGENT_POLL_MAX_MS);
+          return;
+        }
+        fetchMobileAgentEvents();
+        fetchMobileAgentConfirmations();
+        // 动态间隔：空结果越多间隔越长（3s → 6s → 12s → 15s 封顶）
+        const nextDelay = Math.min(
+          MOBILE_AGENT_POLL_BASE_MS * Math.pow(2, mobileAgentPollEmptyCount),
+          MOBILE_AGENT_POLL_MAX_MS
+        );
+        mobileAgentConfirmPolling = setTimeout(pollLoop, nextDelay);
+      };
+      mobileAgentConfirmPolling = setTimeout(pollLoop, MOBILE_AGENT_POLL_BASE_MS);
+    });
+
+    onUnmounted(() => {
+      if (mobileAgentConfirmPolling) clearTimeout(mobileAgentConfirmPolling);
+    });
 
     const default_url = ref("http://172.23.96.54:8000");
     const url = ref(default_url.value);
@@ -2036,6 +3225,13 @@ export default {
     const { proxy } = getCurrentInstance();
     const videoPlayer = ref(null);
     const instrumentVideoPlayer = ref(null);
+    const mobileVideoUrl = ref("");
+    const instrumentVideoUrl = ref("");
+    const selectedDbcName = ref("");
+    const dbcDisplayName = (name) => {
+      const value = String(name || "");
+      return value.length > 14 ? `${value.slice(0, 11)}...` : value;
+    };
 
     const activeName = ref("first");
     const activeDevice = ref("five");
@@ -2186,12 +3382,121 @@ export default {
     const iconConfigLoading = ref(false);
     const iconDots = ref([]);
     const iconRealImg = ref(null);
+    const iconWrap = ref(null);
+    const iconVideoPlayer = ref(null);
+    const iconEventLayer = ref(null);
     const iconOverlayCanvas = ref(null);
+    const iconVideoSrc = ref("");     // <img> 的 src，替代 iframe
     const iconConfigTip = ref("");
+    const iconMode = ref("dots"); // 'dots' 描点模式 | 'control' 操作模式
+    const adbOpLogs = ref([]); // ADB 操作日志（结构化，每条含唯一 id）
+    const adbLogsTableRef = ref(null);
+    const adbOpSelectedIds = ref([]);   // 勾选的日志 id 列表
+    const isAllAdbLogsSelected = ref(false);
+    const adbSequenceName = ref("");    // 操作序列名称（如"打开设置"）
+    let _adbLogSeq = 0;                 // 自增 id，保证每条唯一
+    const isAdbSending = ref(false);
+    // 手势识别临时变量
+    const _gesture = {
+      pressing: false,
+      startX: 0,
+      startY: 0,
+      startTime: 0,
+      lastX: 0,
+      lastY: 0,
+    };
+
+    // =========================================================================
+    //  🎬 案例 ADB 操作序列录制向导（独立 Dialog，方案 A，图标配置弹窗保留独立纯调试）
+    // =========================================================================
+    const recDialogVisible = ref(false);   // 向导 Dialog 是否可见
+    const recStep = ref(1);                 // 当前阶段：1=初始条件  2=操作步骤  3=预期结果
+    const recCase = ref(null);              // 当前正在录制的案例（cases[i] 的引用）
+    const recStartAt = ref(0);              // 录制开始时间戳（ms，用于计算总耗时）
+    // 阶段1：初始条件（按 Initial_Condition 文本拆分为多个子步骤，逐步骤录制）
+    const recInitialParsed = ref([]);       // [{idx,text,seq:null|{...}}]  初始条件细分步骤数组
+    const recCurrentInitialStep = ref(1);   // 当前在阶段1 中录第几个 Step（从 1 开始）
+    const recInitialSeq = ref(null);        // === 兼容保留：旧单序列（改为组装所有子步骤合并）===
+    // 阶段2：操作步骤（按 Action 文本拆分为多个 Step，每条 Step 一个独立 ADB 序列）
+    const recActionParsed = ref([]);        // [{idx,text,seq:null|{...}}]   （细分后的数组）
+    const recCurrentActionStep = ref(1);    // 当前在阶段2 中录第几个 Step（从 1 开始）
+    const recActionSeq = ref(null);         // === 兼容保留：旧单序列（改为组装所有子步骤合并）===
+
+    // --- 录制向导内部：画面 + 操作 + 日志（独立一份状态，不污染图标配置弹窗） ---
+    const recWrap = ref(null);              // 画面容器
+    const recImg = ref(null);               // 画面 <img>
+    const recCanvas = ref(null);            // 画布（滑动轨迹，因为录制里没有描点，所以只画轨迹）
+    const recEvLayer = ref(null);           // 事件层
+    const recVideoSrc = ref("");            // 画面 src
+    const recLogs = ref([]);                // 录制向导专用 ADB 日志（独立一份！）
+    const recLogsTableRef = ref(null);
+    const recLogsSelected = ref([]);        // 勾选的日志 id 列表（用于全选显示，保存时按时间升序不用选）
+    const recLogsAllSelected = ref(false);
+    const recGesture = { pressing:false, x1:0, y1:0, x2:0, y2:0, t:0, lx:0, ly:0 };
+    const recIsSending = ref(false);
+    const recSubmitting = ref(false);
+    let _recLogSeq = 0;
+
+    // Reboot 状态 & 倒计时
+    const recRebooting = ref(false);
+    const recRebootCountdown = ref(0);
+    let _recRebootTimer = null;
+    const recRebootResult = ref("");        // reboot 阶段展示的文本
+
+    // 工具：把 Action 整段文本拆成多个 Step
+    const parseActionText = (raw) => {
+      const text = (raw || "").toString().trim();
+      if (!text) return [{ idx:1, text:"操作步骤（整段）", seq:null, skipped:false }];
+      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const out = [];
+      let pending = null;
+      for (const line of lines) {
+        const m = line.match(/^\s*(\d+)\s*[、.．)\]\s]\s*(.+)$/);
+        if (m) {
+          if (pending) { out.push(pending); pending = null; }
+          out.push({ idx: parseInt(m[1]), text: m[2].trim(), seq: null, skipped:false });
+        } else {
+          if (out.length) out[out.length-1].text = out[out.length-1].text + "\n" + line;
+          else if (pending) pending.text = pending.text + "\n" + line;
+          else pending = { idx: 1, text: line, seq: null, skipped:false };
+        }
+      }
+      if (pending) out.push(pending);
+      if (!out.length) return [{ idx:1, text, seq:null, skipped:false }];
+      out.sort((a,b) => a.idx - b.idx);
+      return out.map((it, i) => ({ idx: i+1, text: it.text, seq: null, skipped:false }));
+    };
+
+    // 工具：把 Initial_Condition 整段文本拆成多个 Step（逻辑与 parseActionText 一致）
+    const parseInitialText = (raw) => {
+      const text = (raw || "").toString().trim();
+      if (!text) return [{ idx:1, text:"初始条件（整段）", seq:null, skipped:false }];
+      const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const out = [];
+      let pending = null;
+      for (const line of lines) {
+        const m = line.match(/^\s*(\d+)\s*[、.．)\]\s]\s*(.+)$/);
+        if (m) {
+          if (pending) { out.push(pending); pending = null; }
+          out.push({ idx: parseInt(m[1]), text: m[2].trim(), seq: null, skipped:false });
+        } else {
+          if (out.length) out[out.length-1].text = out[out.length-1].text + "\n" + line;
+          else if (pending) pending.text = pending.text + "\n" + line;
+          else pending = { idx: 1, text: line, seq: null, skipped:false };
+        }
+      }
+      if (pending) out.push(pending);
+      if (!out.length) return [{ idx:1, text, seq:null, skipped:false }];
+      out.sort((a,b) => a.idx - b.idx);
+      return out.map((it, i) => ({ idx: i+1, text: it.text, seq: null, skipped:false }));
+    };
+
 
     const iconConfig = () => {
       iconConfigDialogVisible.value = true;
       iconDots.value = [];
+      adbOpLogs.value = [];
+      iconMode.value = "dots";
       nextTick(loadIconConfigShot);
     };
 
@@ -2202,40 +3507,394 @@ export default {
     const loadIconConfigShot = async () => {
       iconConfigLoading.value = true;
       try {
-        const res = await fetch(url.value + "/adb/getScreenshot");
-        if (!res.ok) throw new Error("接口异常 " + res.status);
-        const blob = await res.blob();
-        const blob_url = URL.createObjectURL(blob);
-
-        iconRealImg.value.src = blob_url;
-        iconRealImg.value.onload = () => {
-          const img = iconRealImg.value;
-          const cvs = iconOverlayCanvas.value;
-          // 画布像素 = 原始分辨率
-          cvs.width = img.naturalWidth;
-          cvs.height = img.naturalHeight;
-          // CSS 大小 = img 视觉大小
-          const rect = img.getBoundingClientRect();
-          cvs.style.width = rect.width + "px";
-          cvs.style.height = rect.height + "px";
-
-          redrawDots(); // 重画已有标点
+        const wrap = iconWrap.value;
+        const img = iconVideoPlayer.value;
+        const cvs = iconOverlayCanvas.value;
+        if (!wrap || !img || !cvs) {
           iconConfigLoading.value = false;
-        };
+          return;
+        }
+        // 1. 真实设备分辨率（例：2560×1440）
+        const { w, h } = await getDeviceSize();
+        // 2. 先给 wrap 一个合理尺寸（按设备比例缩放到高 480，宽屏宽90%），确保 <img> 能正确渲染出 clientWidth/Height
+        const maxW = Math.min(window.innerWidth * 0.9, 1400);
+        const maxH = 480;
+        const s = Math.min(maxW / w, maxH / h, 1);
+        const dispW = Math.round(w * s);
+        const dispH = Math.round(h * s);
+        wrap.style.width = dispW + "px";
+        wrap.style.height = dispH + "px";
+        // 3. canvas 逻辑像素 = 设备分辨率（这样 x/y 就是真实设备坐标）
+        cvs.width = w;
+        cvs.height = h;
+        cvs.style.width = dispW + "px";
+        cvs.style.height = dispH + "px";
+        // 4. <img> 加载：等它 onload 之后，naturalWidth/naturalHeight 就出来了，就能精准重绘
+        iconVideoSrc.value = `${url.value}/adb/video?t=${Date.now()}`;
+        // 500ms 后重绘一次（有些 MJPEG 流不会触发 onload）
+        setTimeout(() => {
+          redrawDots();
+          iconConfigLoading.value = false;
+        }, 500);
       } catch (e) {
-        ElMessage.error("加载截图失败：" + e.message);
+        ElMessage.error("加载画面失败：" + e.message);
         iconConfigLoading.value = false;
       }
     };
 
-    const onImgClick = (e) => {
-      const img = iconRealImg.value;
-      const rect = img.getBoundingClientRect();
-      // 点击 → 原始像素
-      const x = Math.round((e.offsetX / rect.width) * img.naturalWidth);
-      const y = Math.round((e.offsetY / rect.height) * img.naturalHeight);
-      iconDots.value.push({ name: "", x, y });
-      redrawDots();
+    // 【核心函数】根据 <img> 的 natural（真实分辨率）和 client（实际显示）尺寸，
+    // 推算出实际画面在 CSS 像素里的真实可视矩形（含上下/左右留白补偿）
+    // 返回值：{ x, y, w, h } 以「事件层左上角」为原点的 CSS 像素矩形
+    const _getImgVisibleRect = () => {
+      const img = iconVideoPlayer.value;
+      if (!img) return null;
+      const natW = img.naturalWidth || img.width || 0;
+      const natH = img.naturalHeight || img.height || 0;
+      const cssW = img.clientWidth;
+      const cssH = img.clientHeight;
+      if (!natW || !natH || !cssW || !cssH) return null;
+      const natRatio = natW / natH;
+      const cssRatio = cssW / cssH;
+      let visW, visH;
+      if (cssRatio > natRatio) {
+        // CSS 更扁 → 左右有留白 → 以高度为基准
+        visH = cssH;
+        visW = cssH * natRatio;
+      } else {
+        // CSS 更高 → 上下有留白 → 以宽度为基准
+        visW = cssW;
+        visH = cssW / natRatio;
+      }
+      return {
+        x: (cssW - visW) / 2,   // 相对 img 左上角的 X 偏移（事件层和 img 同尺寸，所以也是事件层内偏移）
+        y: (cssH - visH) / 2,   // 相对 img 左上角的 Y 偏移
+        w: visW,
+        h: visH,
+      };
+    };
+
+    // 坐标换算：按【实际画面可视矩形】换算，100% 精准
+    // 1. 先算点击在 CSS 像素中相对【可视矩形左上角】的位置
+    // 2. 再按可视矩形大小比例 → 映射到真实设备分辨率（cvs.width/height）
+    const getScreenAndCoords = (e) => {
+      const cvs = iconOverlayCanvas.value;
+      const evLayer = iconEventLayer.value;
+      if (!cvs || !evLayer) return null;
+      const layerRect = evLayer.getBoundingClientRect();
+      if (layerRect.height < 10 || layerRect.width < 10) return null;
+
+      const relX = e.clientX - layerRect.left;
+      const relY = e.clientY - layerRect.top;
+
+      // 实际画面可视矩形（img 在 CSS 像素里真正占的区域，排除左右留白）
+      const vis = _getImgVisibleRect();
+      let x, y;
+      if (!vis) {
+        // img 还没加载出来，退回到按整个事件层比例估算（兜底）
+        x = Math.round((relX / layerRect.width) * cvs.width);
+        y = Math.round((relY / layerRect.height) * cvs.height);
+      } else {
+        // 点击在可视矩形外面 → 直接忽略（不会产生红点和 ADB 点击）
+        if (relX < vis.x || relY < vis.y || relX > vis.x + vis.w || relY > vis.y + vis.h) return null;
+        const localX = relX - vis.x;
+        const localY = relY - vis.y;
+        x = Math.round((localX / vis.w) * cvs.width);
+        y = Math.round((localY / vis.h) * cvs.height);
+      }
+      x = Math.max(0, Math.min(cvs.width, x));
+      y = Math.max(0, Math.min(cvs.height, y));
+      return { W: cvs.width, H: cvs.height, relX, relY, x, y };
+    };
+
+    // 在画布上画临时滑动轨迹线
+    const _drawGestureLine = (x1, y1, x2, y2, clearFirst = true) => {
+      const cvs = iconOverlayCanvas.value;
+      if (!cvs) return;
+      const ctx = cvs.getContext("2d");
+      if (clearFirst) {
+        ctx.clearRect(0, 0, cvs.width, cvs.height);
+        redrawDots(); // 保留原有的红点
+      }
+      ctx.strokeStyle = "#409EFF";
+      ctx.lineWidth = Math.max(2, 6 / (cvs.clientWidth / cvs.width));
+      ctx.setLineDash([8, 6]);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      // 起点圆点
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#409EFF";
+      ctx.beginPath();
+      ctx.arc(x1, y1, Math.max(3, 8 / (cvs.clientWidth / cvs.width)), 0, Math.PI * 2);
+      ctx.fill();
+    };
+
+    // 记录一条 ADB 操作日志（结构化：含坐标、命令、唯一 id 方便勾选/删除/上传）
+    // payload 示例：
+    //  TAP:   { x, y, cmd }
+    //  SWIPE: { x1, y1, x2, y2, duration, cmd }
+    //  KEY:   { keyCode, keyName, cmd }
+    const addAdbLog = (type, payload = {}, success = true, msg = "") => {
+      const t = new Date();
+      const time = `${t.getHours().toString().padStart(2, "0")}:${t
+        .getMinutes()
+        .toString()
+        .padStart(2, "0")}:${t.getSeconds().toString().padStart(2, "0")}`;
+      _adbLogSeq += 1;
+      const entry = {
+        id: `adb_${Date.now()}_${_adbLogSeq}`,
+        time,
+        ts: t.getTime(),
+        type, // "TAP" | "SWIPE" | "KEY"
+        success,
+        msg: msg || buildAdbLogMsg(type, payload),
+        cmd: payload.cmd || "",
+        // TAP
+        x: payload.x ?? null,
+        y: payload.y ?? null,
+        // SWIPE
+        x1: payload.x1 ?? null,
+        y1: payload.y1 ?? null,
+        x2: payload.x2 ?? null,
+        y2: payload.y2 ?? null,
+        duration: payload.duration ?? null,
+        // KEY
+        keyCode: payload.keyCode ?? null,
+        keyName: payload.keyName ?? null,
+      };
+      adbOpLogs.value.unshift(entry);
+      if (adbOpLogs.value.length > 200) adbOpLogs.value.length = 200;
+    };
+    const buildAdbLogMsg = (type, p) => {
+      if (type === "TAP") return `(${p.x}, ${p.y})`;
+      if (type === "SWIPE") return `(${p.x1},${p.y1}) → (${p.x2},${p.y2}) [${p.duration}ms]`;
+      if (type === "KEY") return `${p.keyCode} (${p.keyName || ""})`;
+      return "";
+    };
+
+    // ============================================================
+    //  ADB 操作列表功能：清空 / 单条删除 / 全选 / 数据导出
+    // ============================================================
+    const clearAdbLogs = () => {
+      ElMessageBox.confirm("确认清空所有 ADB 操作记录？此操作不可撤销", "提示", {
+        type: "warning",
+        confirmButtonText: "清空",
+        cancelButtonText: "取消",
+      })
+        .then(() => {
+          adbOpLogs.value = [];
+          adbOpSelectedIds.value = [];
+          isAllAdbLogsSelected.value = false;
+          if (adbLogsTableRef.value) adbLogsTableRef.value.clearSelection();
+          ElMessage.success("已清空 ADB 操作记录");
+        })
+        .catch(() => {});
+    };
+    const deleteAdbLogAt = (index) => {
+      const row = adbOpLogs.value[index];
+      if (!row) return;
+      // 同时从已选列表移除
+      adbOpSelectedIds.value = adbOpSelectedIds.value.filter((id) => id !== row.id);
+      adbOpLogs.value.splice(index, 1);
+      isAllAdbLogsSelected.value = adbOpSelectedIds.value.length === adbOpLogs.value.length && adbOpLogs.value.length > 0;
+    };
+    const onAdbSelectionChange = (rows) => {
+      adbOpSelectedIds.value = rows.map((r) => r.id);
+      isAllAdbLogsSelected.value = rows.length === adbOpLogs.value.length && rows.length > 0;
+    };
+    const toggleSelectAllAdbLogs = () => {
+      if (!adbLogsTableRef.value) return;
+      if (isAllAdbLogsSelected.value) {
+        adbLogsTableRef.value.clearSelection();
+      } else {
+        adbOpLogs.value.forEach((row) => adbLogsTableRef.value.toggleRowSelection(row, true));
+      }
+    };
+    // 把勾选的记录按时间升序组装成接口可传输的数据结构
+    // 等后端接口出来后，直接拿这个 payload 发请求即可
+    const exportSelectedAdbSequence = () => {
+      if (!adbOpSelectedIds.value.length) {
+        ElMessage.warning("请先勾选至少一条操作记录");
+        return;
+      }
+      const name = (adbSequenceName.value || "").trim();
+      // 按操作时间升序（注意日志是 unshift 新操作在前，所以升序就是回放顺序）
+      const selectedRows = adbOpLogs.value
+        .filter((r) => adbOpSelectedIds.value.includes(r.id))
+        .sort((a, b) => a.ts - b.ts);
+
+      const steps = selectedRows.map((r, i) => ({
+        step: i + 1,
+        id: r.id,
+        type: r.type,
+        time: r.time,
+        ts: r.ts,
+        // TAP
+        x: r.x,
+        y: r.y,
+        // SWIPE
+        x1: r.x1,
+        y1: r.y1,
+        x2: r.x2,
+        y2: r.y2,
+        duration: r.duration,
+        // KEY
+        keyCode: r.keyCode,
+        keyName: r.keyName,
+        // 原始 adb 命令
+        cmd: r.cmd,
+        success: r.success,
+      }));
+
+      const payload = {
+        name: name || "未命名操作序列",
+        created_at: new Date().toISOString(),
+        total_steps: steps.length,
+        steps,
+      };
+      // 等接口出来，直接 fetch(url, { method:'POST', body: JSON.stringify(payload) })
+      console.group("🎬 【操作序列】已组装完毕（接口可用时直接发送此 payload）");
+      console.log("操作序列名称:", payload.name);
+      console.log("操作步数:", payload.total_steps);
+      console.log("完整 payload:", JSON.stringify(payload, null, 2));
+      console.groupEnd();
+
+      ElMessageBox.alert(
+        `操作序列已导出到浏览器控制台！\n` +
+          `序列名称：${payload.name}\n` +
+          `总步数：${payload.total_steps}\n\n` +
+          `请按 F12 → Console 查看完整 JSON，\n` +
+          `后端接口出来后直接以 POST body 形式提交即可。`,
+        "✅ 操作序列导出成功",
+        {
+          confirmButtonText: "好的",
+          customClass: "adb-sequence-export-tip",
+        }
+      );
+    };
+
+    // 发送 ADB Tap 命令
+    const sendAdbTap = async (x, y) => {
+      if (isAdbSending.value) return;
+      isAdbSending.value = true;
+      const cmd = `shell input tap ${x} ${y}`;
+      const payload = { x, y, cmd };
+      addAdbLog("TAP", payload, true);
+      try {
+        const res = await fetch(
+          `${url.value}/adb/runCmd?cmd=${encodeURIComponent(cmd)}`
+        );
+        const ok = res.ok;
+        if (!ok) addAdbLog("TAP", { ...payload, error: `HTTP ${res.status}` }, false, `(${x}, ${y}) 失败`);
+      } catch (e) {
+        addAdbLog("TAP", { ...payload, error: e.message }, false, `(${x}, ${y}) 网络错误: ${e.message}`);
+      } finally {
+        isAdbSending.value = false;
+      }
+    };
+
+    // 发送 ADB Swipe 命令
+    const sendAdbSwipe = async (x1, y1, x2, y2, durationMs = 300) => {
+      if (isAdbSending.value) return;
+      isAdbSending.value = true;
+      const cmd = `shell input swipe ${x1} ${y1} ${x2} ${y2} ${durationMs}`;
+      const payload = { x1, y1, x2, y2, duration: durationMs, cmd };
+      addAdbLog("SWIPE", payload, true);
+      try {
+        const res = await fetch(
+          `${url.value}/adb/runCmd?cmd=${encodeURIComponent(cmd)}`
+        );
+        if (!res.ok) addAdbLog("SWIPE", { ...payload, error: `HTTP ${res.status}` }, false, "滑动失败");
+      } catch (e) {
+        addAdbLog("SWIPE", { ...payload, error: e.message }, false, `网络错误: ${e.message}`);
+      } finally {
+        isAdbSending.value = false;
+      }
+    };
+
+    // 发送物理按键
+    const sendAdbKey = async (key, name = "") => {
+      if (isAdbSending.value) return;
+      isAdbSending.value = true;
+      const cmd = `shell input keyevent ${key}`;
+      const keyName = name || keyCodeName(key);
+      const payload = { keyCode: key, keyName, cmd };
+      addAdbLog("KEY", payload, true);
+      try {
+        const res = await fetch(
+          `${url.value}/adb/runCmd?cmd=${encodeURIComponent(cmd)}`
+        );
+        if (!res.ok) addAdbLog("KEY", { ...payload, error: `HTTP ${res.status}` }, false, `${key} 失败`);
+      } catch (e) {
+        addAdbLog("KEY", { ...payload, error: e.message }, false, `${key} 错误: ${e.message}`);
+      } finally {
+        isAdbSending.value = false;
+      }
+    };
+    const keyCodeName = (code) => {
+      const table = { "3": "HOME", "4": "BACK", "19": "DPAD_UP", "20": "DPAD_DOWN", "21": "DPAD_LEFT", "22": "DPAD_RIGHT", "23": "DPAD_CENTER", "66": "ENTER", "67": "BACKSPACE" };
+      return table[String(code)] || "";
+    };
+
+    // ===== 手势事件处理（统一入口：鼠标按下/移动/抬起）=====
+    const onScreenMouseDown = (e) => {
+      const info = getScreenAndCoords(e);
+      if (!info) return;
+      _gesture.pressing = true;
+      _gesture.startX = info.x;
+      _gesture.startY = info.y;
+      _gesture.lastX = info.x;
+      _gesture.lastY = info.y;
+      _gesture.startTime = Date.now();
+    };
+
+    const onScreenMouseMove = (e) => {
+      if (!_gesture.pressing) return;
+      const info = getScreenAndCoords(e);
+      if (!info) return;
+      _gesture.lastX = info.x;
+      _gesture.lastY = info.y;
+      const dx = Math.abs(info.x - _gesture.startX);
+      const dy = Math.abs(info.y - _gesture.startY);
+      // 移动超过 10 像素才开始画轨迹（区分 tap 和 swipe）
+      if (dx > 10 || dy > 10) {
+        _drawGestureLine(_gesture.startX, _gesture.startY, info.x, info.y, true);
+      }
+    };
+
+    const onScreenMouseUp = () => {
+      if (!_gesture.pressing) return;
+      const { startX, startY, lastX, lastY, startTime } = _gesture;
+      _gesture.pressing = false;
+
+      const dx = Math.abs(lastX - startX);
+      const dy = Math.abs(lastY - startY);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const duration = Date.now() - startTime;
+      const isSwipe = dist > 12; // 超过 12 像素或长按 400ms 都算 swipe/长按
+
+      if (iconMode.value === "dots") {
+        // ========== 描点模式：tap = 添加标点 ==========
+        if (!isSwipe) {
+          iconDots.value.push({ name: "", x: startX, y: startY });
+          redrawDots();
+        }
+      } else if (iconMode.value === "control") {
+        // ========== 操作模式：发送 ADB ==========
+        if (!isSwipe) {
+          // TAP
+          sendAdbTap(startX, startY);
+        } else {
+          // SWIPE
+          let dur = Math.max(200, Math.min(1500, duration));
+          if (dur < 250 && dist > 80) dur = 300; // 快速滑动但距离长，补够时间
+          sendAdbSwipe(startX, startY, lastX, lastY, dur);
+        }
+      }
+
+      // 抬起后重绘画布，清除临时轨迹线
+      setTimeout(() => redrawDots(), 150);
     };
 
     const redrawDots = () => {
@@ -2328,6 +3987,37 @@ export default {
     const logActiveTab = ref("logs");
     const ActualResultActiveTab = ref("logs");
     const activeCodeFile = ref([]);
+    const activeImageFile = ref([]);
+    const currentTestIdForImage = ref("");
+    // 测试图片懒加载：展开下拉时按 filename 调 /test_logs/{test_id}/image 取单张图
+    const handleImageExpand = async (names) => {
+      const current = Array.isArray(names) ? names : [names];
+      const currentTestId = currentTestIdForImage.value;
+      if (!currentTestId || !logDetails.images) return;
+      for (const image of logDetails.images) {
+        const expanded = current.includes(image.filename);
+        if (expanded && !image.url && !image.loading) {
+          image.loading = true;
+          image.error = "";
+          try {
+            const resp = await fetch(
+              `/dev-api/test_logs/${encodeURIComponent(currentTestId)}/image?file=${encodeURIComponent(image.filename)}`,
+              { cache: "no-store" }
+            );
+            if (!resp.ok) throw new Error(`图片加载失败（${resp.status}）`);
+            image.url = URL.createObjectURL(await resp.blob());
+          } catch (err) {
+            image.error = err.message || "图片加载失败";
+          } finally {
+            image.loading = false;
+          }
+        } else if (!expanded && image.url) {
+          // 折叠时释放对象 URL
+          URL.revokeObjectURL(image.url);
+          image.url = "";
+        }
+      }
+    };
     const logDetails = reactive({
       logs: "",
       ignition_logs: "",
@@ -2428,15 +4118,32 @@ export default {
       return m ? { w: +m[1], h: +m[2] } : { w: 2560, h: 1440 };
     };
 
-    const resizeCanvas = (canvas, realW, realH) => {
+    const resizeCanvas = (canvas, realW, realH, fitRatio = null) => {
       if (!canvas) return; // 防空
       const box = canvas.parentElement?.getBoundingClientRect();
       if (!box) return;
 
       canvas.width = realW;
       canvas.height = realH;
-      canvas.style.width = box.width + "px";
-      canvas.style.height = box.height + "px";
+
+      if (fitRatio) {
+        // 指定 fitRatio（设备真实比例）：等比缩放到盒子内，保持正确画面比例，不拉伸
+        const ratio = realW / realH; // fitRatio.realW / fitRatio.realH
+        const boxW = box.width;
+        const boxH = box.height;
+        const s1 = boxW / realW;
+        const s2 = boxH / realH;
+        const s = Math.min(s1, s2);
+        canvas.style.width = Math.round(realW * s) + "px";
+        canvas.style.height = Math.round(realH * s) + "px";
+        // 使 canvas 在外层盒子中水平居中（垂直默认 top，保持与 iframe img 一致）
+        canvas.style.left = "50%";
+        canvas.style.transform = "translateX(-50%)";
+      } else {
+        // 旧逻辑：撑满外层盒子（主页面横屏拉伸场景继续用这个）
+        canvas.style.width = box.width + "px";
+        canvas.style.height = box.height + "px";
+      }
     };
 
     const onVideoClick = (e, device) => {
@@ -2467,13 +4174,13 @@ export default {
     };
 
     const connectInstrumentStream = () => {
-      instrumentVideoPlayer.value.src = `${url.value}/camera/video?name=UGREEN`;
+      instrumentVideoPlayer.value.src = instrumentVideoUrl.value.trim() || `${url.value}/camera/video?name=UGREEN`;
     };
 
     const connectMobileStream = async () => {
       const { w, h } = await getDeviceSize();
       resizeCanvas(mobileCanvas.value, w, h);
-      videoPlayer.value.src = `${url.value}/adb/video`;
+      videoPlayer.value.src = mobileVideoUrl.value.trim() || `${url.value}/adb/video`;
     };
 
     // 自动保存用例
@@ -2952,7 +4659,7 @@ export default {
 
       await poll();
 
-      const pollInterval = setInterval(poll, interval); // 每隔 5 秒执行一次 poll 函数
+      const pollInterval = setInterval(poll, interval); // 每隔 5 秒执行一次 poll
 
       // 监听弹窗的可见性，如果弹窗关闭则停止轮询
       const stopPollingWhenDialogClosed = watch(
@@ -3040,6 +4747,98 @@ export default {
     const selectDbcFile = () => {
       dbcFileInput.value.click();
       showToast("请选择DBC文件", "info");
+    };
+
+    // ===== UE PDF 导入（知识图谱） =====
+    const uePdfFileInput = ref(null);
+    const uePdfLoading = ref(false);
+    const ueKgDialogVisible = ref(false);
+    const ueKgJsonContent = ref("");
+    const ueKgSaveLoading = ref(false);
+    const selectUePdfFile = async () => {
+      // 先查是否有已保存的知识图谱——有则直接开 modal（展示现有 JSON 可编辑），无则选文件
+      try {
+        const resp = await fetch("/dev-api/api/get_ue_knowledge_graph");
+        const data = await resp.json();
+        if (data.success && data.has_graph && data.kg_json) {
+          ueKgJsonContent.value = data.kg_json;
+          ueKgDialogVisible.value = true;
+          return; // 已有图谱，直接开 modal（不选文件）
+        }
+      } catch (e) {
+        // 查询失败则回退到选文件
+      }
+      // 没有已保存图谱 → 选文件上传
+      uePdfFileInput.value.click();
+      showToast("请选择UE交互PDF文件", "info");
+    };
+    const handleUePdfUpload = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith(".pdf")) {
+        showToast(`文件 ${file.name} 不是.pdf格式`, "error");
+        event.target.value = "";
+        return;
+      }
+      uePdfLoading.value = true;
+      showToast(`正在导入: ${file.name}（LLM生成知识图谱约需30-60秒）`, "info");
+      try {
+        // 直接传 PDF 文件到 /api/import_ue_pdf（multipart）
+        const formData = new FormData();
+        formData.append("file", file);
+        const impResp = await fetch("/dev-api/api/import_ue_pdf", {
+          method: "POST",
+          body: formData,
+        });
+        const impData = await impResp.json();
+        if (impData.success) {
+          // 弹窗展示生成的 JSON（可编辑）
+          ueKgJsonContent.value = impData.kg_json || JSON.stringify({}, null, 2);
+          ueKgDialogVisible.value = true;
+          showToast(impData.result || "知识图谱生成成功", "success", 8000);
+        } else {
+          showToast(`导入失败: ${impData.error}`, "error", 8000);
+        }
+      } catch (e) {
+        showToast(`导入UE文件出错: ${e.message}`, "error");
+      } finally {
+        uePdfLoading.value = false;
+        event.target.value = "";
+      }
+    };
+    // 重新上传（关闭弹窗，重新选文件）
+    const ueReupload = () => {
+      ueKgDialogVisible.value = false;
+      setTimeout(() => selectUePdfFile(), 200);
+    };
+    // 保存到当前会话（校验 JSON 格式 → 调后端保存）
+    const ueSaveToSession = async () => {
+      // 前端先校验 JSON 格式
+      try {
+        JSON.parse(ueKgJsonContent.value);
+      } catch (e) {
+        showToast(`JSON 格式错误: ${e.message}`, "error");
+        return;
+      }
+      ueKgSaveLoading.value = true;
+      try {
+        const resp = await fetch("/dev-api/api/save_ue_knowledge_graph", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ json_content: ueKgJsonContent.value }),
+        });
+        const data = await resp.json();
+        if (data.success) {
+          showToast(data.message || "知识图谱已保存到当前会话", "success");
+          ueKgDialogVisible.value = false;
+        } else {
+          showToast(`保存失败: ${data.error}`, "error");
+        }
+      } catch (e) {
+        showToast(`保存出错: ${e.message}`, "error");
+      } finally {
+        ueKgSaveLoading.value = false;
+      }
     };
 
     const handleFileUpload = (event) => {
@@ -3406,8 +5205,15 @@ export default {
             debugRows.value.push(row);
           }
           selectedCase.value = row.id;
-          const initSeq = isCarryOverInit(row.InitTestSequences) ? "" : row.InitTestSequences;
-          const query = `前提条件: ${initSeq} 操作步骤: ${row.ActionTestSequences} 预期结果:${row.ExpectedTestSequences}`;
+          const initSeq = isCarryOverInit(row.InitTestSequences) ? "" : (row.InitTestSequences ?? "");
+          const actSeq = (row.ActionTestSequences ?? "").toString().trim();
+          const expSeq = (row.ExpectedTestSequences ?? "").toString().trim();
+          if (!actSeq && !expSeq) {
+            showToast(`用例${row.id}缺少操作步骤和预期结果，无法执行`, "error");
+            index++;
+            continue;
+          }
+          const query = `前提条件: ${initSeq} 操作步骤: ${actSeq} 预期结果:${expSeq}`;
           const baseurl = url.value;
           if (isMockMode.value) {
             await runMockTestCase(row.id, row);
@@ -3504,17 +5310,18 @@ export default {
       }
 
       if (currentTestId.value) {
+        const stoppingTestId = currentTestId.value;
         try {
           await fetch(`/dev-api/cancelsession`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ test_id: currentTestId.value }),
+            body: JSON.stringify({ test_id: stoppingTestId }),
           });
           showToast("已发送停止指令", "info");
         } catch (e) {
           console.error("cancelSession 失败", e);
         } finally {
-          currentTestId.value = "";
+          cleanupMobileAgentSession(stoppingTestId);
         }
       }
     };
@@ -3522,12 +5329,13 @@ export default {
     const abortCurrentTest = () => {
       isDebugRunning.value = false;
       if (currentTestId.value) {
+        const abortingTestId = currentTestId.value;
         fetch("/dev-api/cancelsession", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ test_id: currentTestId.value }),
+          body: JSON.stringify({ test_id: abortingTestId }),
         }).catch(() => {});
-        currentTestId.value = "";
+        cleanupMobileAgentSession(abortingTestId);
       }
       stopPolling();
     };
@@ -3664,13 +5472,24 @@ export default {
       xhr.setRequestHeader("Content-Type", "application/json");
       xhr.setRequestHeader("Accept", "text/event-stream");
       let lastProcessedLength = 0;
+      let pendingStreamText = "";
+      let thinkFlag = false;
 
       xhr.onreadystatechange = () => {
-        if (xhr.readyState === 3 && isDebugRunning.value) {
+        // LOADING(3) 和 DONE(4) 都要处理。最后一个 SSE 分片经常只在 DONE 时到达，
+        // 若只处理 readyState=3，会出现后端已返回但前端缺少最后一条“工具结果”。
+        if ((xhr.readyState === 3 || xhr.readyState === 4) && isDebugRunning.value) {
           const newResponseText = xhr.responseText.slice(lastProcessedLength);
-
-          const lines = newResponseText.split("\n");
-          var thinkFlag = false;
+          lastProcessedLength = xhr.responseText.length;
+          pendingStreamText += newResponseText;
+          const lines = pendingStreamText.split(/\r?\n/);
+          if (xhr.readyState === 3) {
+            // 保留尚未收到换行符的半行，等待下一个网络分片后再解析。
+            pendingStreamText = lines.pop() ?? "";
+          } else {
+            // DONE 时把最终不带换行符的残留行也一并处理。
+            pendingStreamText = "";
+          }
           lines.forEach(async (line) => {
             if (line.trim() === "") return;
             if (line === "") return;
@@ -3791,6 +5610,10 @@ export default {
               if (match) {
                 const test_id = match[1];
                 currentTestId.value = test_id;
+                mobileAgentSessionCaseIds.set(test_id, id);
+                if (!mobileAgentLastEventTimes.has(test_id)) {
+                  mobileAgentLastEventTimes.set(test_id, Date.now() / 1000 - 5);
+                }
                 testIdFound = true;
                 const pollForResult = async () => {
                   const maxPollingTime = 600000; // 600s
@@ -3809,6 +5632,10 @@ export default {
                         }
                         fetchTestList(1); // 刷新测试用例列表
                         clearInterval(intervalId); // 停止轮询
+                        cleanupMobileAgentSession(test_id);
+                        // 测试完成：清除确认弹窗和残留状态，停止全局轮询
+                        mobileAgentConfirmation.value = null;
+                        mobileAgentConfirmVisible.value = false;
                         resolve(data); // 完成请求，调用 resolve
                       }
                     } catch (error) {
@@ -3828,6 +5655,10 @@ export default {
                       }
                       fetchTestList(1); // 刷新测试用例列表
                       clearInterval(intervalId); // 停止轮询
+                      cleanupMobileAgentSession(test_id);
+                      // 超时：同样清除确认弹窗和残留状态
+                      mobileAgentConfirmation.value = null;
+                      mobileAgentConfirmVisible.value = false;
                       reject(new Error("超时未获取测试结果"));
                     }
                   }, interval);
@@ -3870,8 +5701,6 @@ export default {
               console.error("Error parsing chunk:", parseError);
             }
           });
-          // 更新已处理的数据位置
-          lastProcessedLength = xhr.responseText.length;
         } else if (!isDebugRunning.value) {
           return;
         }
@@ -3897,6 +5726,7 @@ export default {
           lang: value,
           model_name: model_name.value,
           detect_before_timeout: testConfig.preWaitSec + "",
+          exploration_mode: testConfig.explorationMode || "approval",
           is_reset: testConfig.isReset ? "true" : "false",
           is_clip: testConfig.isClip ? "true" : "false",
         })
@@ -4154,32 +5984,48 @@ export default {
         const skipE = isCarryOverInit(row.Expected_Result);
         
         console.log('判断结果 - skipA:', skipA, 'skipB:', skipB, 'skipE:', skipE);
-        
-        const predict = skipE ? "" : row.Expected_Result;
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
         if (!skipA) {
-          console.log('准备调用 Task A');
-          await callApi(row.id, row.Initial_Condition, "A", false, "A", predict);
+          console.log('准备调用 Task A - 转化初始条件');
+          await callApi(row.id, row.Initial_Condition, "A", false, "A", row.Expected_Result || "");
         } else {
-          console.log('跳过 Task A');
+          console.log('跳过 Task A - 初始条件');
         }
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
         if (!skipB) {
-          console.log('准备调用 Task B');
-          await callApi(row.id, row.Action, "B", false, "B", predict);
+          console.log('准备调用 Task B - 转化动作');
+          await callApi(row.id, row.Action, "B", false, "B", row.Expected_Result || "");
         } else {
-          console.log('跳过 Task B');
+          console.log('跳过 Task B - 动作');
         }
 
         await waitIfConversionPaused();
         if (isConversionCanceled.value) throw new Error("CONVERSION_CANCELED");
         if (!skipE) {
-          const index = cases.value.findIndex((c) => c.id === row.id);
-          if (index !== -1) cases.value[index].ExpectedTestSequences = row.Expected_Result;
+          const erText = (row.Expected_Result || "").toString();
+          const hasReceive = erText.includes("接收");
+          const hasSend = erText.includes("外发");
+          const hasSerial = erText.includes("串口");
+          const shouldCallExpected = hasReceive || hasSend || hasSerial;
+          if (shouldCallExpected) {
+            console.log('准备调用 Task A - 转化预期结果（含"接收"/"外发"/"串口"任一关键字）');
+            await callApi(row.id, row.Expected_Result, "A", false, "E", row.Expected_Result || "");
+          } else {
+            console.log(`不调用接口，直接复制预期结果文本到 ExpectedTestSequences（接收:${hasReceive}, 外发:${hasSend}, 串口:${hasSerial}）`);
+            const index = cases.value.findIndex((c) => c.id === row.id);
+            if (index !== -1) {
+              cases.value[index].ExpectedTestSequences = erText;
+              if (conversionTotal.value <= 1) {
+                showToast(`用例 ${row.id} 预期结果已直接复制`, "success");
+              }
+            }
+          }
+        } else {
+          console.log('跳过 Task A - 预期结果');
         }
         resolve();
       } catch (error) {
@@ -4222,9 +6068,11 @@ export default {
                   cases.value[index].InitTestSequences = content;
                 } else if (step === "B") {
                   cases.value[index].ActionTestSequences = content;
-                  if (conversionTotal.value <= 1) {
-                    showToast(`用例 ${id} 转换成功`, "success");
-                  }
+                } else if (step === "E") {
+                  cases.value[index].ExpectedTestSequences = content;
+                }
+                if (conversionTotal.value <= 1 && (step === "B" || step === "E")) {
+                  showToast(`用例 ${id} 转换成功`, "success");
                 }
               }
               resolve();
@@ -4266,7 +6114,7 @@ export default {
         };
         
         // 安全处理所有参数，确保不会发送 undefined 或 null
-        const dbc = dbcFileName.value?.name ?? "";
+        const dbc = dbcFiles.value.map((file) => file.name);
         const prompt = prompt1.value ?? "";
         const safePredict = predict ?? "";
         const safeTask = task ?? "A";
@@ -4315,9 +6163,16 @@ export default {
         .then((response) => response.json())
         .then((data) => {
           if (data.code === "200") {
+            currentTestIdForImage.value = test_id;
             logDetails.logs = data.result.logs.chat_log;
             logDetails.code_files = data.result.logs.code_files;
-            logDetails.images = data.result.logs.images;
+            // images 只带 filename/path/size（无 base64），懒加载时补 url/loading/error
+            logDetails.images = (data.result.logs.images || []).map((img) => ({
+              ...img,
+              url: "",
+              loading: false,
+              error: "",
+            }));
             logDetails.ignition_logs = data.result.logs.ignition_log;
             logDetails.json_files = data.result.logs.json_files;
             //console.log(logDetails.code_files);
@@ -4333,7 +6188,7 @@ export default {
         });
     };
 
-    const dbcFileName = ref("");
+    const dbcFiles = ref([]);
     const dbcUploadLoading = ref(false);
 
     const fetchActualResult = (test_id, command) => {
@@ -4364,11 +6219,12 @@ export default {
     };
 
     const handleDbcFileUpload = async (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-
-      if (!file.name.endsWith(".dbc")) {
-        showToast("请选择.dbc格式的文件", "error");
+      const files = Array.from(event.target.files || []);
+      if (!files.length) return;
+      const invalid = files.find((file) => !file.name.toLowerCase().endsWith(".dbc"));
+      if (invalid) {
+        showToast(`文件 ${invalid.name} 不是.dbc格式`, "error");
+        event.target.value = "";
         return;
       }
 
@@ -4376,30 +6232,37 @@ export default {
 
       try {
         const formData = new FormData();
-        formData.append("file", file); // 接口参数名为 file
+        files.forEach((file) => formData.append("files", file));
 
-        const response = await fetch("/dev-api/upload", {
+        const response = await fetch("/dev-api/upload/batch", {
           method: "POST",
           body: formData,
         });
 
         const data = await response.json();
 
-        if (response.ok && data.code === 200) {
-          dbcFileName.value = {
-            name: file.name,
-            path: data.result?.save_path || "",
-            size: data.result?.file_size || file.size,
-          };
+        const uploaded = data.result?.files?.filter((item) => item.success) || [];
+        if (uploaded.length) {
+          const fileMap = new Map(dbcFiles.value.map((item) => [item.name, item]));
+          uploaded.forEach((item) => fileMap.set(item.filename, {
+            name: item.filename,
+            path: item.save_path || "",
+            size: item.file_size || 0,
+          }));
+          dbcFiles.value = Array.from(fileMap.values());
           try {
             localStorage.setItem(
               getProjectLocalStorageKey("DBC_FILE_META"),
-              JSON.stringify(dbcFileName.value)
+              JSON.stringify(dbcFiles.value)
             );
           } catch {
             // ignore
           }
-          showToast(`DBC文件上传成功: ${file.name}`, "success");
+          const failed = data.result?.files?.filter((item) => !item.success) || [];
+          showToast(
+            failed.length ? `DBC上传成功${uploaded.length}个，失败${failed.length}个` : `成功读取${uploaded.length}个DBC文件`,
+            failed.length ? "warning" : "success"
+          );
         } else {
           throw new Error(data.description || "上传失败");
         }
@@ -4412,7 +6275,17 @@ export default {
       }
     };
 
+    const removeDbcFile = (name) => {
+      dbcFiles.value = dbcFiles.value.filter((file) => file.name !== name);
+      localStorage.setItem(
+        getProjectLocalStorageKey("DBC_FILE_META"),
+        JSON.stringify(dbcFiles.value)
+      );
+    };
+
     const testConfigVisible = ref(false);
+    const adbDeviceList = ref([]);
+    const adbDeviceLoading = ref(false);
 
     const testConfig = reactive({
       waitStrategy: "fixed_and_poll",
@@ -4421,7 +6294,98 @@ export default {
       isClip: false,
       continueOnFail: false,
       defaultAllIn: false,
+      recordMachineId: "",
+      explorationMode: "approval",
     });
+
+    const RECORD_API_BASE = "/record-api";
+    const RECORD_API_PREFIX = "/api/record";
+
+    const _normalizeBaseUrl = (base) => {
+      if (!base) return "";
+      return base.replace(/\/$/, "");
+    };
+
+    const getRecordApiBase = () => _normalizeBaseUrl(RECORD_API_BASE);
+
+    const fetchAdbDeviceList = async () => {
+      adbDeviceLoading.value = true;
+      try {
+        const base = _normalizeBaseUrl(url.value || "");
+        const resp = await fetch(`${base}/adb/runCmd?cmd=devices`, {
+          signal: AbortSignal.timeout(10000),
+        });
+        const json = await resp.json();
+        const list = [];
+        if (json?.state && typeof json?.desc === "string") {
+          const lines = json.desc.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+          lines.forEach(line => {
+            if (/^List\s+of\s+devices/i.test(line)) return;
+            const parts = line.split(/\s+/);
+            if (parts.length >= 2) {
+              list.push({ id: parts[0], state: parts[1] });
+            }
+          });
+        }
+        adbDeviceList.value = list;
+        if (list.length && !testConfig.recordMachineId) {
+          const online = list.find(d => /device/i.test(d.state)) || list[0];
+          testConfig.recordMachineId = online.id;
+        }
+      } catch (e) {
+        console.error("获取 ADB 设备列表失败:", e);
+        ElMessage.error("获取 ADB 设备列表失败：" + e.message);
+      } finally {
+        adbDeviceLoading.value = false;
+      }
+    };
+
+    const buildCaseContent = (c) => {
+      const parts = [];
+      const init = c?.InitTestSequences || c?.Initial_Condition || "";
+      const act = c?.ActionTestSequences || c?.Action || "";
+      const exp = c?.ExpectedTestSequences || c?.Expected_Result || "";
+      if (init) parts.push(`前提条件: ${init}`);
+      if (act) parts.push(`操作步骤: ${act}`);
+      if (exp) parts.push(`预期结果: ${exp}`);
+      return parts.join("\n");
+    };
+
+    const recordSaveStep = async (payload) => {
+      const base = getRecordApiBase();
+      if (!payload?.machine_id) throw new Error("请先在【测试配置】中选择/设置 ADB 设备 ID");
+      const url0 = `${base}${RECORD_API_PREFIX}/save-step`;
+      console.log("[record] 调用 save-step, URL:", url0, "payload:", payload);
+      const resp = await fetch(url0, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || (data && data.code && data.code !== 200)) {
+        const msg = data?.message || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    };
+
+    const recordComplete = async (payload) => {
+      const base = getRecordApiBase();
+      if (!payload?.machine_id) throw new Error("请先在【测试配置】中选择/设置 ADB 设备 ID");
+      const url0 = `${base}${RECORD_API_PREFIX}/complete`;
+      console.log("[record] 调用 complete, URL:", url0, "payload:", payload);
+      const resp = await fetch(url0, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || (data && data.code && data.code !== 200)) {
+        const msg = data?.message || `HTTP ${resp.status}`;
+        throw new Error(msg);
+      }
+      return data;
+    };
 
     const loadTestConfig = () => {
       try {
@@ -4438,6 +6402,9 @@ export default {
             } catch {
               // ignore
             }
+          }
+          if (typeof testConfig.recordMachineId !== "string") {
+            testConfig.recordMachineId = "";
           }
         }
       } catch {}
@@ -4465,7 +6432,11 @@ export default {
 
       try {
         const meta = localStorage.getItem(getProjectLocalStorageKey("DBC_FILE_META"));
-        if (meta) dbcFileName.value = JSON.parse(meta);
+        if (meta) {
+          const saved = JSON.parse(meta);
+          // 兼容旧版保存的单文件对象。
+          dbcFiles.value = Array.isArray(saved) ? saved : saved?.name ? [saved] : [];
+        }
       } catch {
         // ignore
       }
@@ -4571,7 +6542,831 @@ export default {
     onUnmounted(() => {
       stopPolling();
       if (pollingInterval) clearInterval(pollingInterval);
+      if (_recRebootTimer) clearInterval(_recRebootTimer);
     });
+
+    // =====================================================================
+    //  🎬 录制向导：全部逻辑（画面加载 / 坐标换算 / ADB命令 / 日志 / 阶段保存 / reboot / 最终上传）
+    // =====================================================================
+
+    // 打开向导：案例表格行 → 开始录制
+    const openRecordWizard = (row) => {
+      if (!row) return;
+      recCase.value = row;
+      recStep.value = 1;
+      // === 阶段1：解析初始条件文本，初始化细分步骤数组 ===
+      recInitialParsed.value = parseInitialText(row.Initial_Condition);
+      recCurrentInitialStep.value = 1;
+      recInitialSeq.value = null;
+      // === 阶段2：解析操作步骤文本，初始化细分步骤数组 ===
+      recActionParsed.value = parseActionText(row.Action);
+      recCurrentActionStep.value = 1;
+      recActionSeq.value = null;
+      // 清空当前日志
+      recLogs.value = [];
+      recLogsSelected.value = [];
+      recLogsAllSelected.value = false;
+      recRebooting.value = false;
+      recRebootCountdown.value = 0;
+      recRebootResult.value = "";
+      recStartAt.value = Date.now();
+      recDialogVisible.value = true;
+      nextTick(() => recLoadShot());
+    };
+
+    // 向导画面加载：复用现有 getDeviceSize 取真实分辨率 → 按比例缩放容器
+    let _recDeviceSize = null;
+    const recLoadShot = async () => {
+      try {
+        const u = url.value;
+        if (!u) { ElMessage.warning("请先配置上位机 URL"); return; }
+        recVideoSrc.value = "";
+        recVideoSrc.value = u + "/adb/video?_t=" + Date.now();
+        if (!_recDeviceSize) {
+          try {
+            const r = await fetch(u + "/adb/runCmd?cmd=shell%20wm%20size", { signal: AbortSignal.timeout(4000) });
+            const j = await r.json();
+            if (j?.state && j?.desc) {
+              const m = String(j.desc).match(/Physical\s+size\s*:\s*(\d+)x(\d+)/i);
+              if (m) _recDeviceSize = { W: parseInt(m[1]), H: parseInt(m[2]) };
+            }
+          } catch(e) {}
+        }
+        nextTick(() => recResizeWrap());
+      } catch (e) {
+        ElMessage.error("画面加载失败：" + e.message);
+      }
+    };
+    const recResizeWrap = () => {
+      const wr = recWrap.value, cv = recCanvas.value, im = recImg.value;
+      if (!wr || !cv) return;
+      if (!_recDeviceSize) { setTimeout(recResizeWrap, 400); return; }
+      const { W, H } = _recDeviceSize;
+      const maxH = 480;
+      const availW = Math.min(window.innerWidth * 0.85, 1280);
+      const r1 = W / H, r2 = H / W;
+      let cw, ch;
+      if (W >= H) { // 横屏
+        ch = maxH; cw = Math.round(ch * r1);
+        if (cw > availW) { cw = availW; ch = Math.round(cw * r2); }
+      } else { // 竖屏
+        cw = Math.min(availW, 420);
+        ch = Math.round(cw * r2);
+        if (ch > maxH + 200) { ch = maxH + 200; cw = Math.round(ch * r1); }
+      }
+      wr.style.width = cw + "px";
+      wr.style.height = ch + "px";
+      // canvas 内部画布大小 = CSS 大小（按设备像素比画，避免模糊）
+      const dpr = window.devicePixelRatio || 1;
+      cv.width = cw * dpr;
+      cv.height = ch * dpr;
+      cv.style.width = cw + "px";
+      cv.style.height = ch + "px";
+      const ctx = cv.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    const recOnImgLoaded = () => recResizeWrap();
+    const recReloadVideo = () => {
+      recVideoSrc.value = "";
+      nextTick(() => { recVideoSrc.value = (url.value || "") + "/adb/video?_t=" + Date.now(); });
+    };
+
+    // 画面可视矩形（object-fit:contain 内部真正的可视区域）
+    const recGetVisRect = () => {
+      const im = recImg.value, wr = recWrap.value;
+      if (!im || !wr) return null;
+      const nw = im.naturalWidth || 1, nh = im.naturalHeight || 1;
+      const box = wr.getBoundingClientRect();
+      const cw = box.width, ch = box.height;
+      const sW = cw / nw, sH = ch / nh;
+      const s = Math.min(sW, sH);
+      const visW = nw * s, visH = nh * s;
+      const x = (cw - visW) / 2, y = (ch - visH) / 2;
+      return { x, y, w: visW, h: visH, devW: _recDeviceSize?.W || nw, devH: _recDeviceSize?.H || nh };
+    };
+
+    // 坐标换算：屏幕 → 设备真实坐标
+    const recGetCoords = (ev) => {
+      const wr = recWrap.value; if (!wr) return null;
+      const r = recGetVisRect(); if (!r) return null;
+      const box = wr.getBoundingClientRect();
+      const rx = ev.clientX - box.left, ry = ev.clientY - box.top;
+      if (rx < r.x || rx > r.x + r.w || ry < r.y || ry > r.y + r.h) return null;
+      const x = Math.round((rx - r.x) / r.w * r.devW);
+      const y = Math.round((ry - r.y) / r.h * r.devH);
+      return { x, y };
+    };
+
+    // 画轨迹：Tap 红点 / Swipe 蓝虚线
+    const recDrawDot = (x, y, color="#ff5c5c") => {
+      const cv = recCanvas.value; if (!cv) return;
+      const ctx = cv.getContext("2d");
+      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI*2); ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.lineWidth = 1.5; ctx.stroke();
+    };
+    const recDrawSwipe = (x1,y1,x2,y2) => {
+      const cv = recCanvas.value; if (!cv) return;
+      const ctx = cv.getContext("2d");
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.setLineDash([6, 5]); ctx.strokeStyle = "#4ab6ff"; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(x1,y1,5,0,Math.PI*2); ctx.fillStyle = "#4ab6ff"; ctx.fill();
+    };
+    const recClearCanvas = () => {
+      const cv = recCanvas.value; if (!cv) return;
+      const ctx = cv.getContext("2d");
+      ctx.clearRect(0,0,cv.width, cv.height);
+    };
+
+    // ADB 发送（封装，带日志记录）
+    const KEY_MAP = {
+      KEYCODE_HOME: 3, KEYCODE_BACK: 4, KEYCODE_ENTER: 66,
+      KEYCODE_VOLUME_UP: 24, KEYCODE_VOLUME_DOWN: 25, KEYCODE_REBOOT: 26
+    };
+    const recAdb = async (cmd) => {
+      try {
+        const r = await fetch((url.value||"") + "/adb/runCmd?cmd=" + encodeURIComponent(cmd), { signal: AbortSignal.timeout(8000) });
+        const j = await r.json(); return { ok: !!j?.state, desc: j?.desc || "" };
+      } catch (e) { return { ok: false, desc: e.message }; }
+    };
+    const recAddLog = (type, payload, success=true, msg="") => {
+      const id = "rec_${Date.now()}_${_recLogSeq++}";
+      const now = new Date();
+      const tsStr = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0") + ":" + String(now.getSeconds()).padStart(2,"0");
+      recLogs.value.push({
+        id, ts: Date.now(), tsStr, type, success, msg,
+        ...payload,
+      });
+      if (recLogs.value.length > 200) recLogs.value.splice(0, recLogs.value.length - 200);
+      if (recLogsTableRef.value) recLogsTableRef.value.setCurrentRow(recLogs.value[recLogs.value.length-1]);
+    };
+    const recSendTap = async (x, y) => {
+      if (recIsSending.value) return;
+      recIsSending.value = true;
+      const { ok, desc } = await recAdb(`shell input tap ${x} ${y}`);
+      recAddLog("TAP", { x, y, cmd: `shell input tap ${x} ${y}` }, ok, ok ? "" : desc);
+      recIsSending.value = false;
+    };
+    const recSendSwipe = async (x1,y1,x2,y2,duration=300) => {
+      if (recIsSending.value) return;
+      recIsSending.value = true;
+      const cmd = `shell input swipe ${x1} ${y1} ${x2} ${y2} ${duration}`;
+      const { ok, desc } = await recAdb(cmd);
+      recAddLog("SWIPE", { x1,y1,x2,y2, duration, cmd }, ok, ok ? "" : desc);
+      recIsSending.value = false;
+    };
+    const recSendKey = async (keyCode, name) => {
+      if (recIsSending.value) return;
+      if (typeof keyCode === "string") { name = keyCode; keyCode = KEY_MAP[keyCode] || 0; }
+      recIsSending.value = true;
+      const cmd = `shell input keyevent ${keyCode}`;
+      const { ok, desc } = await recAdb(cmd);
+      recAddLog("KEY", { keyCode, keyName: name || "KEY", cmd }, ok, ok ? "" : desc);
+      recIsSending.value = false;
+    };
+
+    // 手势识别：Tap (<12px / <800ms)  vs Swipe
+    const recOnMouseDown = (e) => {
+      if (e.button !== 0) return;
+      const p = recGetCoords(e); if (!p) return;
+      const wr = recWrap.value.getBoundingClientRect();
+      recGesture.x1 = recGesture.lx = p.x;
+      recGesture.y1 = recGesture.ly = p.y;
+      recGesture.t = Date.now();
+      recGesture.pressing = true;
+      recGesture.cx = e.clientX - wr.left;
+      recGesture.cy = e.clientY - wr.top;
+    };
+    const recOnMouseMove = (e) => {
+      if (!recGesture.pressing) return;
+      const wr = recWrap.value.getBoundingClientRect();
+      const cx = e.clientX - wr.left, cy = e.clientY - wr.top;
+      recDrawSwipe(recGesture.cx, recGesture.cy, cx, cy);
+      recGesture.lcx = cx; recGesture.lcy = cy;
+    };
+    const recOnMouseUp = (e) => {
+      if (!recGesture.pressing) return;
+      recGesture.pressing = false;
+      const p = recGetCoords(e);
+      setTimeout(recClearCanvas, 500);
+      if (!p) return;
+      const dur = Date.now() - recGesture.t;
+      const wr = recWrap.value.getBoundingClientRect();
+      const cx = e.clientX - wr.left, cy = e.clientY - wr.top;
+      const dxPx = Math.abs(cx - recGesture.cx), dyPx = Math.abs(cy - recGesture.cy);
+      if (dxPx < 12 && dyPx < 12) {
+        // Tap
+        recDrawDot(cx, cy);
+        recSendTap(recGesture.x1, recGesture.y1);
+      } else {
+        // Swipe
+        const duration = Math.max(200, Math.min(1500, Math.round(dur)));
+        recSendSwipe(recGesture.x1, recGesture.y1, p.x, p.y, duration);
+      }
+    };
+
+    // 日志操作
+    const recClearLogs = async () => {
+      try { await ElMessageBox.confirm("确定清空当前阶段的所有 ADB 操作日志？", "确认", { type:"warning" }); }
+      catch(e) { return; }
+      recLogs.value = []; recLogsSelected.value = []; recLogsAllSelected.value = false;
+    };
+    const recDeleteLogAt = (i) => {
+      const row = recLogs.value[i]; if (!row) return;
+      recLogs.value.splice(i, 1);
+      recLogsSelected.value = recLogsSelected.value.filter(x => x !== row.id);
+      recLogsAllSelected.value = recLogs.value.length > 0 && recLogsSelected.value.length === recLogs.value.length;
+    };
+    const recOnSelectionChange = (rows) => {
+      recLogsSelected.value = rows.map(r => r.id);
+      recLogsAllSelected.value = recLogs.value.length > 0 && recLogsSelected.value.length === recLogs.value.length;
+    };
+    const recToggleSelectAll = () => {
+      if (!recLogsTableRef.value) return;
+      if (recLogsAllSelected.value) recLogsTableRef.value.clearSelection();
+      else recLogs.value.forEach(r => recLogsTableRef.value.toggleRowSelection(r, true));
+    };
+
+    // 把当前 recLogs 组装成「单个阶段的序列 payload」
+    const recBuildSeqPayload = (name) => {
+      const sorted = [...recLogs.value].sort((a,b) => a.ts - b.ts);
+      if (!sorted.length) return null;
+      return {
+        name: name || "",
+        created_at: new Date().toISOString(),
+        total_steps: sorted.length,
+        steps: sorted.map((r, i) => {
+          const base = { step: i+1, type: r.type, cmd: r.cmd, success: !!r.success };
+          if (r.type === "TAP") { base.x = r.x; base.y = r.y; }
+          else if (r.type === "SWIPE") { base.x1 = r.x1; base.y1 = r.y1; base.x2 = r.x2; base.y2 = r.y2; base.duration = r.duration; }
+          else if (r.type === "KEY") { base.keyCode = r.keyCode; base.keyName = r.keyName; }
+          if (!r.success && r.msg) base.msg = r.msg;
+          return base;
+        })
+      };
+    };
+
+    // ========== 阶段1：初始条件 - 子步骤跳转辅助函数 ==========
+    // 点击标签跳转到指定子步骤（如果该步骤已有序列，会一并回填到日志显示区）
+    const recJumpInitialStep = (idx) => {
+      if (idx < 1 || idx > (recInitialParsed.value || []).length) return;
+      recCurrentInitialStep.value = idx;
+      const sub = recInitialParsed.value[idx - 1];
+      // 回填：如果该子步骤已有录制序列，则把它的 steps 转换为 recLogs 供用户查看/修改
+      if (sub && sub.seq && Array.isArray(sub.seq.steps)) {
+        recLogs.value = sub.seq.steps.map((s, i) => ({
+          id: `rec_init_${idx}_${i}`,
+          ts: s.ts || Date.now() + i,
+          tsStr: s.time || "--:--:--",
+          type: s.type,
+          cmd: s.cmd || "",
+          success: s.success !== false,
+          msg: s.msg || "",
+          x: s.x ?? null, y: s.y ?? null,
+          x1: s.x1 ?? null, y1: s.y1 ?? null,
+          x2: s.x2 ?? null, y2: s.y2 ?? null,
+          duration: s.duration ?? null,
+          keyCode: s.keyCode ?? null, keyName: s.keyName ?? null,
+        }));
+      } else {
+        recLogs.value = [];
+      }
+      recLogsSelected.value = [];
+      recLogsAllSelected.value = false;
+      nextTick(() => { recClearCanvas(); recReloadVideo(); });
+    };
+    const recPrevInitialStep = () => recJumpInitialStep(recCurrentInitialStep.value - 1);
+
+    // ========== 阶段2：操作步骤 - 子步骤跳转辅助函数 ==========
+    const recJumpActionStep = (idx) => {
+      if (idx < 1 || idx > (recActionParsed.value || []).length) return;
+      recCurrentActionStep.value = idx;
+      const sub = recActionParsed.value[idx - 1];
+      if (sub && sub.seq && Array.isArray(sub.seq.steps)) {
+        recLogs.value = sub.seq.steps.map((s, i) => ({
+          id: `rec_act_${idx}_${i}`,
+          ts: s.ts || Date.now() + i,
+          tsStr: s.time || "--:--:--",
+          type: s.type,
+          cmd: s.cmd || "",
+          success: s.success !== false,
+          msg: s.msg || "",
+          x: s.x ?? null, y: s.y ?? null,
+          x1: s.x1 ?? null, y1: s.y1 ?? null,
+          x2: s.x2 ?? null, y2: s.y2 ?? null,
+          duration: s.duration ?? null,
+          keyCode: s.keyCode ?? null, keyName: s.keyName ?? null,
+        }));
+      } else {
+        recLogs.value = [];
+      }
+      recLogsSelected.value = [];
+      recLogsAllSelected.value = false;
+      nextTick(() => { recClearCanvas(); recReloadVideo(); });
+    };
+    const recPrevActionStep = () => recJumpActionStep(recCurrentActionStep.value - 1);
+
+    // 工具：把一组细分步骤合并为一个「合并序列」（用于兼容旧字段 recInitialSeq/recActionSeq）
+    const recMergeSubsteps = (substeps) => {
+      if (!Array.isArray(substeps) || !substeps.length) return null;
+      const mergedSteps = [];
+      substeps.forEach(sub => {
+        if (sub.seq && Array.isArray(sub.seq.steps)) {
+          sub.seq.steps.forEach(s => mergedSteps.push({ ...s }));
+        }
+      });
+      if (!mergedSteps.length) return null;
+      // 重排 step 编号 + 按 ts 升序（已有序但以防万一）
+      mergedSteps.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+      mergedSteps.forEach((s, i) => s.step = i + 1);
+      return {
+        name: "merged",
+        created_at: new Date().toISOString(),
+        total_steps: mergedSteps.length,
+        steps: mergedSteps,
+      };
+    };
+
+    // 阶段跳转：清空日志 + 准备下一步的画面
+    const recBackTo = (n) => {
+      if (recRebooting.value) return;
+      if (n === 1) {
+        // 回到阶段1：重置初始条件已录制的子步骤
+        recInitialParsed.value.forEach(s => { s.seq = null; s.skipped = false; });
+        recInitialSeq.value = null;
+        recCurrentInitialStep.value = 1;
+      }
+      if (n <= 2) {
+        // 回到阶段2或更早：重置操作步骤已录制的子步骤
+        recActionParsed.value.forEach(s => { s.seq = null; s.skipped = false; });
+        recActionSeq.value = null;
+        recCurrentActionStep.value = 1;
+      }
+      recStep.value = n;
+      recLogs.value = [];
+      recLogsSelected.value = [];
+      recLogsAllSelected.value = false;
+      nextTick(() => { recClearCanvas(); recReloadVideo(); });
+    };
+
+    // ========== 阶段1跳过：标记当前子步骤为跳过，如果还有下一个就进下一步，否则进入阶段2 ==========
+    const recSkipInitial = async () => {
+      if (recSubmitting.value) return;
+      const idx = recCurrentInitialStep.value;
+      const total = (recInitialParsed.value || []).length;
+      if (idx < 1 || idx > total) return;
+      const currentSub = recInitialParsed.value[idx - 1];
+      // 标记为跳过 + 清空可能存在的录制序列
+      currentSub.skipped = true;
+      currentSub.seq = null;
+      recInitialSeq.value = recMergeSubsteps(recInitialParsed.value);
+
+      recSubmitting.value = true;
+      try {
+        const c = recCase.value || {};
+        const subName = currentSub?.text ? currentSub.text.slice(0, 40) : `初始条件子步骤${idx}`;
+        const payload = {
+          case_content: buildCaseContent(c),
+          machine_id: testConfig.recordMachineId || "",
+          section_type: "initial_condition",
+          step_index: idx,
+          step_description: `[跳过] ${currentSub?.text || subName}`,
+          adb_commands: [],
+          expected_result: c.Expected_Result || "",
+        };
+        await recordSaveStep(payload);
+        ElMessage.info(`⏭ 初始条件 · 子步骤${idx} 已标记跳过`);
+      } catch (e) {
+        console.error("上报跳过（初始条件）失败:", e);
+        ElMessage.warning(`子步骤${idx} 已标记跳过，但上传录制服务提示：${e.message}`);
+      } finally {
+        recSubmitting.value = false;
+      }
+
+      if (idx < total) {
+        recJumpInitialStep(idx + 1);
+      } else {
+        recStep.value = 2;
+        recCurrentActionStep.value = 1;
+        recLogs.value = []; recLogsSelected.value = []; recLogsAllSelected.value = false;
+        nextTick(() => { recClearCanvas(); recReloadVideo(); });
+      }
+    };
+
+    // ========== 阶段1保存：保存当前子步骤，如果还有下一个就进下一步，否则进入阶段2 ==========
+    const recSaveInitial = async () => {
+      if (recSubmitting.value) return;
+      const idx = recCurrentInitialStep.value;
+      const total = (recInitialParsed.value || []).length;
+      if (idx < 1 || idx > total) return;
+      const currentSub = recInitialParsed.value[idx - 1];
+      const subName = currentSub?.text ? currentSub.text.slice(0, 40) : `初始条件子步骤${idx}`;
+      const seq = recBuildSeqPayload(subName);
+      if (!seq) { ElMessage.warning("请先录制至少一条操作"); return; }
+      // 保存时自动取消跳过标记
+      currentSub.skipped = false;
+      // 写入到该子步骤
+      currentSub.seq = seq;
+      // 合并所有已录制子步骤到兼容字段 recInitialSeq
+      recInitialSeq.value = recMergeSubsteps(recInitialParsed.value);
+
+      recSubmitting.value = true;
+      try {
+        // 上报到录制服务
+        const c = recCase.value || {};
+        const adbCmds = (seq.steps || []).map(s => (s.cmd || "").toString());
+        const payload = {
+          case_content: buildCaseContent(c),
+          machine_id: testConfig.recordMachineId || "",
+          section_type: "initial_condition",
+          step_index: idx,
+          step_description: currentSub?.text || subName,
+          adb_commands: adbCmds,
+          expected_result: c.Expected_Result || "",
+        };
+        await recordSaveStep(payload);
+        ElMessage.success(`✅ 初始条件 · 子步骤${idx} 已保存并上传（${seq.total_steps} 条ADB）`);
+      } catch (e) {
+        console.error("上传初始条件子步骤失败:", e);
+        ElMessage.error(`子步骤${idx} 保存成功，但上传录制服务失败：${e.message}`);
+      } finally {
+        recSubmitting.value = false;
+      }
+
+      if (idx < total) {
+        // 还有下一步：切换到下一个子步骤
+        recJumpInitialStep(idx + 1);
+      } else {
+        // 全部初始条件子步骤录制完毕 → 进入阶段2
+        recStep.value = 2;
+        recCurrentActionStep.value = 1;
+        recLogs.value = []; recLogsSelected.value = []; recLogsAllSelected.value = false;
+        nextTick(() => { recClearCanvas(); recReloadVideo(); });
+      }
+    };
+
+    // ========== 阶段2跳过：标记当前子步骤为跳过，如果还有下一个就进下一步，否则进入阶段3 ==========
+    const recSkipAction = async () => {
+      if (recSubmitting.value) return;
+      const idx = recCurrentActionStep.value;
+      const total = (recActionParsed.value || []).length;
+      if (idx < 1 || idx > total) return;
+      const currentSub = recActionParsed.value[idx - 1];
+      // 标记为跳过 + 清空可能存在的录制序列
+      currentSub.skipped = true;
+      currentSub.seq = null;
+      recActionSeq.value = recMergeSubsteps(recActionParsed.value);
+
+      recSubmitting.value = true;
+      try {
+        const c = recCase.value || {};
+        const subName = currentSub?.text ? currentSub.text.slice(0, 40) : `操作子步骤${idx}`;
+        const payload = {
+          case_content: buildCaseContent(c),
+          machine_id: testConfig.recordMachineId || "",
+          section_type: "action",
+          step_index: idx,
+          step_description: `[跳过] ${currentSub?.text || subName}`,
+          adb_commands: [],
+          expected_result: c.Expected_Result || "",
+        };
+        await recordSaveStep(payload);
+        ElMessage.info(`⏭ 操作步骤 · 子步骤${idx} 已标记跳过`);
+      } catch (e) {
+        console.error("上报跳过（操作步骤）失败:", e);
+        ElMessage.warning(`子步骤${idx} 已标记跳过，但上传录制服务提示：${e.message}`);
+      } finally {
+        recSubmitting.value = false;
+      }
+
+      if (idx < total) {
+        recJumpActionStep(idx + 1);
+      } else {
+        recStep.value = 3;
+      }
+    };
+
+    // ========== 阶段2保存：保存当前子步骤，如果还有下一个就进下一步，否则进入阶段3 ==========
+    const recSaveAction = async () => {
+      if (recSubmitting.value) return;
+      const idx = recCurrentActionStep.value;
+      const total = (recActionParsed.value || []).length;
+      if (idx < 1 || idx > total) return;
+      const currentSub = recActionParsed.value[idx - 1];
+      const subName = currentSub?.text ? currentSub.text.slice(0, 40) : `操作子步骤${idx}`;
+      const seq = recBuildSeqPayload(subName);
+      if (!seq) { ElMessage.warning("请先录制至少一条操作"); return; }
+      // 保存时自动取消跳过标记
+      currentSub.skipped = false;
+      currentSub.seq = seq;
+      recActionSeq.value = recMergeSubsteps(recActionParsed.value);
+
+      recSubmitting.value = true;
+      try {
+        // 上报到录制服务
+        const c = recCase.value || {};
+        const adbCmds = (seq.steps || []).map(s => (s.cmd || "").toString());
+        const payload = {
+          case_content: buildCaseContent(c),
+          machine_id: testConfig.recordMachineId || "",
+          section_type: "action",
+          step_index: idx,
+          step_description: currentSub?.text || subName,
+          adb_commands: adbCmds,
+          expected_result: c.Expected_Result || "",
+        };
+        await recordSaveStep(payload);
+        ElMessage.success(`✅ 操作步骤 · 子步骤${idx} 已保存并上传（${seq.total_steps} 条ADB）`);
+      } catch (e) {
+        console.error("上传操作子步骤失败:", e);
+        ElMessage.error(`子步骤${idx} 保存成功，但上传录制服务失败：${e.message}`);
+      } finally {
+        recSubmitting.value = false;
+      }
+
+      if (idx < total) {
+        recJumpActionStep(idx + 1);
+      } else {
+        // 全部操作步骤子步骤录制完毕 → 进入阶段3（不再显示画面+日志）
+        recStep.value = 3;
+      }
+    };
+
+    // ===== 阶段3：不符合 → 先上报 fail → reboot + 重置录制 =====
+    const recExpectedWrong = async () => {
+      if (recRebooting.value || recSubmitting.value) return;
+      try { await ElMessageBox.confirm("确定要发送 Reboot 重启车机吗？\n将清空本次所有录制，重新开始。", "确认 Reboot", { type:"error" }); }
+      catch(e) { return; }
+
+      recSubmitting.value = true;
+      try {
+        const c = recCase.value || {};
+        await recordSaveStep({
+          case_content: buildCaseContent(c),
+          machine_id: testConfig.recordMachineId || "",
+          section_type: "result",
+          expected_result: "fail",
+        });
+        console.log("[record] 不符合，已上报 section_type=result expected_result=fail");
+      } catch (e) {
+        console.error("不符合上报 save-step 失败：", e);
+        ElMessage.warning("上报录制结果 fail 失败：" + e.message);
+      } finally {
+        recSubmitting.value = false;
+      }
+
+      // 提前校验：必须配置 ADB Gateway URL
+      if (!url.value) {
+        ElMessage.error("请先在页面顶部填写 ADB Gateway 地址（URL），否则无法检测车机重启状态");
+        return;
+      }
+
+      recRebooting.value = true;
+      recRebootCountdown.value = 90;
+      recRebootResult.value = "发送 adb reboot...";
+      const { ok, desc } = await recAdb("shell reboot");
+      if (!ok) {
+        recRebootResult.value = "Reboot 发送失败：" + (desc || "未知原因");
+        recRebooting.value = false;
+        ElMessage.error("ADB Reboot 命令发送失败：" + (desc || "未知原因"));
+        return;
+      }
+      recRebootResult.value = "Reboot 命令已发送，等待车机重启中…将自动检测 ADB 恢复";
+
+      // 独立 tick 计数器，保证每 3 秒 ping 一次，与 countdown 数值解耦
+      let tickCounter = 0;
+      let pingAttempts = 0;
+      let pingLastErr = "";
+      const PING_INTERVAL_TICKS = 3;
+
+      const doPing = async () => {
+        pingAttempts++;
+        const { ok: okPing, desc: descPing } = await recAdb("shell wm size");
+        if (okPing && descPing && (
+          /Physical\s*size/i.test(descPing) ||
+          /Override\s*size/i.test(descPing) ||
+          /\d+\s*x\s*\d+/.test(descPing)
+        )) {
+          return true;
+        }
+        pingLastErr = okPing
+          ? `ADB已通但无法识别分辨率（返回: "${(descPing||"").slice(0,60)}"）`
+          : (descPing || "连接超时/失败");
+        return false;
+      };
+
+      // 重启命令发送后立即先 ping 一次（快速通道：如果只是服务重启，1~2秒就通）
+      try {
+        const firstOk = await doPing();
+        if (firstOk) {
+          if (_recRebootTimer) clearInterval(_recRebootTimer); _recRebootTimer = null;
+          recRebooting.value = false;
+          recRebootResult.value = "";
+          ElMessage.success("车机已恢复，即将重置录制向导");
+          recResetAll();
+          return;
+        }
+        recRebootResult.value = `等待车机重启中…已检测 ${pingAttempts} 次（上次：${pingLastErr}）`;
+      } catch(e) {}
+
+      if (_recRebootTimer) clearInterval(_recRebootTimer);
+      _recRebootTimer = setInterval(async () => {
+        tickCounter++;
+        recRebootCountdown.value -= 1;
+
+        if (recRebootCountdown.value <= 0) {
+          clearInterval(_recRebootTimer); _recRebootTimer = null;
+          recRebooting.value = false;
+          recRebootResult.value = "";
+          recResetAll();
+          ElMessage.warning(`重启超时（90s），共检测 ${pingAttempts} 次，已重置向导，请手动检查车机状态`);
+          return;
+        }
+
+        // 每 3 秒 ping 一次
+        if (tickCounter % PING_INTERVAL_TICKS === 0) {
+          let carOk = false;
+          try {
+            carOk = await doPing();
+          } catch(e) {
+            pingLastErr = e.message || "检测异常";
+          }
+          if (carOk) {
+            clearInterval(_recRebootTimer); _recRebootTimer = null;
+            recRebooting.value = false;
+            recRebootResult.value = "";
+            ElMessage.success(`车机已恢复（检测 ${pingAttempts} 次），即将重置录制向导`);
+            recResetAll();
+            return;
+          }
+          recRebootResult.value = `等待车机重启中…已检测 ${pingAttempts} 次（上次：${pingLastErr}）`;
+        }
+      }, 1000);
+    };
+    const recResetAll = () => {
+      recStep.value = 1;
+      // 重置阶段1子步骤数组 + 指针
+      if (recCase.value) recInitialParsed.value = parseInitialText(recCase.value.Initial_Condition);
+      else recInitialParsed.value = [];
+      recCurrentInitialStep.value = 1;
+      recInitialSeq.value = null;
+      // 重置阶段2子步骤数组 + 指针
+      if (recCase.value) recActionParsed.value = parseActionText(recCase.value.Action);
+      else recActionParsed.value = [];
+      recCurrentActionStep.value = 1;
+      recActionSeq.value = null;
+      recLogs.value = []; recLogsSelected.value = []; recLogsAllSelected.value = false;
+      recStartAt.value = Date.now();
+      nextTick(() => { recClearCanvas(); recReloadVideo(); });
+    };
+
+    // ===== 阶段3：符合 → 组装最终 JSON，Console + ElMessage 打印 =====
+    const recExpectedCorrect = async () => {
+      if (recSubmitting.value) return;
+      // 校验：子步骤要么已录制（s.seq），要么已标记跳过（s.skipped）
+      const initFinished = (s) => s.seq || s.skipped;
+      const actFinished = (s) => s.seq || s.skipped;
+      const initDone = (recInitialParsed.value || []).every(initFinished);
+      const actDone = (recActionParsed.value || []).every(actFinished);
+      if (!initDone || !actDone) {
+        const initTotal = (recInitialParsed.value || []).length;
+        const initOk = (recInitialParsed.value || []).filter(s => s.seq).length;
+        const initSkip = (recInitialParsed.value || []).filter(s => s.skipped && !s.seq).length;
+        const actTotal = (recActionParsed.value || []).length;
+        const actOk = (recActionParsed.value || []).filter(s => s.seq).length;
+        const actSkip = (recActionParsed.value || []).filter(s => s.skipped && !s.seq).length;
+        ElMessage.error(
+          `请先完成所有子步骤（录制或跳过）：` +
+          `初始条件 录制${initOk}/跳过${initSkip}/${initTotal}，` +
+          `操作步骤 录制${actOk}/跳过${actSkip}/${actTotal}`
+        );
+        return;
+      }
+      const c = recCase.value || {};
+
+      // 组装：细分步骤的完整结构（新结构，推荐使用）
+      const initial_new = {
+        total_substeps: (recInitialParsed.value || []).length,
+        skipped_substeps: (recInitialParsed.value || []).filter(s => s.skipped && !s.seq).length,
+        substeps: (recInitialParsed.value || []).map(s => ({
+          idx: s.idx,
+          text: s.text,
+          sequence: s.seq,
+          skipped: !!s.skipped && !s.seq,
+        })),
+      };
+      const action_new = {
+        total_substeps: (recActionParsed.value || []).length,
+        skipped_substeps: (recActionParsed.value || []).filter(s => s.skipped && !s.seq).length,
+        substeps: (recActionParsed.value || []).map(s => ({
+          idx: s.idx,
+          text: s.text,
+          sequence: s.seq,
+          skipped: !!s.skipped && !s.seq,
+        })),
+      };
+      // 合并结构（兼容旧字段 recInitialSeq/recActionSeq，保证 _old*TestSequences 正常）
+      const mergedInit = recMergeSubsteps(recInitialParsed.value);
+      const mergedAct = recMergeSubsteps(recActionParsed.value);
+
+      const finalPayload = {
+        case_id: c.id || "",
+        test_case_id: c.TestCaseID || c.TestKey || "",
+        project_id: c.ProjectID || "",
+        uid: userDisplayName.value || "",
+        nickname: projectDisplayName.value || "",
+        test_key: c.TestKey || "",
+        // === 新：细分步骤结构（推荐） ===
+        initial: initial_new,
+        action_steps: action_new,
+        // === 旧：合并序列，兼容已有字段 ===
+        initial_sequence: mergedInit,
+        action_sequence: mergedAct,
+        // 预期结果 + 结果
+        expected_result_text: c.Expected_Result || "",
+        result: "pass",
+        initial_condition_text: c.Initial_Condition || "",
+        action_text: c.Action || "",
+        // 元信息
+        recorded_at: new Date().toISOString(),
+        record_duration_ms: Date.now() - (recStartAt.value || 0),
+      };
+      // 写入 case 字段：仅保存 ADB 录制专属字段，不污染序列转化用的 *TestSequences
+      c._adb_recorded = true;
+      c._adb_record_payload = JSON.parse(JSON.stringify(finalPayload));
+
+      // 统计：子步骤总数 + ADB 总步数
+      const totalInitSub = initial_new.total_substeps;
+      const totalActSub = action_new.total_substeps;
+      const skippedInitSub = initial_new.skipped_substeps || 0;
+      const skippedActSub = action_new.skipped_substeps || 0;
+      const totalAdbInit = (mergedInit?.steps || []).length;
+      const totalAdbAct = (mergedAct?.steps || []).length;
+
+      // 上报：Console 打印 + 调用录制服务 complete 接口
+      console.log("================================================");
+      console.log("🎬 【案例 ADB 序列录制完成（细分步骤版） · 待上传后台 Payload】");
+      console.log("================================================");
+      console.log(JSON.stringify(finalPayload, null, 2));
+      console.log("================================================");
+
+      recSubmitting.value = true;
+      const submitMsg = ElMessage({
+        message: "正在提交最终录制结果，请稍候…",
+        type: "info",
+        duration: 0,
+        showClose: false,
+      });
+      let completeMsg = "";
+      try {
+        // 最后一步：section_type="result"，只传 case_content + machine_id + expected_result，其余三字段不传
+        const payload = {
+          case_content: buildCaseContent(c),
+          machine_id: testConfig.recordMachineId || "",
+          section_type: "result",
+          expected_result: c.Expected_Result || "",
+        };
+        await recordSaveStep(payload);
+        completeMsg = "✅ save-step 上报成功（section_type=result，已写入预期结果）";
+      } catch (e) {
+        console.error("最后上报 save-step 失败:", e);
+        completeMsg = "⚠️ 上报失败：" + e.message;
+      } finally {
+        recSubmitting.value = false;
+        try { submitMsg.close(); } catch {}
+      }
+
+      try {
+        await ElMessageBox({
+          title: completeMsg.startsWith("✅") ? "✅ 录制完成" : "⚠️ 录制完成（上报异常）",
+          message: h("div", {}, [
+            h("div", { style: "margin-bottom:10px; font-weight:600;" }, `案例 [${c.id||""}] ${c.TestCaseID||c.TestKey||""}`),
+            h("div", { style: "margin-bottom:6px;" }, [
+              `初始条件：${totalInitSub} 个子步骤 / ${totalAdbInit} 条 ADB`,
+              skippedInitSub > 0 ? h("span", { style: "margin-left:8px; color:#909399;" }, `（跳过${skippedInitSub}步）`) : null,
+            ]),
+            h("div", { style: "margin-bottom:6px;" }, [
+              `操作步骤：${totalActSub} 个子步骤 / ${totalAdbAct} 条 ADB`,
+              skippedActSub > 0 ? h("span", { style: "margin-left:8px; color:#909399;" }, `（跳过${skippedActSub}步）`) : null,
+            ]),
+            h("div", { style: "margin-bottom:10px; color:#67C23A;" }, "结果：PASS（符合预期）"),
+            (skippedInitSub > 0 || skippedActSub > 0)
+              ? h("el-alert", { props: { type:"warning", title:`本次录制含跳过步骤：初始条件${skippedInitSub}步、操作步骤${skippedActSub}步`, "show-icon":true, closable:false }, style: { marginBottom:"10px" } })
+              : null,
+            h("div", { style: `margin-bottom:10px; font-size:13px; ${completeMsg.startsWith("✅") ? "color:#67C23A;" : "color:#E6A23C; font-weight:600;"}` }, completeMsg),
+            h("el-alert", { props: { type:"info", title:"完整 JSON Payload 已在 Console (F12) 打印", "show-icon":true, closable:false }}),
+            h("div", { style: "margin-top:10px; font-size:12px; color:#909399;" },
+              "Payload 包含 initial / action_steps 两个细分步骤结构（推荐使用），同时保留 initial_sequence / action_sequence 兼容旧字段。跳过步骤的 skipped=true, sequence=null。"),
+          ]),
+          showCancelButton: false,
+          confirmButtonText: "好的，关闭录制向导",
+        });
+        recDialogVisible.value = false;
+      } catch(e) {
+        recDialogVisible.value = false;
+      }
+    };
 
     return {
       userDisplayName,
@@ -4586,7 +7381,11 @@ export default {
       runSingleRow,
       isDebugRunning,
       activeName,
-      dbcFileName,
+      dbcFiles,
+      selectedDbcName,
+      mobileVideoUrl,
+      instrumentVideoUrl,
+      dbcDisplayName,
       infoType,
       url,
       showTestKey,
@@ -4606,6 +7405,7 @@ export default {
       filteredExecutionLogs,
       userLogs,
       executionLogsTable,
+      handleStepScreenshotExpand,
       filteredLogCases,
       paginatedCases,
       currentPage,
@@ -4653,10 +7453,20 @@ export default {
       handleDbcFileUpload,
       videoPlayer,
       instrumentVideoPlayer,
-      dbcFileName,
+      dbcFiles,
+      removeDbcFile,
       dbcUploadLoading,
       fileInput,
       dbcFileInput,
+      uePdfFileInput,
+      selectUePdfFile,
+      handleUePdfUpload,
+      uePdfLoading,
+      ueKgDialogVisible,
+      ueKgJsonContent,
+      ueKgSaveLoading,
+      ueReupload,
+      ueSaveToSession,
       importXlsmFile,
       exportTestReport,
       exportName,
@@ -4676,6 +7486,9 @@ export default {
       logActiveTab,
       ActualResultActiveTab,
       activeCodeFile,
+      activeImageFile,
+      handleImageExpand,
+      currentTestIdForImage,
       logDetails,
       ActualResultDetails,
       handleInfoTypeChange,
@@ -4710,6 +7523,9 @@ export default {
       testConfig,
       openTestConfigDialog,
       saveTestConfig,
+      adbDeviceList,
+      adbDeviceLoading,
+      fetchAdbDeviceList,
       mobileCanvas,
       clickPos,
       onVideoClick,
@@ -4722,14 +7538,34 @@ export default {
       iconDots,
 
       iconRealImg,
+      iconWrap,
+      iconVideoPlayer,
+      iconEventLayer,
       iconOverlayCanvas,
+      iconVideoSrc,
+      iconMode,
+      adbOpLogs,
+      adbLogsTableRef,
+      adbOpSelectedIds,
+      isAllAdbLogsSelected,
+      adbSequenceName,
+      clearAdbLogs,
+      deleteAdbLogAt,
+      onAdbSelectionChange,
+      toggleSelectAllAdbLogs,
+      exportSelectedAdbSequence,
       delDot,
       iconConfig,
       loadIconConfigShot,
-      onImgClick,
       redrawDots,
       submitIconDots,
       iconConfigTip,
+      onScreenMouseDown,
+      onScreenMouseMove,
+      onScreenMouseUp,
+      sendAdbTap,
+      sendAdbSwipe,
+      sendAdbKey,
       abortCurrentTest,
       connectMobileStream,
       connectInstrumentStream,
@@ -4753,6 +7589,69 @@ export default {
       fetchTasks,
       reportCaseResult,
       reportTaskComplete,
+      mobileAgentConfirmVisible,
+      mobileAgentConfirmation,
+      mobileAgentConfirmSuccess,
+      mobileAgentConfirmDescription,
+      mobileAgentConfirmSubmitting,
+      mobileAgentCorrectionMode,
+      mobileAgentCorrectedCoordinate,
+      mobileAgentStepCompleted,
+      mobileAgentSelectedCandidate,
+      mobileAgentCorrectionMarkerStyle,
+      selectMobileAgentCoordinate,
+      submitMobileAgentConfirmation,
+      closeMobileAgentConfirmation,
+
+      // ============== 🎬 录制向导 ==============
+      openRecordWizard,
+      recDialogVisible,
+      recStep,
+      recCase,
+      // 阶段1细分步骤
+      recInitialParsed,
+      recCurrentInitialStep,
+      recJumpInitialStep,
+      recPrevInitialStep,
+      // 阶段2细分步骤
+      recActionParsed,
+      recCurrentActionStep,
+      recJumpActionStep,
+      recPrevActionStep,
+      // 兼容保留的合并序列
+      recInitialSeq,
+      recActionSeq,
+      recWrap,
+      recImg,
+      recCanvas,
+      recEvLayer,
+      recVideoSrc,
+      recLogs,
+      recLogsTableRef,
+      recLogsSelected,
+      recLogsAllSelected,
+      recRebooting,
+      recRebootCountdown,
+      recRebootResult,
+      recIsSending,
+      recSubmitting,
+      recOnImgLoaded,
+      recReloadVideo,
+      recSendKey,
+      recOnMouseDown,
+      recOnMouseMove,
+      recOnMouseUp,
+      recClearLogs,
+      recDeleteLogAt,
+      recOnSelectionChange,
+      recToggleSelectAll,
+      recBackTo,
+      recSkipInitial,
+      recSkipAction,
+      recSaveInitial,
+      recSaveAction,
+      recExpectedWrong,
+      recExpectedCorrect,
     };
   },
 };
@@ -4789,8 +7688,9 @@ body {
   z-index: 1000;
   background: linear-gradient(to right, #1e4976, #2c6a9e);
   color: white;
-  padding: 0 15px;
-  height: 55px;
+  padding: 6px 15px;
+  min-height: 55px;
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -4814,6 +7714,8 @@ body {
 .nav-left {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .nav-right {
@@ -5044,7 +7946,21 @@ pre {
   display: flex;
   align-items: center;
   gap: 5px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
+
+.dbc-file-list {
+  display: flex;
+  max-width: 260px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.dbc-summary { width: 150px; flex: 0 0 150px; }
+.dbc-count { color: #909399; white-space: nowrap; font-size: 12px; }
+.video-url-input { margin-bottom: 8px; }
 
 .control-container {
   display: flex;
@@ -5192,5 +8108,116 @@ pre {
 
 :deep(.el-table__row.executing-row ~ .executing-row) {
   background-color: transparent !important;
+}
+
+.mobile-agent-confirmation {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mobile-agent-confirm-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: #f5f7fa;
+  color: #303133;
+}
+
+.mobile-agent-current-purpose {
+  flex-basis: 100%;
+  color: #d97706;
+  font-size: 15px;
+}
+
+.mobile-agent-confirm-images {
+  width: 100%;
+}
+
+.mobile-agent-interaction-image {
+  width: 100%;
+  margin: 14px 0;
+}
+
+.mobile-agent-interaction-screenshot {
+  display: block;
+  max-height: 48vh;
+  background: #111827;
+}
+
+.step-screenshot-collapse {
+  margin-top: 8px;
+}
+
+.execution-step-screenshot {
+  width: min(100%, 900px);
+  max-height: 520px;
+  background: #111827;
+}
+
+.mobile-agent-image-title {
+  margin-bottom: 8px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.mobile-agent-confirm-image {
+  width: 100%;
+  height: min(40vh, 360px);
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background: #111827;
+}
+
+.mobile-agent-correction-canvas {
+  position: relative;
+  width: 100%;
+  text-align: center;
+}
+
+.mobile-agent-clickable-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 40vh;
+  object-fit: fill;
+  cursor: crosshair;
+}
+
+.mobile-agent-correction-marker {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 3px solid #f56c6c;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+}
+
+.mobile-agent-corrected-coordinate {
+  margin-left: 14px;
+  color: #e6a23c;
+  font-weight: 600;
+}
+
+.mobile-agent-candidate-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+}
+
+.mobile-agent-candidate-list :deep(.el-radio) {
+  margin-right: 0;
+}
+
+.execution-log-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
 }
 </style>
