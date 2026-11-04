@@ -1,0 +1,8 @@
+node_modules
+dist
+*.tar
+.git
+.github
+.dockerignore
+dockerfile
+Dockerfile
