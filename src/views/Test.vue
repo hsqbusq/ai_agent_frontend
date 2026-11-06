@@ -4970,7 +4970,26 @@ export default {
           for (let i = 1; i < sheetCount - 1; i++) {
             const sheetName = workbook.SheetNames[i];
             const worksheet = workbook.Sheets[sheetName];
-            const json = XLSX.utils.sheet_to_json(worksheet, { range: 6 });
+
+            // 识别用例 sheet 及其表头行位置：
+            // 旧模板表头在第7行（range:6），新模板（捷途3.0）表头在第8行（range:7），
+            // 且新模板开头有非用例 sheet（Cover/功能模块/变更记录等），需按表头内容跳过
+            let headerRange = 6;
+            {
+              const headerOld = XLSX.utils.sheet_to_json(worksheet, { range: 6, header: 1, defval: "" });
+              const headerNew = XLSX.utils.sheet_to_json(worksheet, { range: 7, header: 1, defval: "" });
+              const rowIsCaseHeader = (arr) =>
+                Array.isArray(arr) &&
+                arr.some((cell) => String(cell).includes("Test Case ID"));
+              if (rowIsCaseHeader(headerNew[0])) {
+                headerRange = 7;
+              } else if (!rowIsCaseHeader(headerOld[0])) {
+                // 两行都不是用例表头 → 非用例 sheet（封面/变更记录等），跳过
+                continue;
+              }
+            }
+
+            const json = XLSX.utils.sheet_to_json(worksheet, { range: headerRange });
             const length = json.length;
             casesTable.value.push({
               sheetName: sheetName,
@@ -4983,28 +5002,70 @@ export default {
               const newId = `${String(cases.value.length + 1).padStart(3, "0")}`;
               cases.value.push({
                 id: newId,
-                TestCaseID: row["Test Case ID"],
-                SyRDIDFSRD: row["SyRD ID/FSR"],
-                Auto_testID: row["Auto_test ID"],
-                TSR: row["TSR"],
-                CasePriority: row["Case\r\nPriority"],
-                DesignMethod: row["Design Method "],
-                TestMethod: row["Test Method"],
-                TestStrategy: row["Test\r\nStrategy "],
-                TestKey: row["Test Key\r\n功能点"],
-                Initial_Condition: row["Pre-condition\r\n前提条件"],
-                Action: row["Action\r\n操作步骤"],
-                Expected_Result: row["Expected Result\r\n期望结果"],
-                InitTestSequences: row["Init Test Sequences\r\n测试序列前置条件"],
-                ActionTestSequences: row["Action Test Sequences\r\n动作测试序列"],
-                ExpectedTestSequences: row["Expected Test Sequences\r\n预期测试序列结果"],
-                Selected: row["Selected"],
-                Result: row["Test Result"],
-                ActualResult: row["Actual Result"],
-                PRNo: row["PR No."],
-                TestLogs: row["Test Logs"],
-                TestDate: row["Test Date"],
-                Remark: row["Remark"],
+                TestCaseID:
+                  row["Test Case ID"] ??
+                  row["Test Case ID\r\n测试caseID"] ??
+                  "",
+                SyRDIDFSRD:
+                  row["SyRD ID/FSR"] ??
+                  row["RD ID/(FSR/TSR）\r\n需求ID"] ??
+                  "",
+                Auto_testID: row["Auto_test ID"] ?? "",
+                TSR: row["TSR"] ?? "",
+                CasePriority:
+                  row["Case\r\nPriority"] ??
+                  row["Case_Priority\r\n优先级"] ??
+                  "",
+                DesignMethod:
+                  row["Design Method "] ??
+                  row["Design Method \r\n设计方法"] ??
+                  "",
+                TestMethod:
+                  row["Test Method"] ??
+                  row["Test Method\r\n测试方法"] ??
+                  "",
+                TestStrategy:
+                  row["Test\r\nStrategy "] ??
+                  row["Test Goal\r\n测试目的"] ??
+                  "",
+                TestKey: row["Test Key\r\n功能点"] ?? row["Test Key"] ?? "",
+                Initial_Condition:
+                  row["Pre-condition\r\n前提条件"] ??
+                  row["Initial_Condition"] ??
+                  "",
+                Action:
+                  row["Action\r\n操作步骤"] ??
+                  row["Test Steps\r\n测试步骤"] ??
+                  "",
+                Expected_Result:
+                  row["Expected Result\r\n期望结果"] ??
+                  row["Expected Result"] ??
+                  "",
+                InitTestSequences:
+                  row["Init Test Sequences\r\n测试序列前置条件"] ??
+                  row["Init Test Sequences"] ??
+                  "",
+                ActionTestSequences:
+                  row["Action Test Sequences\r\n动作测试序列"] ??
+                  row["Action Test Sequences"] ??
+                  "",
+                ExpectedTestSequences:
+                  row["Expected Test Sequences\r\n预期测试序列结果"] ??
+                  row["Expected Test Sequences"] ??
+                  "",
+                Selected: row["Selected"] ?? row["Selected\r\n是否选择"] ?? "",
+                Result:
+                  row["Test Result"] ??
+                  row["Test  Result \r\n测试结果"] ??
+                  "",
+                ActualResult:
+                  row["Actual Result"] ??
+                  row["Actual Result\r\n实际结果"] ??
+                  "",
+                PRNo: row["PR No."] ?? row["PR No.\r\nBug编号"] ?? "",
+                TestLogs: row["Test Logs"] ?? row["Test Log\r\n测试日志"] ?? "",
+                TestDate: row["Test Date"] ?? row["Test Date\r\n测试日期"] ?? "",
+                Remark: row["Remark"] ?? row["Remark\r\n测试备注"] ?? "",
               });
             });
           }
