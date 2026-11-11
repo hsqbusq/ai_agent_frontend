@@ -6239,16 +6239,12 @@ export default {
         });
     };
 
-    // 日志文本展示：把 repr 转义产生的字面 
-（含多层 \n）还原为真实换行
+    // 日志文本展示：把 repr 转义产生的字面 \n（含多层 \\n）还原为真实换行
     const formatLogText = (text) => {
       if (!text) return "";
       return text
-        .replace(/\\n/g, "
-") // 双层转义 \n → 换行
-        .replace(/\n/g, "
-"); // 单层转义 
- → 换行
+        .replace(/\\\\n/g, "\n") // 双层转义 \\n → 换行
+        .replace(/\\n/g, "\n"); // 单层转义 \n → 换行
     };
 
     const fetchTestLogs = (test_id) => {
