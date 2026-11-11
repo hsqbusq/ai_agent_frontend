@@ -634,10 +634,11 @@
                 </template>
               </el-table-column>
 
-              <!-- 实际结果 - 不可编辑 -->
+              <!-- 实际结果 - 不可编辑：展示 AI 判定依据的语义裁剪图，失败时回退"查看"按钮 -->
               <el-table-column prop="ActualResult" label="实际结果" min-width="180">
                 <template #default="scope">
                   <br />
+                  <!-- AI 判定依据：与"测试结果"列同款蓝色查看按钮，点击弹出裁剪依据图+取部位日志 -->
                   <el-button
                     v-if="scope.row.Testid && scope.row.Result !== undefined && scope.row.Result !== ''"
                     type="primary"
@@ -1966,7 +1967,13 @@
     <el-dialog v-model="logDialogVisible" title="测试日志详情" width="70%">
       <el-tabs v-model="logActiveTab" type="card">
         <el-tab-pane v-if="logDetails.logs" label="日志" name="logs">
-          <pre style="text-align: left">{{ logDetails.logs }}</pre>
+          <!-- 字面 
+ 转真实换行 + 长行自动折行（工具结果文本经 str() 转义，
+ 是字面量） -->
+          <pre
+            style="text-align: left; white-space: pre-wrap; word-break: break-all"
+            >{{ formatLogText(logDetails.logs) }}</pre
+          >
         </el-tab-pane>
         <el-tab-pane v-if="logDetails.code_files" label="Python代码" name="python">
           <el-collapse v-model="activeCodeFile">
@@ -2063,7 +2070,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="ActualResultDialogVisible" title="真实结果" width="70%">
+    <el-dialog v-model="ActualResultDialogVisible" title="实车结果（AI 判定依据）" width="70%">
       <el-tabs
         v-model="ActualResultActiveTab"
         type="card"
@@ -2074,6 +2081,16 @@
           style="width: 800px; height: 800px; margin-bottom: 10px"
         />
       </el-tabs>
+      <!-- 裁剪取部位日志：语义匹配命中的识别项与相似度（供 video-processor 开发排查） -->
+      <div v-if="ActualResultDetails.matchedClasses.length" style="margin-top: 10px">
+        <div style="font-weight: bold; margin-bottom: 6px">裁剪取部位日志（语义匹配命中的识别项）：</div>
+        <el-table :data="ActualResultDetails.matchedClasses.map((c, i) => ({ class: c, similarity: ActualResultDetails.similarities[i] }))" size="small" border>
+          <el-table-column prop="class" label="命中识别项 (class)" />
+          <el-table-column label="语义相似度">
+            <template #default="scope">{{ (scope.row.similarity ?? 0).toFixed(4) }}</template>
+          </el-table-column>
+        </el-table>
+      </div>
     </el-dialog>
     <!-- 上传测试记录弹窗 -->
     <el-dialog v-model="uploadRecordDialogVisible" title="上传测试记录" width="600px">
@@ -4026,6 +4043,9 @@ export default {
     });
     const ActualResultDetails = reactive({
       images: "",
+      // 裁剪取部位日志：远端语义匹配命中的识别项与相似度，供 video-processor 开发排查
+      matchedClasses: [],
+      similarities: [],
     });
 
     // 搜索功能
@@ -6219,6 +6239,18 @@ export default {
         });
     };
 
+    // 日志文本展示：把 repr 转义产生的字面 
+（含多层 \n）还原为真实换行
+    const formatLogText = (text) => {
+      if (!text) return "";
+      return text
+        .replace(/\\n/g, "
+") // 双层转义 \n → 换行
+        .replace(/\n/g, "
+"); // 单层转义 
+ → 换行
+    };
+
     const fetchTestLogs = (test_id) => {
       fetch(`/dev-api/test_logs/${test_id}`)
         .then((response) => response.json())
@@ -6266,6 +6298,9 @@ export default {
           //console.log(data);
           if (data.status === "ok") {
             ActualResultDetails.images = data.base64;
+            // 保存裁剪取部位日志（命中的识别项与语义相似度），弹窗中展示给 video-processor 开发
+            ActualResultDetails.matchedClasses = data.matched_classes || [];
+            ActualResultDetails.similarities = data.similarities || [];
             //console.log(ActualResultDetails.images);
             ActualResultDialogVisible.value = true;
             showToast(`实际结果加载成功`, "success");
@@ -7538,6 +7573,7 @@ export default {
       stopPolling,
       fetchTestList,
       fetchTestLogs,
+      formatLogText,
       scrollToCase,
       tableKey,
       fetchActualResult,
