@@ -148,6 +148,25 @@
             font-size: 12px;
         }
 
+        /* 报告缩略图：竖排罗列，hover 放大查看原图细节 */
+        .report-thumb {
+            display: block;
+            max-width: 120px;
+            border-radius: 4px;
+            margin-bottom: 4px;
+            cursor: zoom-in;
+            transition: transform 0.2s;
+            border: 1px solid #e0e0e0;
+        }
+
+        .report-thumb:hover {
+            transform: scale(2.2);
+            transform-origin: left center;
+            z-index: 10;
+            position: relative;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
         .header-row {
             display: flex;
             align-items: center;
@@ -180,6 +199,23 @@
             background-color: #389e0d;
         }
 
+        .only-tested-toggle {
+            position: absolute;
+            right: 140px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 14px;
+            color: #606266;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .only-tested-toggle input {
+            vertical-align: -2px;
+            margin-right: 4px;
+            cursor: pointer;
+        }
+
         .excel-only {
             display: none;
         }
@@ -189,6 +225,10 @@
 <body>
     <div class="header-row">
         <h1>{{TITLE}}</h1>
+        <label class="only-tested-toggle" title="勾选后 Excel 只导出有测试结果(Pass/Fail)的用例，去掉全部未测试空行，文件更小">
+            <input type="checkbox" id="onlyTestedToggle" />
+            仅导出已执行用例
+        </label>
         <button onclick="exportTestReport()" class="export-btn">
             导出为 Excel
         </button>
@@ -258,9 +298,16 @@
 
         const table = document.querySelector('table');
         const headerRow = Array.from(table.tHead.rows[0].cells).map(th => th.innerText.trim());
-        const dataRows = Array.from(table.tBodies[0].rows).map(tr =>
-            Array.from(tr.cells).map(td => td.innerText.trim())
-        );
+        // “仅导出已执行用例”开关：勾选时只导出 Result 列非空的行（Pass/Fail），
+        // 跳过未测试行（其 Result 单元格为空白或“未测试”，与页面统计口径一致）；
+        // 保留 htmlIdx 以便截图单元格取图不错位
+        const onlyTested = document.getElementById('onlyTestedToggle')?.checked;
+        const dataRows = [];
+        Array.from(table.tBodies[0].rows).forEach((tr, htmlIdx) => {
+            const trData = Array.from(tr.cells).map(td => td.innerText.trim());
+            if (onlyTested && !trData[16]) return;
+            dataRows.push({ htmlIdx, trData });
+        });
 
         const wb = new ExcelJS.Workbook();
         const ws = wb.addWorksheet('测试报告');
@@ -283,7 +330,7 @@
             { header: '操作步骤序列', key: 'ActionTestSequences', width: 30 },
             { header: '预期结果序列', key: 'ExpectedTestSequences', width: 30 },
             { header: '测试结果', key: 'Result', width: 10 },
-            { header: '实际结果', key: 'ActualResult', width: 20 },
+            { header: '实际结果', key: 'ActualResult', width: 30 },
             { header: '是否选中', key: 'Selected', width: 10 },
             { header: 'PR号', key: 'PRNo', width: 10 },
             { header: '测试日志', key: 'TestLogs', width: 20 },
@@ -312,34 +359,40 @@
             cell.alignment = { vertical: 'middle', horizontal: 'center' };
         });
 
-        dataRows.forEach((trData, idx) => {
+        dataRows.forEach(({ htmlIdx, trData }) => {
             const rowObj = {};
             headerRow.forEach((key, i) => {
                 rowObj[key] = trData[i] || '';
             });
 
             const excelRow = ws.addRow(rowObj);
-            
+
             excelRow.eachCell({ includeEmpty: false }, (cell) => {
                 cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
             });
 
-            const tdActual = table.tBodies[0].rows[idx].cells[17];
-            console.log(tdActual);
-            
-            const img = tdActual && tdActual.querySelector('img');
-            if (img && img.src.startsWith('data:image/png;base64,')) {
-                const base64 = img.src.split(',')[1];
-                const imgId = wb.addImage({
-                    base64: base64,
-                    extension: 'png',
+            // 实际结果列（第18列）：抓取该行全部缩略图（多帧竖排），逐张嵌入 Excel
+            const tdActual = table.tBodies[0].rows[htmlIdx].cells[17];
+            const imgs = tdActual ? Array.from(tdActual.querySelectorAll('img')) : [];
+            if (imgs.length) {
+                // 修复空行：多帧图不再往下错位 14 行（浮到后续数据行上），
+                // 全部锚定在当前行内，由行高撑开展示
+                imgs.forEach((img) => {
+                    if (img.src.startsWith('data:image/png;base64,')) {
+                        const base64 = img.src.split(',')[1];
+                        const imgId = wb.addImage({
+                            base64: base64,
+                            extension: 'png',
+                        });
+                        ws.addImage(imgId, {
+                            tl: { col: 17, row: excelRow.number - 1 },
+                            ext: { width: 160, height: 100 },
+                            editAs: 'oneCell'
+                        });
+                    }
                 });
-                ws.addImage(imgId, {
-                    tl: { col: 17, row: excelRow.number - 1 },
-                    ext: { width: 160, height: 100 },
-                    editAs: 'oneCell'
-                });
-                excelRow.height = 90;
+                // 行高按图片数量撑开：首行 90 + 每加一张 88
+                excelRow.height = 90 + (imgs.length - 1) * 88;
             } else {
                 excelRow.getCell(18).value = '无图片';
             }

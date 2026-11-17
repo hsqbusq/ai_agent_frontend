@@ -47,11 +47,20 @@
             <el-button
               type="primary"
               size="small"
-              @click="exportTestReport"
+              @click="exportTestReport(false)"
               style="padding: 15px"
             >
               <img src="../assets/04.svg" alt="" style="width: 14px; height: 14px" />
-              导出测试报告
+              导出报告(不含截图)
+            </el-button>
+            <el-button
+              type="primary"
+              size="small"
+              @click="exportTestReport(true)"
+              style="padding: 15px"
+            >
+              <img src="../assets/04.svg" alt="" style="width: 14px; height: 14px" />
+              导出报告(含截图)
             </el-button>
             <el-button
               type="primary"
@@ -264,11 +273,11 @@
               <el-option label="全部信息" value="all"></el-option>
             </el-select>
             <div class="half-width input-wrapper">
-              <span style="margin-right: 8px">URL地址：</span>
+              <span style="margin-right: 8px; flex-shrink: 0; white-space: nowrap">URL地址：</span>
               <el-input
                 v-model="url"
                 placeholder="请输入URL地址"
-                style="flex: 1"
+                style="flex: 1; min-width: 0"
               ></el-input>
             </div>
           </div>
@@ -1084,6 +1093,19 @@
               active-text="是"
               inactive-text="否"
             />
+          </el-form-item>
+          <el-form-item v-if="testConfig.isReset" label="重置后延时">
+            <el-input-number
+              v-model="testConfig.resetDelaySec"
+              :min="0"
+              :max="999"
+              :step="0.1"
+              :precision="3"
+              style="width: 100%"
+            />
+            <div style="font-size: 12px; color: #999">
+              单位：秒。信号复位完成后等待该时间才开始测试
+            </div>
           </el-form-item>
           <el-form-item label="安卓执行模式">
             <el-radio-group v-model="testConfig.explorationMode">
@@ -2827,7 +2849,11 @@ export default {
 
     const default_url = ref("http://172.23.96.54:8000");
     const url = ref(default_url.value);
-    const taskBaseUrl = "http://127.0.0.1:8000";
+    // 走 /task-api 代理转发到 pats 服务(默认8000，/task-stream 路由在其 servers_manager)。
+    // 不硬编码 127.0.0.1——正式环境下 127.0.0.1 指向用户本机，任务轮询必挂
+    // pats 是每用户本机运行的平台：正式环境直连 127.0.0.1（指向用户自己的 pats）。
+    // 本地开发机没跑 pats，走 /task-api 代理转发到台架机 172.23.98.12:8000。
+    const taskBaseUrl = import.meta.env.DEV ? "/task-api" : "http://127.0.0.1:8000";
 
     const stopPolling = () => {
       Object.keys(pollingIntervals).forEach((test_id) => {
@@ -4537,8 +4563,117 @@ export default {
     };
 
     const exportName = ref("");
-    const exportTestReport = async () => {
-      showToast("正在生成测试报告，请稍后...", "info");
+    const exportTestReport = async (withImages = true) => {
+      // ===== 截图缩略图获取 =====
+      // 对 Testid 非空的用例，并发拉取其日志目录下全部截图（含 clip 多帧、processed 标注图），
+      // Canvas 压缩为宽 360px 的 PNG（仪表图实测约 7KB/张），以 base64 内嵌进 HTML 报告。
+      const getThumbnailsForCase = async (testId, maxImages = 6) => {
+        if (!testId) return [];
+        try {
+          const resp = await fetch(
+            `/dev-api/test_logs/${encodeURIComponent(testId)}`
+          );
+          const data = await resp.json();
+          if (data.code !== "200") return [];
+          // 只取截图原图：过滤 processed_ 前缀的标注图（带识别框，非原始画面）
+          const images = (data.result?.logs?.images || [])
+            .map((img) => img.filename)
+            .filter((name) => !name.startsWith("processed_"));
+          if (!images.length) return [];
+          // 排序：clip0 → clip05 → clip1 时间序；无 clip 标记的图排前面
+          const clipOrder = (name) => {
+            const m = name.match(/_clip(\d+)/);
+            if (!m) return -1;
+            const tag = m[1];
+            return tag.startsWith("0") && tag !== "0"
+              ? Number(tag) / 10
+              : Number(tag);
+          };
+          const sorted = [...images].sort((a, b) => clipOrder(a) - clipOrder(b));
+          // 单条用例最多带 maxImages 张，防多帧用例把报告撑爆
+          const batch = sorted.slice(0, maxImages);
+          const results = await Promise.all(
+            batch.map(async (filename) => {
+              try {
+                const r = await fetch(
+                  `/dev-api/test_logs/${encodeURIComponent(testId)}/image?file=${encodeURIComponent(filename)}`
+                );
+                if (!r.ok) return null;
+                const blob = await r.blob();
+                // 只生成缩略图（宽 360px PNG）：
+                // 不再内嵌原尺寸图——5800 条全带图时原图占 3/4 体积，会导致报告上百 MB；
+                // 需要原图的人走测试日志详情页下载原图。缩略图 360px 悬浮放大已可辨文字。
+                const thumbB64 = await new Promise((resolve) => {
+                  const img = new Image();
+                  const url = URL.createObjectURL(blob);
+                  img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    const makeThumb = (src, w) => {
+                      const c = document.createElement("canvas");
+                      c.width = w;
+                      c.height = Math.max(
+                        1,
+                        Math.round((src.height / src.width) * w)
+                      );
+                      const ctx = c.getContext("2d");
+                      ctx.imageSmoothingEnabled = true;
+                      ctx.imageSmoothingQuality = "high";
+                      ctx.drawImage(src, 0, 0, c.width, c.height);
+                      return c;
+                    };
+                    // 逐级 2 倍缩小到接近目标宽度，最后一步精确缩到 targetW（近似 LANCZOS，
+                    // 避免一次 drawImage 大比例缩小时的画质损失）
+                    let current = img;
+                    const targetW = 360;
+                    while (current.width > targetW * 2) {
+                      current = makeThumb(current, Math.round(current.width / 2));
+                    }
+                    resolve(makeThumb(current, targetW).toDataURL("image/png"));
+                  };
+                  img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    resolve(null);
+                  };
+                  img.src = url;
+                });
+                return thumbB64 ? { filename, b64: thumbB64 } : null;
+              } catch {
+                return null;
+              }
+            })
+          );
+          return results.filter((item) => item);
+        } catch (e) {
+          console.warn(`获取 ${testId} 截图失败:`, e);
+          return [];
+        }
+      };
+
+      // 并发限制 4：所有用例的截图分批拉取，避免瞬间打满后端
+      const fetchAllThumbnails = async (caseList) => {
+        const targets = caseList.filter((c) => c.Testid);
+        if (targets.length) {
+          showToast(`正在获取 ${targets.length} 条用例的截图...`, "info");
+        }
+        const thumbMap = new Map(); // id -> [{filename, b64}]
+        for (let i = 0; i < targets.length; i += 4) {
+          const group = targets.slice(i, i + 4);
+          const groupResults = await Promise.all(
+            group.map((c) => getThumbnailsForCase(c.Testid))
+          );
+          group.forEach((c, j) => {
+            if (groupResults[j]?.length) thumbMap.set(c.id, groupResults[j]);
+          });
+        }
+        return thumbMap;
+      };
+
+      // 不含截图模式：跳过全部图片拉取（体积小、生成快）；含截图模式才拉缩略图
+      const thumbMap = withImages
+        ? await fetchAllThumbnails(cases.value)
+        : new Map();
+
+      showToast("正在生成测试报告，请稍等...", "info");
 
       const list = cases.value;
       const total = list.length;
@@ -4583,8 +4718,22 @@ export default {
             }">
                 ${c.Result ?? "未测试"}
             </td>
-            <!-- 直接显示“暂无图片” -->
-            <td><span class="empty-img">暂无图片</span></td>
+            <td>${(() => {
+              const thumbs = thumbMap.get(c.id) || [];
+              if (!withImages) {
+                return '<span class="empty-img">未导出截图</span>';
+              }
+              if (!thumbs.length) {
+                return '<span class="empty-img">暂无图片</span>';
+              }
+              // 截图原图缩略图竖排罗列（clip0/clip05/clip1 时间序），hover 放大查看
+              return thumbs
+                .map(
+                  (t) =>
+                    `<img class="report-thumb" src="${t.b64}" alt="${t.filename}" title="${t.filename}" />`
+                )
+                .join("");
+            })()}</td>
             <td>${c.Selected ?? ""}</td>
             <td>${c.PRNo ?? ""}</td>
             <td>${c.TestLogs ?? ""}</td>
@@ -4607,7 +4756,7 @@ export default {
       const timeStamp = new Date()
         .toLocaleString("zh-CN", { hour12: false })
         .replace(/[/: ]/g, "");
-      exportName.value = `TestReport_${timeStamp}.html`;
+      exportName.value = `TestReport_${withImages ? "withImg" : "noImg"}_${timeStamp}.html`;
       saveAs(blob, `${exportName.value}`);
     };
 
@@ -5809,6 +5958,7 @@ export default {
           detect_before_timeout: testConfig.preWaitSec + "",
           exploration_mode: testConfig.explorationMode || "approval",
           is_reset: testConfig.isReset ? "true" : "false",
+          reset_delay_sec: testConfig.resetDelaySec + "",
           is_clip: testConfig.isClip ? "true" : "false",
         })
       );
@@ -6383,6 +6533,7 @@ export default {
       waitStrategy: "fixed_and_poll",
       preWaitSec: 0,
       isReset: false,
+      resetDelaySec: 0,
       isClip: false,
       continueOnFail: false,
       defaultAllIn: false,
@@ -7875,7 +8026,9 @@ body {
 .content-layout {
   display: grid;
   gap: 20px;
-  margin-top: 55px;
+  /* 顶部工具栏固定悬浮，原 55px 不够时会把第一行（选择测试用例/URL地址）压住并
+     被 card 的 overflow:hidden 裁掉上半截；加高避让 */
+  margin-top: 80px;
   padding: 20px;
 }
 
