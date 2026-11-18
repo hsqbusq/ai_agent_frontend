@@ -3,6 +3,7 @@
 // 独立模块：Test.vue 的 SFC 解析器无法容忍模板字符串中的 HTML 标签流。
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import reportTpl from "../views/report-template.html?raw";
 
 const escapeHtml = (s) =>
   (s ?? "")
@@ -11,6 +12,10 @@ const escapeHtml = (s) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+
+// 表格截断列：hover 显示全文（与 Test.vue 报告逻辑一致）
+const clipTd = (val) =>
+  `<td class="td-clip" title="${escapeHtml(val)}">${escapeHtml(val)}</td>`;
 
 // Vue SFC 解析器会把字符串里的 </script> 当作组件脚本结束标签，拆开拼接规避
 const scriptOpen = "<scr" + "ipt>";
@@ -158,8 +163,69 @@ export const exportZipReport = async (cases, hooks = {}) => {
     zip.file(`图册/${entry.caseKey}.html`, albumHtml);
   }
 
-  // 总览页：统计 + 每用例一张卡片（第一张截图，点击进图册）
+  // 总览页 = 完整测试报告（reportTpl 明细表）+ 截图列链接到图册页 + 底部图片总览网格
   const entryById = new Map(albumEntries.map((e) => [e.row.id, e]));
+
+  const rowsHtml = list
+    .map((c) => {
+      const entry = entryById.get(c.id);
+      const shotTd = entry
+        ? `<a href="图册/${entry.caseKey}.html">查看截图（${entry.images.length} 张）</a>`
+        : '<span class="empty-img">暂无图片</span>';
+      const stressTd = (() => {
+        const sr = c.StressResults || [];
+        if (!sr.length) return "<td></td>";
+        return (
+          "<td>" +
+          sr
+            .map(
+              (r, i) =>
+                `<span style="display:inline-block;margin:0 4px 2px 0;padding:1px 6px;border-radius:3px;font-weight:600;color:#fff;background:${
+                  /pass/i.test(r.result) ? "rgb(31,181,51)" : "#eb1919"
+                }">R${i + 1}:${r.result || "-"}</span>`
+            )
+            .join("") +
+          "</td>"
+        );
+      })();
+      const resultStyle =
+        c.Result === undefined || c.Result === ""
+          ? "background:#f2f3f5;color:#909399"
+          : /pass/i.test(c.Result)
+            ? "background:#d4f8d4;color:#303133"
+            : "background:#ffe1e1;color:#303133";
+      return (
+        `<tr><td>${escapeHtml(c.id)}</td>` +
+        `<td>${escapeHtml(c.TestCaseID)}</td>` +
+        `<td>${escapeHtml(c.SyRDIDFSRD)}</td>` +
+        `<td>${escapeHtml(c.Auto_testID)}</td>` +
+        `<td>${escapeHtml(c.TSR)}</td>` +
+        `<td>${escapeHtml(c.CasePriority)}</td>` +
+        `<td>${escapeHtml(c.TestMethod)}</td>` +
+        `<td>${escapeHtml(c.TestStrategy)}</td>` +
+        `<td>${escapeHtml(c.DesignMethod)}</td>` +
+        `<td>${escapeHtml(c.TestKey)}</td>` +
+        clipTd(c.Initial_Condition) +
+        clipTd(c.Action) +
+        clipTd(c.Expected_Result) +
+        clipTd(c.InitTestSequences) +
+        clipTd(c.ActionTestSequences) +
+        `<td>${escapeHtml(c.ExpectedTestSequences)}</td>` +
+        `<td style="${resultStyle};font-weight:600">${escapeHtml(c.Result ?? "") || "未测试"}</td>` +
+        stressTd +
+        `<td>${shotTd}</td>` +
+        `<td>${escapeHtml(c.ActualResult)}</td>` +
+        `<td>${escapeHtml(c.Selected)}</td>` +
+        `<td>${escapeHtml(c.PRNo)}</td>` +
+        `<td>${escapeHtml(c.TestLogs)}</td>` +
+        `<td>${escapeHtml(c.Numberoftests)}</td>` +
+        `<td>${escapeHtml(c.TestDate)}</td>` +
+        `<td>${escapeHtml(c.Remark)}</td></tr>`
+      );
+    })
+    .join("");
+
+  // 图片总览网格（附加在明细表后）：每用例第一张截图，点击进图册
   const overviewCards = list
     .map((c) => {
       const entry = entryById.get(c.id);
@@ -180,16 +246,28 @@ export const exportZipReport = async (cases, hooks = {}) => {
     })
     .join("");
 
+  // 完整报告主体（reportTpl）：置顶统计 + 用例明细表（截图列链接图册）
+  const reportHtml = reportTpl
+    .replaceAll("{{TITLE}}", "自动化测试报告")
+    .replaceAll("{{TOTAL}}", total)
+    .replaceAll("{{PASS}}", pass)
+    .replaceAll("{{FAIL}}", fail)
+    .replaceAll("{{UNTESTED}}", untested)
+    .replace("{{ROWS}}", rowsHtml)
+    // Excel 导出脚本/按钮在 zip 离线场景无意义，移除
+    .replace(/<script src="https:\/\/cdn[^"]*"><\/script>/g, "");
+
+  // index.html = 报告主体 + 暗色图片总览网格（两段独立 style/交互，iframe-free 直接拼接）
   const indexHtml =
-    `<!DOCTYPE html>\n<html lang="zh-CN"><head><meta charset="utf-8">\n` +
-    `<meta name="viewport" content="width=device-width,initial-scale=1">\n` +
-    `<title>自动化测试报告 · 截图总览</title>\n` +
-    `<style>${albumStyles}</style></head><body>\n` +
-    `<div id="zoom" onclick="resetZoom()"><img alt=""></div>\n` +
-    `<header><h1>自动化测试报告 · 截图总览</h1>` +
-    `<span class="hint">共 ${total} 条 · Pass ${pass} / Fail ${fail} / 未测 ${untested} · 点击图片放大，点击用例号进单案例图册</span></header>\n` +
-    `<div class="grid">${overviewCards}</div>\n` +
-    `${scriptOpen}${albumZoomScript}${scriptClose}</body></html>`;
+    reportHtml.replace(
+      "</body>",
+      `<hr style="margin:24px 0">\n<style>${albumStyles}</style>\n` +
+        `<h1 style="text-align:center;font-weight:500;font-size:24px">截图总览</h1>\n` +
+        `<div id="zoom" onclick="resetZoom()"><img alt=""></div>\n` +
+        `<div class="grid">${overviewCards}</div>\n` +
+        `${scriptOpen}${albumZoomScript}${scriptClose}\n</body>`
+    );
+
   zip.file("index.html", indexHtml);
 
   notify("正在打包报告，请稍等...");

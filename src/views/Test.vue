@@ -4724,6 +4724,7 @@ export default {
               // 不含截图模式固定展示“未导出截图”
               return '<span class="empty-img">未导出截图</span>';
             })()}</td>
+            <td>${c.ActualResult ?? ""}</td>
             <td>${c.Selected ?? ""}</td>
             <td>${c.PRNo ?? ""}</td>
             <td>${c.TestLogs ?? ""}</td>
