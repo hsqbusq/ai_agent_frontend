@@ -2481,6 +2481,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { useRouter } from "vue-router";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { exportZipReport } from "../utils/report-zip.js";
 import { Buffer } from "buffer";
 import reportTpl from "./report-template.html?raw";
 import langOptionsJson from "./langOptions.json";
@@ -4648,116 +4649,18 @@ export default {
     };
 
     const exportName = ref("");
+
     const exportTestReport = async (withImages = true) => {
-      // ===== 截图缩略图获取 =====
-      // 对 Testid 非空的用例，并发拉取其日志目录下全部截图（含 clip 多帧、processed 标注图），
-      // Canvas 压缩为宽 360px 的 PNG（仪表图实测约 7KB/张），以 base64 内嵌进 HTML 报告。
-      const getThumbnailsForCase = async (testId, maxImages = 6) => {
-        if (!testId) return [];
-        try {
-          const resp = await fetch(
-            `/dev-api/test_logs/${encodeURIComponent(testId)}`
-          );
-          const data = await resp.json();
-          if (data.code !== "200") return [];
-          // 只取截图原图：过滤 processed_ 前缀的标注图（带识别框，非原始画面）
-          const images = (data.result?.logs?.images || [])
-            .map((img) => img.filename)
-            .filter((name) => !name.startsWith("processed_"));
-          if (!images.length) return [];
-          // 排序：clip0 → clip05 → clip1 时间序；无 clip 标记的图排前面
-          const clipOrder = (name) => {
-            const m = name.match(/_clip(\d+)/);
-            if (!m) return -1;
-            const tag = m[1];
-            return tag.startsWith("0") && tag !== "0"
-              ? Number(tag) / 10
-              : Number(tag);
-          };
-          const sorted = [...images].sort((a, b) => clipOrder(a) - clipOrder(b));
-          // 单条用例最多带 maxImages 张，防多帧用例把报告撑爆
-          const batch = sorted.slice(0, maxImages);
-          const results = await Promise.all(
-            batch.map(async (filename) => {
-              try {
-                const r = await fetch(
-                  `/dev-api/test_logs/${encodeURIComponent(testId)}/image?file=${encodeURIComponent(filename)}`
-                );
-                if (!r.ok) return null;
-                const blob = await r.blob();
-                // 只生成缩略图（宽 360px PNG）：
-                // 不再内嵌原尺寸图——5800 条全带图时原图占 3/4 体积，会导致报告上百 MB；
-                // 需要原图的人走测试日志详情页下载原图。缩略图 360px 悬浮放大已可辨文字。
-                const thumbB64 = await new Promise((resolve) => {
-                  const img = new Image();
-                  const url = URL.createObjectURL(blob);
-                  img.onload = () => {
-                    URL.revokeObjectURL(url);
-                    const makeThumb = (src, w) => {
-                      const c = document.createElement("canvas");
-                      c.width = w;
-                      c.height = Math.max(
-                        1,
-                        Math.round((src.height / src.width) * w)
-                      );
-                      const ctx = c.getContext("2d");
-                      ctx.imageSmoothingEnabled = true;
-                      ctx.imageSmoothingQuality = "high";
-                      ctx.drawImage(src, 0, 0, c.width, c.height);
-                      return c;
-                    };
-                    // 逐级 2 倍缩小到接近目标宽度，最后一步精确缩到 targetW（近似 LANCZOS，
-                    // 避免一次 drawImage 大比例缩小时的画质损失）
-                    let current = img;
-                    const targetW = 360;
-                    while (current.width > targetW * 2) {
-                      current = makeThumb(current, Math.round(current.width / 2));
-                    }
-                    resolve(makeThumb(current, targetW).toDataURL("image/png"));
-                  };
-                  img.onerror = () => {
-                    URL.revokeObjectURL(url);
-                    resolve(null);
-                  };
-                  img.src = url;
-                });
-                return thumbB64 ? { filename, b64: thumbB64 } : null;
-              } catch {
-                return null;
-              }
-            })
-          );
-          return results.filter((item) => item);
-        } catch (e) {
-          console.warn(`获取 ${testId} 截图失败:`, e);
-          return [];
-        }
-      };
-
-      // 并发限制 4：所有用例的截图分批拉取，避免瞬间打满后端
-      const fetchAllThumbnails = async (caseList) => {
-        const targets = caseList.filter((c) => c.Testid);
-        if (targets.length) {
-          showToast(`正在获取 ${targets.length} 条用例的截图...`, "info");
-        }
-        const thumbMap = new Map(); // id -> [{filename, b64}]
-        for (let i = 0; i < targets.length; i += 4) {
-          const group = targets.slice(i, i + 4);
-          const groupResults = await Promise.all(
-            group.map((c) => getThumbnailsForCase(c.Testid))
-          );
-          group.forEach((c, j) => {
-            if (groupResults[j]?.length) thumbMap.set(c.id, groupResults[j]);
-          });
-        }
-        return thumbMap;
-      };
-
-      // 不含截图模式：跳过全部图片拉取（体积小、生成快）；含截图模式才拉缩略图
-      const thumbMap = withImages
-        ? await fetchAllThumbnails(cases.value)
-        : new Map();
-
+      if (withImages) {
+        // 含截图模式：zip 文件夹形式（index 总览 + 图册 + 原图），见 utils/report-zip.js
+        const res = await exportZipReport(cases.value, {
+          onProgress: (m) => showToast(m, "info"),
+        });
+        exportName.value = res.name;
+        showToast(`报告已导出（zip，含 ${res.albumCount} 条用例截图）`, "success");
+        return;
+      }
+      // ===== 不含截图模式：保持轻量单 HTML =====
       showToast("正在生成测试报告，请稍等...", "info");
 
       const list = cases.value;
@@ -4818,20 +4721,8 @@ export default {
               return `<td>${tags}</td>`;
             })()}
             <td>${(() => {
-              const thumbs = thumbMap.get(c.id) || [];
-              if (!withImages) {
-                return '<span class="empty-img">未导出截图</span>';
-              }
-              if (!thumbs.length) {
-                return '<span class="empty-img">暂无图片</span>';
-              }
-              // 截图原图缩略图竖排罗列（clip0/clip05/clip1 时间序），hover 放大查看
-              return thumbs
-                .map(
-                  (t) =>
-                    `<img class="report-thumb" src="${t.b64}" alt="${t.filename}" title="${t.filename}" />`
-                )
-                .join("");
+              // 不含截图模式固定展示“未导出截图”
+              return '<span class="empty-img">未导出截图</span>';
             })()}</td>
             <td>${c.Selected ?? ""}</td>
             <td>${c.PRNo ?? ""}</td>
