@@ -26,6 +26,15 @@
             <el-button
               type="primary"
               size="small"
+              @click="openStressDialog"
+              style="padding: 15px"
+            >
+              <img src="../assets/01.svg" alt="" style="width: 14px; height: 14px" />
+              压测
+            </el-button>
+            <el-button
+              type="primary"
+              size="small"
               @click="addTestCase"
               style="padding: 15px"
             >
@@ -804,6 +813,7 @@
               @mouseleave="contextMenu.visible = false"
             >
               <li @click="startDebugging">执行已选用例</li>
+              <li @click="openStressDialog">压测已选用例</li>
               <li @click="runSingleRow(contextMenu.row)">本用例执行</li>
               <li @click="convertRow(contextMenu.row)">本用例序列化转换</li>
             </ul>
@@ -891,6 +901,17 @@
                 </div>
               </el-tab-pane>
               <el-tab-pane label="测试执行日志" name="third">
+                <div
+                  v-if="isStressRunning"
+                  style="margin-bottom: 12px; font-weight: 600"
+                >
+                  压测进度：第 {{ stressCurrentRound }}/{{ stressTotalRounds }} 遍，用例
+                  {{ stressCurrentCaseIndex }}/{{ stressTotalCases }}
+                  <el-progress
+                    :percentage="stressProgressPercent"
+                    style="margin-top: 4px"
+                  />
+                </div>
                 <el-select
                   v-model="selectedCase"
                   placeholder="请选择测试用例"
@@ -1166,6 +1187,70 @@
       <template #footer>
         <el-button @click="testConfigVisible = false">取 消</el-button>
         <el-button type="primary" @click="saveTestConfig">保 存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 压测设置弹窗 -->
+    <el-dialog v-model="stressDialogVisible" title="压测设置" width="420px">
+      <el-form label-width="120px" @submit.prevent>
+        <el-form-item label="选中用例数">
+          <span>{{ selectedRowsAll.length }}</span>
+        </el-form-item>
+        <el-form-item label="执行遍数">
+          <el-input-number
+            v-model="stressRounds"
+            :min="1"
+            :max="50"
+            :step="1"
+            step-strictly
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <div style="font-size: 12px; color: #999">
+        按“遍优先”顺序执行：每一遍依次执行所有选中用例，共执行 {{ stressRounds }} 遍；每遍每用例独立记录结果明细。
+      </div>
+      <template #footer>
+        <el-button @click="stressDialogVisible = false">取 消</el-button>
+        <el-button
+          type="primary"
+          :disabled="selectedRowsAll.length === 0"
+          @click="startStressTest"
+          >开始压测</el-button
+        >
+      </template>
+    </el-dialog>
+
+    <!-- 压测结果汇总弹窗 -->
+    <el-dialog v-model="stressSummaryVisible" title="压测结果汇总" width="70%">
+      <el-table :data="stressSummaryRows" border max-height="480">
+        <el-table-column prop="id" label="用例ID" min-width="100" />
+        <el-table-column prop="rounds" label="遍数" width="70" align="center" />
+        <el-table-column prop="pass" label="Pass" width="70" align="center" />
+        <el-table-column prop="fail" label="Fail" width="70" align="center" />
+        <el-table-column label="各遍结果" min-width="300">
+          <template #default="{ row }">
+            <span
+              v-for="(r, i) in row.results"
+              :key="i"
+              :style="{
+                display: 'inline-block',
+                margin: '0 6px 4px 0',
+                padding: '1px 8px',
+                borderRadius: '3px',
+                fontWeight: 600,
+                color: '#fff',
+                backgroundColor: /pass/i.test(r) ? 'rgb(31,181,51)' : '#eb1919',
+              }"
+              >第{{ i + 1 }}遍: {{ r }}</span
+            >
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button type="primary" @click="stressSummaryVisible = false"
+          >关 闭</el-button
+        >
       </template>
     </el-dialog>
 
@@ -4718,6 +4803,20 @@ export default {
             }">
                 ${c.Result ?? "未测试"}
             </td>
+            ${(() => {
+              // 压测明细：勾选压测后保留的各遍结果，追加在 Result 后一列
+              const sr = c.StressResults || [];
+              if (!sr.length) return "<td></td>";
+              const tags = sr
+                .map(
+                  (r, i) =>
+                    `<span style="display:inline-block;margin:0 4px 2px 0;padding:1px 6px;border-radius:3px;font-weight:600;color:#fff;background:${
+                      /pass/i.test(r.result) ? "rgb(31,181,51)" : "#eb1919"
+                    }">R${i + 1}:${r.result || "-"}</span>`
+                )
+                .join("");
+              return `<td>${tags}</td>`;
+            })()}
             <td>${(() => {
               const thumbs = thumbMap.get(c.id) || [];
               if (!withImages) {
@@ -5406,12 +5505,151 @@ export default {
       return result;
     };
 
+    // ============== 压测功能 ==============
+    const stressDialogVisible = ref(false);
+    const stressRounds = ref(1);
+    const isStressRunning = ref(false);
+    const stressCurrentRound = ref(0);
+    const stressTotalRounds = ref(0);
+    const stressCurrentCaseIndex = ref(0);
+    const stressTotalCases = ref(0);
+    const stressSummaryVisible = ref(false);
+    const stressSummaryRows = ref([]);
+
+    const stressProgressPercent = computed(() => {
+      if (!stressTotalRounds.value || !stressTotalCases.value) return 0;
+      const done =
+        (stressCurrentRound.value - 1) * stressTotalCases.value +
+        (stressCurrentCaseIndex.value - 1);
+      const total = stressTotalRounds.value * stressTotalCases.value;
+      return Math.min(100, Math.round((Math.max(done, 0) / total) * 100));
+    });
+
+    const openStressDialog = () => {
+      if (isDebugRunning.value || isStressRunning.value) {
+        showToast("测试执行中，无法开始压测", "warning");
+        return;
+      }
+      if (selectedRowsAll.value.length === 0) {
+        showToast("请先选择要压测的测试用例", "warning");
+        return;
+      }
+      stressDialogVisible.value = true;
+    };
+
+    const startStressTest = async () => {
+      stressDialogVisible.value = false;
+      const roundCount = Math.max(1, Math.floor(stressRounds.value || 1));
+      const caseList = [...selectedRowsAll.value];
+
+      if (isMockMode.value) {
+        showToast(
+          `[模拟模式] 压测 ${caseList.length} 条用例 × ${roundCount} 遍，不调用真实接口`,
+          "info"
+        );
+      }
+      activeName.value = "third";
+      isDebugRunning.value = true;
+      isStressRunning.value = true;
+      debugRows.value = [];
+      startTime.value = parseInt(Date.now());
+      stressTotalRounds.value = roundCount;
+      stressTotalCases.value = caseList.length;
+      stressCurrentRound.value = 1;
+      stressCurrentCaseIndex.value = 0;
+
+      // 压测明细：row.id -> [{round, result, testid}]，执行前清空旧明细
+      caseList.forEach((row) => {
+        row.StressResults = [];
+      });
+
+      for (let round = 1; round <= roundCount && isStressRunning.value; round++) {
+        stressCurrentRound.value = round;
+        for (let i = 0; i < caseList.length && isStressRunning.value; i++) {
+          const row = caseList[i];
+          stressCurrentCaseIndex.value = i + 1;
+          const caseStartTime = Date.now();
+          currentExecutingId.value = row.id;
+          await scrollToCase(row.id);
+
+          try {
+            if (!debugRows.value.some((dr) => dr.id === row.id)) {
+              debugRows.value.push(row);
+            }
+            selectedCase.value = row.id;
+            const initSeq = isCarryOverInit(row.InitTestSequences) ? "" : (row.InitTestSequences ?? "");
+            const actSeq = (row.ActionTestSequences ?? "").toString().trim();
+            const expSeq = (row.ExpectedTestSequences ?? "").toString().trim();
+            if (!actSeq && !expSeq) {
+              showToast(`用例${row.id}缺少操作步骤和预期结果，无法执行`, "error");
+              row.StressResults.push({ round, result: "未执行", testid: "" });
+              continue;
+            }
+            const query = `前提条件: ${initSeq} 操作步骤: ${actSeq} 预期结果:${expSeq}`;
+            const baseurl = url.value;
+            executionLogs.value[row.id] = [];
+            executionLogs.value[row.id].push({
+              log_id: 1,
+              time: new Date()
+                .toLocaleString("zh-CN", { hour12: false })
+                .replace(/\//g, "-"),
+              message: `[压测] 第 ${round} 遍开始执行，请等待！`,
+            });
+            if (isMockMode.value) {
+              await runMockTestCase(row.id, row);
+            } else {
+              await runTestCase(query, baseurl, row.id, row);
+            }
+            // 记录本遍明细（Result/Testid 已由轮询逻辑写回行数据）
+            const caseRow = cases.value.find((c) => c.id === row.id) || row;
+            row.StressResults.push({
+              round,
+              result: caseRow.Result ?? "",
+              testid: caseRow.Testid ?? "",
+            });
+          } catch (error) {
+            showToast(`测试用例${row.id}第 ${round} 遍执行失败`, "error");
+            row.StressResults.push({
+              round,
+              result: "执行异常",
+              testid: "",
+            });
+          } finally {
+            currentExecutingId.value = "";
+            await nextTick();
+          }
+        }
+      }
+
+      isDebugRunning.value = false;
+      isStressRunning.value = false;
+      endTime.value = parseInt(Date.now());
+      currentExecutingId.value = "";
+
+      // 汇总
+      stressSummaryRows.value = caseList
+        .filter((row) => (row.StressResults || []).length)
+        .map((row) => {
+          const results = row.StressResults.map((r) => r.result);
+          return {
+            id: row.id,
+            rounds: results.length,
+            pass: results.filter((r) => /pass/i.test(r)).length,
+            fail: results.filter((r) => r && !/pass/i.test(r)).length,
+            results,
+          };
+        });
+      if (stressSummaryRows.value.length) {
+        stressSummaryVisible.value = true;
+      }
+      showToast("压测已完成", "info");
+    };
+
     const startDebugging = async () => {
       if (selectedRowsAll.value.length === 0) {
         showToast("请先选择要调试的测试用例", "warning");
         return;
       }
-
       if (isMockMode.value) {
         showToast(
           `[模拟模式] 开始执行 ${selectedRowsAll.value.length} 条用例，不调用真实接口`,
@@ -5520,6 +5758,7 @@ export default {
     const currentTestId = ref("");
     const stopDebugging = async () => {
       isDebugRunning.value = false;
+      isStressRunning.value = false;
       currentExecutingId.value = "";
       currentPage.value = 1;
       tableKey.value++;
@@ -7623,6 +7862,19 @@ export default {
       clearTestCase,
       runSingleRow,
       isDebugRunning,
+      // 压测
+      stressDialogVisible,
+      stressRounds,
+      isStressRunning,
+      stressCurrentRound,
+      stressTotalRounds,
+      stressCurrentCaseIndex,
+      stressTotalCases,
+      stressProgressPercent,
+      stressSummaryVisible,
+      stressSummaryRows,
+      openStressDialog,
+      startStressTest,
       activeName,
       dbcFiles,
       selectedDbcName,
