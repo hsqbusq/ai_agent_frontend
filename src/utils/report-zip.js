@@ -255,17 +255,19 @@ export const exportZipReport = async (cases, hooks = {}) => {
     .replaceAll("{{FAIL}}", fail)
     .replaceAll("{{UNTESTED}}", untested)
     .replace("{{ROWS}}", rowsHtml)
-    // Excel 导出脚本/按钮在 zip 离线场景无意义，移除
-    .replace(/<script src="https:\/\/cdn[^"]*"><\/script>/g, "");
+    // zip 离线场景：移除 CDN 依赖、Excel 导出按钮与内联导出脚本（包内已有全量 xlsx）
+    .replace(/<script src="https:\/\/cdn[^"]*"><\/script>/g, "")
+    .replace(/<button onclick="exportTestReport\(\)"[\s\S]*?<\/button>/g, "")
+    .replace(/<label class="only-tested-toggle"[\s\S]*?<\/label>/g, "");
 
-  // index.html = 报告主体 + 暗色图片总览网格（两段独立 style/交互，iframe-free 直接拼接）
+  // 图片总览默认折叠（<details>）：不展开不加载图，index 打开不卡
   const indexHtml =
     reportHtml.replace(
       "</body>",
       `<hr style="margin:24px 0">\n<style>${albumStyles}</style>\n` +
-        `<h1 style="text-align:center;font-weight:500;font-size:24px">截图总览</h1>\n` +
+        `<details style="padding:0 20px 20px"><summary style="cursor:pointer;font-size:20px;font-weight:500">截图总览（点击展开，共 ${list.length} 条）</summary>` +
         `<div id="zoom" onclick="resetZoom()"><img alt=""></div>\n` +
-        `<div class="grid">${overviewCards}</div>\n` +
+        `<div class="grid">${overviewCards}</div></details>\n` +
         `${scriptOpen}${albumZoomScript}${scriptClose}\n</body>`
     );
 
@@ -303,6 +305,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
     { header: "测试结果", key: "Result", width: 10 },
     { header: "压测明细", key: "StressResults", width: 20 },
     { header: "实际结果", key: "ActualResult", width: 30 },
+    { header: "截图", key: "Shots", width: 20 },
     { header: "是否选中", key: "Selected", width: 10 },
     { header: "PR号", key: "PRNo", width: 10 },
     { header: "测试日志", key: "TestLogs", width: 20 },
@@ -335,8 +338,8 @@ export const exportZipReport = async (cases, hooks = {}) => {
     cell.alignment = { vertical: "middle", horizontal: "center" };
   });
 
-  // 截图列（第19列 col=18，锚定在实际结果后）：与模板导出脚本同布局
-  const SHOT_COL = 18; // ActualResult 键位对应第19列，图片锚 col 从 0 计
+  // 截图列 = ActualResult 后的 Shots 列（第20列，0-based col 19），图片专列不与文本冲突
+  const SHOT_COL = 19;
   for (const c of list) {
     const stressText = (c.StressResults || [])
       .map((r, i) => `R${i + 1}:${r.result || "-"}`)
@@ -361,6 +364,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
       Result: c.Result ?? "",
       StressResults: stressText,
       ActualResult: c.ActualResult ?? "",
+      Shots: entry ? `${entry.images.length} 张` : "无图片",
       Selected: c.Selected ?? "",
       PRNo: c.PRNo ?? "",
       TestLogs: c.TestLogs ?? "",
@@ -378,7 +382,13 @@ export const exportZipReport = async (cases, hooks = {}) => {
       for (const img of entry.images) {
         try {
           const base64 = await blobToBase64(img.blob);
-          const imgId = wb.addImage({ base64, extension: fileExt(img.filename) === "jpg" ? "jpeg" : "png" });
+          // extension 按 blob MIME 推断（截图目录均 png/jpg；不匹配时兜底 png）
+          const mime = (img.blob.type || "").toLowerCase();
+          const extension =
+            mime.includes("jpeg") || mime.includes("jpg")
+              ? "jpeg"
+              : "png";
+          const imgId = wb.addImage({ base64, extension });
           ws.addImage(imgId, {
             tl: { col: SHOT_COL, row: excelRow.number - 1 },
             ext: { width: 160, height: 100 },
@@ -389,8 +399,6 @@ export const exportZipReport = async (cases, hooks = {}) => {
         }
       }
       excelRow.height = 90 + (entry.images.length - 1) * 88;
-    } else {
-      excelRow.getCell(19).value = "无图片";
     }
   }
 
