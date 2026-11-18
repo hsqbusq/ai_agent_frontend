@@ -100,9 +100,12 @@ export const exportZipReport = async (cases, hooks = {}) => {
   const safeKey = (s) =>
     (s ?? "").toString().replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 60) || "case";
 
-  // 收集：caseKey -> {row, images:[{seq, filename, blob}]}；并发限制 4
+  // 收集：caseKey -> {row, images:[{seq, filename, blob}]}；并发限制 4；分批进度反馈
   const albumEntries = [];
   for (let i = 0; i < targets.length; i += 4) {
+    if (i % 40 === 0 && i > 0) {
+      notify(`正在获取截图 ${i}/${targets.length} 条用例...`);
+    }
     const group = targets.slice(i, i + 4);
     const groupLists = await Promise.all(
       group.map(async (c) => ({ c, filenames: await fetchCaseImageNames(c.Testid) }))
@@ -274,16 +277,14 @@ export const exportZipReport = async (cases, hooks = {}) => {
   zip.file("index.html", indexHtml);
 
   // ===== 全量 Excel 报告（含截图嵌入，复用 report-template.html 导出脚本的列定义/样式） =====
-  const blobToBase64 = async (blob) => {
-    const buf = await blob.arrayBuffer();
-    let binary = "";
-    const bytes = new Uint8Array(buf);
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-    }
-    return btoa(binary);
-  };
+  // FileReader 原生转 base64，比逐字节 String.fromCharCode 快一个量级
+  const blobToBase64 = (blob) =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
 
   const excelColumns = [
     { header: "Case ID", key: "id", width: 10 },
@@ -340,7 +341,14 @@ export const exportZipReport = async (cases, hooks = {}) => {
 
   // 截图列 = ActualResult 后的 Shots 列（第20列，0-based col 19），图片专列不与文本冲突
   const SHOT_COL = 19;
+  // 全量嵌图 OOM 防护：Excel 内嵌图片总数上限
+  const EXCEL_MAX_EMBED_IMAGES = 2000;
+  let excelEmbeddedCount = 0;
+  let excelCaseIdx = 0;
   for (const c of list) {
+    if (++excelCaseIdx % 100 === 0) {
+      notify(`正在生成 Excel ${excelCaseIdx}/${list.length} 行（含嵌图）...`);
+    }
     const stressText = (c.StressResults || [])
       .map((r, i) => `R${i + 1}:${r.result || "-"}`)
       .join(" ");
@@ -379,7 +387,14 @@ export const exportZipReport = async (cases, hooks = {}) => {
 
     const entry = entryById.get(c.id);
     if (entry) {
-      for (const img of entry.images) {
+      // 全量嵌图内存上限：Excel 内嵌总数封顶 2000 张（超出仅截图中照常导出到 zip 目录），
+      // 防止 5000+ 用例全嵌导致浏览器 OOM。封顶后行内显示"N 张(超限未嵌入)"。
+      const embeddable = entry.images.slice(
+        0,
+        Math.max(0, EXCEL_MAX_EMBED_IMAGES - excelEmbeddedCount)
+      );
+      for (const img of embeddable) {
+        excelEmbeddedCount++;
         try {
           const base64 = await blobToBase64(img.blob);
           // extension 按 blob MIME 推断（截图目录均 png/jpg；不匹配时兜底 png）
@@ -398,17 +413,28 @@ export const exportZipReport = async (cases, hooks = {}) => {
           console.warn("Excel 嵌图失败:", img.filename, e);
         }
       }
-      excelRow.height = 90 + (entry.images.length - 1) * 88;
+      if (embeddable.length) {
+        excelRow.height = 90 + (embeddable.length - 1) * 88;
+      }
+      if (entry.images.length > embeddable.length) {
+        excelRow.getCell(20).value = `${entry.images.length} 张（超出嵌入上限，见截图目录）`;
+      }
     }
   }
 
+  notify("正在生成 Excel 文件（写入内存）...");
   const excelBuffer = await wb.xlsx.writeBuffer();
   zip.file("测试报告_全量.xlsx", excelBuffer);
 
   notify("正在打包报告，请稍等...");
-  const blob = await zip.generateAsync({ type: "blob" }, (meta) => {
-    console.log(`zip 进度: ${Math.round(meta.percent)}%`);
-  });
+  const blob = await zip.generateAsync(
+    { type: "blob", compression: "STORE" }, // PNG/xlsx 已是压缩格式，STORE 避免重复 DEFLATE 拖慢全量打包
+    (meta) => {
+      if (Math.round(meta.percent) % 25 === 0) {
+        notify(`正在打包 ${Math.round(meta.percent)}%...`);
+      }
+    }
+  );
   const timeStamp = new Date()
     .toLocaleString("zh-CN", { hour12: false })
     .replace(/[/: ]/g, "");
