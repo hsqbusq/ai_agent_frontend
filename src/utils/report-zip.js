@@ -3,6 +3,7 @@
 // 独立模块：Test.vue 的 SFC 解析器无法容忍模板字符串中的 HTML 标签流。
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import ExcelJS from "exceljs";
 import reportTpl from "../views/report-template.html?raw";
 
 const escapeHtml = (s) =>
@@ -269,6 +270,132 @@ export const exportZipReport = async (cases, hooks = {}) => {
     );
 
   zip.file("index.html", indexHtml);
+
+  // ===== 全量 Excel 报告（含截图嵌入，复用 report-template.html 导出脚本的列定义/样式） =====
+  const blobToBase64 = async (blob) => {
+    const buf = await blob.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buf);
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  };
+
+  const excelColumns = [
+    { header: "Case ID", key: "id", width: 10 },
+    { header: "测试用例ID", key: "TestCaseID", width: 15 },
+    { header: "SyRD/FSRD ID", key: "SyRDIDFSRD", width: 15 },
+    { header: "自动测试ID", key: "Auto_testID", width: 15 },
+    { header: "TSR", key: "TSR", width: 10 },
+    { header: "用例优先级", key: "CasePriority", width: 10 },
+    { header: "测试方法", key: "TestMethod", width: 10 },
+    { header: "测试策略", key: "TestStrategy", width: 10 },
+    { header: "设计方法", key: "DesignMethod", width: 10 },
+    { header: "测试功能点", key: "TestKey", width: 20 },
+    { header: "初始条件", key: "Initial_Condition", width: 30 },
+    { header: "动作", key: "Action", width: 20 },
+    { header: "预期结果", key: "Expected_Result", width: 20 },
+    { header: "初始条件序列", key: "InitTestSequences", width: 30 },
+    { header: "操作步骤序列", key: "ActionTestSequences", width: 30 },
+    { header: "预期结果序列", key: "ExpectedTestSequences", width: 30 },
+    { header: "测试结果", key: "Result", width: 10 },
+    { header: "压测明细", key: "StressResults", width: 20 },
+    { header: "实际结果", key: "ActualResult", width: 30 },
+    { header: "是否选中", key: "Selected", width: 10 },
+    { header: "PR号", key: "PRNo", width: 10 },
+    { header: "测试日志", key: "TestLogs", width: 20 },
+    { header: "测试次数", key: "Numberoftests", width: 10 },
+    { header: "测试日期", key: "TestDate", width: 15 },
+    { header: "备注", key: "Remark", width: 20 },
+  ];
+
+  notify("正在生成 Excel 报告...");
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("测试报告");
+  ws.columns = excelColumns;
+
+  ws.insertRow(1, { id: "测试总数", SyRDIDFSRD: total });
+  ws.insertRow(2, { id: "测试成功数", SyRDIDFSRD: pass });
+  ws.insertRow(3, { id: "测试失败数", SyRDIDFSRD: fail });
+  ws.insertRow(4, { id: "未测试数", SyRDIDFSRD: untested });
+  for (let i = 1; i <= 4; i++) {
+    const r = ws.getRow(i);
+    r.font = { bold: true, size: 13, color: { argb: "FFFFFF" } };
+    r.alignment = { horizontal: "left" };
+    r.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2C6A9E" } };
+    r.getCell(2).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2C6A9E" } };
+    r.getCell(3).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2C6A9E" } };
+  }
+  const headerExcelRow = ws.getRow(5);
+  headerExcelRow.font = { bold: true };
+  headerExcelRow.eachCell((cell) => {
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE0E0E0" } };
+    cell.alignment = { vertical: "middle", horizontal: "center" };
+  });
+
+  // 截图列（第19列 col=18，锚定在实际结果后）：与模板导出脚本同布局
+  const SHOT_COL = 18; // ActualResult 键位对应第19列，图片锚 col 从 0 计
+  for (const c of list) {
+    const stressText = (c.StressResults || [])
+      .map((r, i) => `R${i + 1}:${r.result || "-"}`)
+      .join(" ");
+    const rowObj = {
+      id: c.id ?? "",
+      TestCaseID: c.TestCaseID ?? "",
+      SyRDIDFSRD: c.SyRDIDFSRD ?? "",
+      Auto_testID: c.Auto_testID ?? "",
+      TSR: c.TSR ?? "",
+      CasePriority: c.CasePriority ?? "",
+      TestMethod: c.TestMethod ?? "",
+      TestStrategy: c.TestStrategy ?? "",
+      DesignMethod: c.DesignMethod ?? "",
+      TestKey: c.TestKey ?? "",
+      Initial_Condition: c.Initial_Condition ?? "",
+      Action: c.Action ?? "",
+      Expected_Result: c.Expected_Result ?? "",
+      InitTestSequences: c.InitTestSequences ?? "",
+      ActionTestSequences: c.ActionTestSequences ?? "",
+      ExpectedTestSequences: c.ExpectedTestSequences ?? "",
+      Result: c.Result ?? "",
+      StressResults: stressText,
+      ActualResult: c.ActualResult ?? "",
+      Selected: c.Selected ?? "",
+      PRNo: c.PRNo ?? "",
+      TestLogs: c.TestLogs ?? "",
+      Numberoftests: c.Numberoftests ?? "",
+      TestDate: c.TestDate ?? "",
+      Remark: c.Remark ?? "",
+    };
+    const excelRow = ws.addRow(rowObj);
+    excelRow.eachCell({ includeEmpty: false }, (cell) => {
+      cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+    });
+
+    const entry = entryById.get(c.id);
+    if (entry) {
+      for (const img of entry.images) {
+        try {
+          const base64 = await blobToBase64(img.blob);
+          const imgId = wb.addImage({ base64, extension: fileExt(img.filename) === "jpg" ? "jpeg" : "png" });
+          ws.addImage(imgId, {
+            tl: { col: SHOT_COL, row: excelRow.number - 1 },
+            ext: { width: 160, height: 100 },
+            editAs: "oneCell",
+          });
+        } catch (e) {
+          console.warn("Excel 嵌图失败:", img.filename, e);
+        }
+      }
+      excelRow.height = 90 + (entry.images.length - 1) * 88;
+    } else {
+      excelRow.getCell(19).value = "无图片";
+    }
+  }
+
+  const excelBuffer = await wb.xlsx.writeBuffer();
+  zip.file("测试报告_全量.xlsx", excelBuffer);
 
   notify("正在打包报告，请稍等...");
   const blob = await zip.generateAsync({ type: "blob" }, (meta) => {
