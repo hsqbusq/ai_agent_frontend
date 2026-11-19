@@ -71,6 +71,15 @@ export const fetchCaseImageNames = async (testId) => {
 const fileExt = (filename) =>
   (filename.match(/\.(\w+)$/) || [null, "png"])[1];
 
+// 后端截图源文件名是 .png 但实际内容可能是 WebP，按 blob MIME 决定真实扩展名，
+// 否则画图等不支持 WebP 的程序打不开（报"无效位图"）
+const imgExt = (blob, filename) => {
+  const mime = (blob?.type || "").toLowerCase();
+  if (mime.includes("webp")) return "webp";
+  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+  return fileExt(filename);
+};
+
 /**
  * 导出 zip 形式测试报告（含截图，原图不压缩、无张数上限）。
  * @param cases   用例数组（含 id/Testid/Result）
@@ -135,13 +144,13 @@ export const exportZipReport = async (cases, hooks = {}) => {
   for (const entry of albumEntries) {
     for (const img of entry.images) {
       zip.file(
-        `截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${fileExt(img.filename)}`,
+        `截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${imgExt(img.blob, img.filename)}`,
         img.blob
       );
     }
     const cards = entry.images
       .map((img) => {
-        const rel = `../截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${fileExt(img.filename)}`;
+        const rel = `../截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${imgExt(img.blob, img.filename)}`;
         const alt = escapeHtml(entry.row.id) + " 第" + img.seq + "张";
         return (
           `<div class="card"><img src="${rel}" data-full="${rel}" alt="${alt}" loading="lazy">` +
@@ -177,7 +186,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
       const result = c.Result || "未测试";
       const color = /pass/i.test(c.Result ?? "") ? "rgb(80,220,100)" : "#ff6b6b";
       if (entry) {
-        const rel = `截图/${entry.caseKey}/01.${fileExt(entry.images[0].filename)}`;
+        const rel = `截图/${entry.caseKey}/01.${imgExt(entry.images[0].blob, entry.images[0].filename)}`;
         return (
           `<div class="card"><img src="${rel}" data-full="${rel}" alt="${escapeHtml(c.id)}" loading="lazy">` +
           `<div class="cap"><a href="图册/${entry.caseKey}.html">${escapeHtml(c.id)}</a>` +
