@@ -4652,10 +4652,24 @@ export default {
 
     const exportTestReport = async (withImages = true) => {
       if (withImages) {
-        // 含截图模式：zip 文件夹形式（index 总览 + 图册 + 原图），见 utils/report-zip.js
+        // 含截图模式：zip 文件夹形式（index 总览 + 图册 + 原图 + 全量Excel），见 utils/report-zip.js
+        // 进度提示用单例 ElMessage 句柄更新，避免每次回调新弹一条（大 zip 的 onUpdate 在 100% 处会触发多次）
+        let progressMsg = null;
         const res = await exportZipReport(cases.value, {
-          onProgress: (m) => showToast(m, "info"),
+          onProgress: (m) => {
+            if (progressMsg) {
+              progressMsg.message = m;
+            } else {
+              progressMsg = ElMessage({
+                type: "info",
+                message: m,
+                offset: 60,
+                duration: 0, // 不自动关闭，结束时手动关
+              });
+            }
+          },
         });
+        progressMsg?.close();
         exportName.value = res.name;
         showToast(`报告已导出（zip，含 ${res.albumCount} 条用例截图）`, "success");
         return;
