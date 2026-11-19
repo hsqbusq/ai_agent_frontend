@@ -71,12 +71,19 @@ export const fetchCaseImageNames = async (testId) => {
 const fileExt = (filename) =>
   (filename.match(/\.(\w+)$/) || [null, "png"])[1];
 
-// 后端截图源文件名是 .png 但实际内容可能是 WebP，按 blob MIME 决定真实扩展名，
-// 否则画图等不支持 WebP 的程序打不开（报"无效位图"）
-const imgExt = (blob, filename) => {
-  const mime = (blob?.type || "").toLowerCase();
-  if (mime.includes("webp")) return "webp";
-  if (mime.includes("jpeg") || mime.includes("jpg")) return "jpg";
+// 后端截图源文件名是 .png 但实际内容可能是 WebP，按文件头魔数判定真实扩展名
+// （blob.type 不可靠——fetch 的 blob 常无 MIME），否则画图等不支持 WebP 的程序打不开
+const imgExt = async (blob, filename) => {
+  try {
+    const head = new Uint8Array(await blob.slice(0, 12).arrayBuffer());
+    const startsWith = (...bytes) => bytes.every((b, i) => head[i] === b);
+    if (startsWith(0x52, 0x49, 0x46, 0x46) && head[8] === 0x57 && head[9] === 0x45) return "webp"; // RIFF....WEBP
+    if (startsWith(0xff, 0xd8, 0xff)) return "jpg";
+    if (startsWith(0x89, 0x50, 0x4e, 0x47)) return "png";
+    if (startsWith(0x47, 0x49, 0x46, 0x38)) return "gif";
+  } catch (e) {
+    /* 判定失败回落文件名 */
+  }
   return fileExt(filename);
 };
 
@@ -142,15 +149,16 @@ export const exportZipReport = async (cases, hooks = {}) => {
 
   // 截图文件 + 单用例图册页
   for (const entry of albumEntries) {
+    for (const img of entry.images) img.ext = await imgExt(img.blob, img.filename);
     for (const img of entry.images) {
       zip.file(
-        `截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${imgExt(img.blob, img.filename)}`,
+        `截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${img.ext}`,
         img.blob
       );
     }
     const cards = entry.images
       .map((img) => {
-        const rel = `../截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${imgExt(img.blob, img.filename)}`;
+        const rel = `../截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${img.ext}`;
         const alt = escapeHtml(entry.row.id) + " 第" + img.seq + "张";
         return (
           `<div class="card"><img src="${rel}" data-full="${rel}" alt="${alt}" loading="lazy">` +
@@ -186,7 +194,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
       const result = c.Result || "未测试";
       const color = /pass/i.test(c.Result ?? "") ? "rgb(80,220,100)" : "#ff6b6b";
       if (entry) {
-        const rel = `截图/${entry.caseKey}/01.${imgExt(entry.images[0].blob, entry.images[0].filename)}`;
+        const rel = `截图/${entry.caseKey}/01.${entry.images[0].ext}`;
         return (
           `<div class="card"><img src="${rel}" data-full="${rel}" alt="${escapeHtml(c.id)}" loading="lazy">` +
           `<div class="cap"><a href="图册/${entry.caseKey}.html">${escapeHtml(c.id)}</a>` +
