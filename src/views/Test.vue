@@ -5502,17 +5502,21 @@ export default {
                 .replace(/\//g, "-"),
               message: `[压测] 第 ${round} 遍开始执行，请等待！`,
             });
+            let polledResult = null;
             if (isMockMode.value) {
               await runMockTestCase(row.id, row);
             } else {
-              await runTestCase(query, baseurl, row.id, row);
+              // runTestCase resolve 的 data 即轮询拿到的结果，直接取用；
+              // 不能依赖 caseRow.Result——轮询内 fetchTestList(1) 刷新列表可能把
+              // 刚写回的 Result 覆盖回空值，导致第一遍压测结果丢失
+              polledResult = await runTestCase(query, baseurl, row.id, row);
             }
             // 记录本遍明细（Result/Testid 已由轮询逻辑写回行数据）
             const caseRow = cases.value.find((c) => c.id === row.id) || row;
             row.StressResults.push({
               round,
-              result: caseRow.Result ?? "",
-              testid: caseRow.Testid ?? "",
+              result: polledResult?.result ?? caseRow.Result ?? "",
+              testid: polledResult?.test_id ?? caseRow.Testid ?? "",
             });
           } catch (error) {
             showToast(`测试用例${row.id}第 ${round} 遍执行失败`, "error");
