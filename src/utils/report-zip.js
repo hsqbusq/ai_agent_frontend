@@ -234,7 +234,6 @@ export const exportZipReport = async (cases, hooks = {}) => {
     { header: "测试结果", key: "Result", width: 10 },
     { header: "压测明细", key: "StressResults", width: 20 },
     { header: "实际结果", key: "ActualResult", width: 30 },
-    { header: "截图", key: "Shots", width: 20 },
     { header: "是否选中", key: "Selected", width: 10 },
     { header: "PR号", key: "PRNo", width: 10 },
     { header: "测试日志", key: "TestLogs", width: 20 },
@@ -267,11 +266,11 @@ export const exportZipReport = async (cases, hooks = {}) => {
     cell.alignment = { vertical: "middle", horizontal: "center" };
   });
 
-  // 截图列 = ActualResult 后的 Shots 列（第20列）：超链接模式，无嵌图
+  // 实际结果列放截图超链接，无单独截图列
   let excelCaseIdx = 0;
   for (const c of list) {
     if (++excelCaseIdx % 100 === 0) {
-      notify(`正在生成 Excel ${excelCaseIdx}/${list.length} 行（含嵌图）...`);
+      notify(`正在生成 Excel ${excelCaseIdx}/${list.length} 行...`);
     }
     const stressText = (c.StressResults || [])
       .map((r, i) => `R${i + 1}:${r.result || "-"}`)
@@ -308,15 +307,15 @@ export const exportZipReport = async (cases, hooks = {}) => {
       cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
     });
 
-    // 截图列（Shots，第20列）：不嵌图，放超链接跳转该用例图册页（demo 模式），
+    // 实际结果列（第19格）：不嵌图，有截图时放超链接跳转该用例图册页（demo 模式），
     // 图片本体在 zip 的 截图/ 目录 + 图册/ 页浏览，Excel 保持轻量
     const entry = entryById.get(c.id);
     if (entry) {
-      const shotCell = excelRow.getCell(20);
-      shotCell.value = { text: `打开册（${entry.images.length} 张）`, hyperlink: `图册/${entry.caseKey}.html` };
+      const shotCell = excelRow.getCell(19);
+      shotCell.value = { text: `打开图册（${entry.images.length} 张）`, hyperlink: `图册/${entry.caseKey}.html` };
       shotCell.font = { color: { argb: "FF0563C1" }, underline: true };
-    } else {
-      excelRow.getCell(20).value = "无图片";
+    } else if (!excelRow.getCell(19).value) {
+      excelRow.getCell(19).value = "无图片";
     }
   }
 
