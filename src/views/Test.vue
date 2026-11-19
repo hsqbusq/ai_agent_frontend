@@ -1228,21 +1228,13 @@
         <el-table-column prop="rounds" label="遍数" width="70" align="center" />
         <el-table-column prop="pass" label="Pass" width="70" align="center" />
         <el-table-column prop="fail" label="Fail" width="70" align="center" />
-        <el-table-column label="各遍结果" min-width="300">
+        <el-table-column label="各遍结果" min-width="300" class-name="round-badges-col">
           <template #default="{ row }">
             <span
               v-for="(r, i) in row.results"
               :key="i"
-              :style="{
-                display: 'inline-block',
-                whiteSpace: 'nowrap',
-                margin: '0 6px 4px 0',
-                padding: '1px 8px',
-                borderRadius: '3px',
-                fontWeight: 600,
-                color: '#fff',
-                backgroundColor: /pass/i.test(r) ? 'rgb(31,181,51)' : '#eb1919',
-              }"
+              class="round-badge"
+              :class="/pass/i.test(r) ? 'round-badge-pass' : 'round-badge-fail'"
               >第{{ i + 1 }}遍: {{ r }}</span
             >
           </template>
@@ -8065,6 +8057,28 @@ export default {
 </script>
 
 <style scoped>
+/* 压测汇总"各遍结果"徽标：Element Plus 单元格 .cell 默认 overflow:hidden 会裁掉
+   溢出文字，这里对该列放开溢出并允许徽标换行，保证"第N遍: Fail"完整可见 */
+.round-badges-col :deep(.cell) {
+  overflow: visible;
+  white-space: normal;
+}
+.round-badge {
+  display: inline-block;
+  white-space: nowrap;
+  margin: 0 6px 4px 0;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  color: #fff;
+}
+.round-badge-pass {
+  background-color: rgb(31, 181, 51);
+}
+.round-badge-fail {
+  background-color: #eb1919;
+}
+
 * {
   margin: 0;
   padding: 0;
