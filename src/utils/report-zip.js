@@ -323,7 +323,9 @@ export const exportZipReport = async (cases, hooks = {}) => {
       const shotCell = excelRow.getCell(19);
       // 反斜杠相对路径（demo 示例同写法）：Excel 识别为文件路径走默认关联打开；
       // 正斜杠写法部分 Office 版本会当未知协议 URL，弹"选择应用"框
-      shotCell.value = { text: `打开图册（${entry.images.length} 张）`, hyperlink: `图册\\${entry.caseKey}.html` };
+      // .\ 前缀强制 Excel 将其识别为当前目录文件路径而非 URL，
+      // 避免 Office 对相对路径超链接弹"选择应用/安全确认"框
+      shotCell.value = { text: `打开图册（${entry.images.length} 张）`, hyperlink: `.\\图册\\${entry.caseKey}.html` };
       shotCell.font = { color: { argb: "FF0563C1" }, underline: true };
     } else if (!excelRow.getCell(19).value) {
       excelRow.getCell(19).value = "无图片";
