@@ -276,15 +276,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
 
   zip.file("index.html", indexHtml);
 
-  // ===== 全量 Excel 报告（含截图嵌入，复用 report-template.html 导出脚本的列定义/样式） =====
-  // FileReader 原生转 base64，比逐字节 String.fromCharCode 快一个量级
-  const blobToBase64 = (blob) =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(",")[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
+  // ===== 全量 Excel 报告（复用 report-template.html 导出脚本的列定义/样式；截图走超链接不嵌图） =====
 
   const excelColumns = [
     { header: "Case ID", key: "id", width: 10 },
@@ -339,11 +331,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
     cell.alignment = { vertical: "middle", horizontal: "center" };
   });
 
-  // 截图列 = ActualResult 后的 Shots 列（第20列，0-based col 19），图片专列不与文本冲突
-  const SHOT_COL = 19;
-  // 全量嵌图 OOM 防护：Excel 内嵌图片总数上限
-  const EXCEL_MAX_EMBED_IMAGES = 2000;
-  let excelEmbeddedCount = 0;
+  // 截图列 = ActualResult 后的 Shots 列（第20列）：超链接模式，无嵌图
   let excelCaseIdx = 0;
   for (const c of list) {
     if (++excelCaseIdx % 100 === 0) {
@@ -372,7 +360,6 @@ export const exportZipReport = async (cases, hooks = {}) => {
       Result: c.Result ?? "",
       StressResults: stressText,
       ActualResult: c.ActualResult ?? "",
-      Shots: entry ? `${entry.images.length} 张` : "无图片",
       Selected: c.Selected ?? "",
       PRNo: c.PRNo ?? "",
       TestLogs: c.TestLogs ?? "",
@@ -385,40 +372,15 @@ export const exportZipReport = async (cases, hooks = {}) => {
       cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
     });
 
+    // 截图列（Shots，第20列）：不嵌图，放超链接跳转该用例图册页（demo 模式），
+    // 图片本体在 zip 的 截图/ 目录 + 图册/ 页浏览，Excel 保持轻量
     const entry = entryById.get(c.id);
     if (entry) {
-      // 全量嵌图内存上限：Excel 内嵌总数封顶 2000 张（超出仅截图中照常导出到 zip 目录），
-      // 防止 5000+ 用例全嵌导致浏览器 OOM。封顶后行内显示"N 张(超限未嵌入)"。
-      const embeddable = entry.images.slice(
-        0,
-        Math.max(0, EXCEL_MAX_EMBED_IMAGES - excelEmbeddedCount)
-      );
-      for (const img of embeddable) {
-        excelEmbeddedCount++;
-        try {
-          const base64 = await blobToBase64(img.blob);
-          // extension 按 blob MIME 推断（截图目录均 png/jpg；不匹配时兜底 png）
-          const mime = (img.blob.type || "").toLowerCase();
-          const extension =
-            mime.includes("jpeg") || mime.includes("jpg")
-              ? "jpeg"
-              : "png";
-          const imgId = wb.addImage({ base64, extension });
-          ws.addImage(imgId, {
-            tl: { col: SHOT_COL, row: excelRow.number - 1 },
-            ext: { width: 160, height: 100 },
-            editAs: "oneCell",
-          });
-        } catch (e) {
-          console.warn("Excel 嵌图失败:", img.filename, e);
-        }
-      }
-      if (embeddable.length) {
-        excelRow.height = 90 + (embeddable.length - 1) * 88;
-      }
-      if (entry.images.length > embeddable.length) {
-        excelRow.getCell(20).value = `${entry.images.length} 张（超出嵌入上限，见截图目录）`;
-      }
+      const shotCell = excelRow.getCell(20);
+      shotCell.value = { text: `打开册（${entry.images.length} 张）`, hyperlink: `图册/${entry.caseKey}.html` };
+      shotCell.font = { color: { argb: "FF0563C1" }, underline: true };
+    } else {
+      excelRow.getCell(20).value = "无图片";
     }
   }
 
