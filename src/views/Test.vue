@@ -1235,6 +1235,7 @@
               :key="i"
               :style="{
                 display: 'inline-block',
+                whiteSpace: 'nowrap',
                 margin: '0 6px 4px 0',
                 padding: '1px 8px',
                 borderRadius: '3px',
