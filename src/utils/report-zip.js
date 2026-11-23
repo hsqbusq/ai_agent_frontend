@@ -100,9 +100,12 @@ export const exportZipReport = async (cases, hooks = {}) => {
   const safeKey = (s) =>
     (s ?? "").toString().replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 60) || "case";
 
-  // 收集：caseKey -> {row, images:[{seq, filename, blob}]}；并发限制 4
+  // 收集：caseKey -> {row, images:[{seq, filename, blob}]}；并发限制 4；分批进度反馈
   const albumEntries = [];
   for (let i = 0; i < targets.length; i += 4) {
+    if (i % 40 === 0 && i > 0) {
+      notify(`正在获取截图 ${i}/${targets.length} 条用例...`);
+    }
     const group = targets.slice(i, i + 4);
     const groupLists = await Promise.all(
       group.map(async (c) => ({ c, filenames: await fetchCaseImageNames(c.Testid) }))
@@ -255,33 +258,25 @@ export const exportZipReport = async (cases, hooks = {}) => {
     .replaceAll("{{FAIL}}", fail)
     .replaceAll("{{UNTESTED}}", untested)
     .replace("{{ROWS}}", rowsHtml)
-    // Excel 导出脚本/按钮在 zip 离线场景无意义，移除
-    .replace(/<script src="https:\/\/cdn[^"]*"><\/script>/g, "");
+    // zip 离线场景：移除 CDN 依赖、Excel 导出按钮与内联导出脚本（包内已有全量 xlsx）
+    .replace(/<script src="https:\/\/cdn[^"]*"><\/script>/g, "")
+    .replace(/<button onclick="exportTestReport\(\)"[\s\S]*?<\/button>/g, "")
+    .replace(/<label class="only-tested-toggle"[\s\S]*?<\/label>/g, "");
 
-  // index.html = 报告主体 + 暗色图片总览网格（两段独立 style/交互，iframe-free 直接拼接）
+  // 图片总览默认折叠（<details>）：不展开不加载图，index 打开不卡
   const indexHtml =
     reportHtml.replace(
       "</body>",
       `<hr style="margin:24px 0">\n<style>${albumStyles}</style>\n` +
-        `<h1 style="text-align:center;font-weight:500;font-size:24px">截图总览</h1>\n` +
+        `<details style="padding:0 20px 20px"><summary style="cursor:pointer;font-size:20px;font-weight:500">截图总览（点击展开，共 ${list.length} 条）</summary>` +
         `<div id="zoom" onclick="resetZoom()"><img alt=""></div>\n` +
-        `<div class="grid">${overviewCards}</div>\n` +
+        `<div class="grid">${overviewCards}</div></details>\n` +
         `${scriptOpen}${albumZoomScript}${scriptClose}\n</body>`
     );
 
   zip.file("index.html", indexHtml);
 
-  // ===== 全量 Excel 报告（含截图嵌入，复用 report-template.html 导出脚本的列定义/样式） =====
-  const blobToBase64 = async (blob) => {
-    const buf = await blob.arrayBuffer();
-    let binary = "";
-    const bytes = new Uint8Array(buf);
-    const chunk = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunk) {
-      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
-    }
-    return btoa(binary);
-  };
+  // ===== 全量 Excel 报告（复用 report-template.html 导出脚本的列定义/样式；截图走超链接不嵌图） =====
 
   const excelColumns = [
     { header: "Case ID", key: "id", width: 10 },
@@ -303,6 +298,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
     { header: "测试结果", key: "Result", width: 10 },
     { header: "压测明细", key: "StressResults", width: 20 },
     { header: "实际结果", key: "ActualResult", width: 30 },
+    { header: "截图", key: "Shots", width: 20 },
     { header: "是否选中", key: "Selected", width: 10 },
     { header: "PR号", key: "PRNo", width: 10 },
     { header: "测试日志", key: "TestLogs", width: 20 },
@@ -335,9 +331,12 @@ export const exportZipReport = async (cases, hooks = {}) => {
     cell.alignment = { vertical: "middle", horizontal: "center" };
   });
 
-  // 截图列（第19列 col=18，锚定在实际结果后）：与模板导出脚本同布局
-  const SHOT_COL = 18; // ActualResult 键位对应第19列，图片锚 col 从 0 计
+  // 截图列 = ActualResult 后的 Shots 列（第20列）：超链接模式，无嵌图
+  let excelCaseIdx = 0;
   for (const c of list) {
+    if (++excelCaseIdx % 100 === 0) {
+      notify(`正在生成 Excel ${excelCaseIdx}/${list.length} 行（含嵌图）...`);
+    }
     const stressText = (c.StressResults || [])
       .map((r, i) => `R${i + 1}:${r.result || "-"}`)
       .join(" ");
@@ -373,34 +372,31 @@ export const exportZipReport = async (cases, hooks = {}) => {
       cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
     });
 
+    // 截图列（Shots，第20列）：不嵌图，放超链接跳转该用例图册页（demo 模式），
+    // 图片本体在 zip 的 截图/ 目录 + 图册/ 页浏览，Excel 保持轻量
     const entry = entryById.get(c.id);
     if (entry) {
-      for (const img of entry.images) {
-        try {
-          const base64 = await blobToBase64(img.blob);
-          const imgId = wb.addImage({ base64, extension: fileExt(img.filename) === "jpg" ? "jpeg" : "png" });
-          ws.addImage(imgId, {
-            tl: { col: SHOT_COL, row: excelRow.number - 1 },
-            ext: { width: 160, height: 100 },
-            editAs: "oneCell",
-          });
-        } catch (e) {
-          console.warn("Excel 嵌图失败:", img.filename, e);
-        }
-      }
-      excelRow.height = 90 + (entry.images.length - 1) * 88;
+      const shotCell = excelRow.getCell(20);
+      shotCell.value = { text: `打开册（${entry.images.length} 张）`, hyperlink: `图册/${entry.caseKey}.html` };
+      shotCell.font = { color: { argb: "FF0563C1" }, underline: true };
     } else {
-      excelRow.getCell(19).value = "无图片";
+      excelRow.getCell(20).value = "无图片";
     }
   }
 
+  notify("正在生成 Excel 文件（写入内存）...");
   const excelBuffer = await wb.xlsx.writeBuffer();
   zip.file("测试报告_全量.xlsx", excelBuffer);
 
   notify("正在打包报告，请稍等...");
-  const blob = await zip.generateAsync({ type: "blob" }, (meta) => {
-    console.log(`zip 进度: ${Math.round(meta.percent)}%`);
-  });
+  const blob = await zip.generateAsync(
+    { type: "blob", compression: "STORE" }, // PNG/xlsx 已是压缩格式，STORE 避免重复 DEFLATE 拖慢全量打包
+    (meta) => {
+      if (Math.round(meta.percent) % 25 === 0) {
+        notify(`正在打包 ${Math.round(meta.percent)}%...`);
+      }
+    }
+  );
   const timeStamp = new Date()
     .toLocaleString("zh-CN", { hour12: false })
     .replace(/[/: ]/g, "");
