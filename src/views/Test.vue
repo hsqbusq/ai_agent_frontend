@@ -1228,20 +1228,13 @@
         <el-table-column prop="rounds" label="遍数" width="70" align="center" />
         <el-table-column prop="pass" label="Pass" width="70" align="center" />
         <el-table-column prop="fail" label="Fail" width="70" align="center" />
-        <el-table-column label="各遍结果" min-width="300">
+        <el-table-column label="各遍结果" min-width="300" class-name="round-badges-col">
           <template #default="{ row }">
             <span
               v-for="(r, i) in row.results"
               :key="i"
-              :style="{
-                display: 'inline-block',
-                margin: '0 6px 4px 0',
-                padding: '1px 8px',
-                borderRadius: '3px',
-                fontWeight: 600,
-                color: '#fff',
-                backgroundColor: /pass/i.test(r) ? 'rgb(31,181,51)' : '#eb1919',
-              }"
+              class="round-badge"
+              :class="/pass/i.test(r) ? 'round-badge-pass' : 'round-badge-fail'"
               >第{{ i + 1 }}遍: {{ r }}</span
             >
           </template>
@@ -4512,8 +4505,11 @@ export default {
     const selectedRowIds = ref(new Set());
 
     const syncSelectedRowsAll = () => {
+      // 先建一次 id -> 行对象 的 Map，避免对每个选中 ID 都 find 全表
+      // （万级用例全选时是 N×M 次比较，主线程会长时间阻塞）
+      const caseMap = new Map(cases.value.map((c) => [c.id, c]));
       selectedRowsAll.value = Array.from(selectedRowIds.value)
-        .map((id) => cases.value.find((c) => c.id === id))
+        .map((id) => caseMap.get(id))
         .filter(Boolean);
     };
     const debugRows = ref([]);
@@ -4652,10 +4648,24 @@ export default {
 
     const exportTestReport = async (withImages = true) => {
       if (withImages) {
-        // 含截图模式：zip 文件夹形式（index 总览 + 图册 + 原图），见 utils/report-zip.js
+        // 含截图模式：zip 文件夹形式（index 总览 + 图册 + 原图 + 全量Excel），见 utils/report-zip.js
+        // 进度提示用单例 ElMessage 句柄更新，避免每次回调新弹一条（大 zip 的 onUpdate 在 100% 处会触发多次）
+        let progressMsg = null;
         const res = await exportZipReport(cases.value, {
-          onProgress: (m) => showToast(m, "info"),
+          onProgress: (m) => {
+            if (progressMsg) {
+              progressMsg.message = m;
+            } else {
+              progressMsg = ElMessage({
+                type: "info",
+                message: m,
+                offset: 60,
+                duration: 0, // 不自动关闭，结束时手动关
+              });
+            }
+          },
         });
+        progressMsg?.close();
         exportName.value = res.name;
         showToast(`报告已导出（zip，含 ${res.albumCount} 条用例截图）`, "success");
         return;
@@ -5487,17 +5497,21 @@ export default {
                 .replace(/\//g, "-"),
               message: `[压测] 第 ${round} 遍开始执行，请等待！`,
             });
+            let polledResult = null;
             if (isMockMode.value) {
               await runMockTestCase(row.id, row);
             } else {
-              await runTestCase(query, baseurl, row.id, row);
+              // runTestCase resolve 的 data 即轮询拿到的结果，直接取用；
+              // 不能依赖 caseRow.Result——轮询内 fetchTestList(1) 刷新列表可能把
+              // 刚写回的 Result 覆盖回空值，导致第一遍压测结果丢失
+              polledResult = await runTestCase(query, baseurl, row.id, row);
             }
             // 记录本遍明细（Result/Testid 已由轮询逻辑写回行数据）
             const caseRow = cases.value.find((c) => c.id === row.id) || row;
             row.StressResults.push({
               round,
-              result: caseRow.Result ?? "",
-              testid: caseRow.Testid ?? "",
+              result: polledResult?.result ?? caseRow.Result ?? "",
+              testid: polledResult?.test_id ?? caseRow.Testid ?? "",
             });
           } catch (error) {
             showToast(`测试用例${row.id}第 ${round} 遍执行失败`, "error");
@@ -6069,7 +6083,12 @@ export default {
 
       xhr.onload = () => {
         showToast(`测试用例${id}已停止1`, "info");
-        resolve(null);
+        // 仅在始终未从 SSE 流中解析到 test_id 时才在此 resolve；
+        // 已拿到 test_id 的情况下必须把 resolve 留给结果轮询——SSE 流结束
+        // 通常早于结果就绪，此处抢先 resolve(null) 会让压测拿到空结果
+        if (!testIdFound) {
+          resolve(null);
+        }
       };
 
       xhr.onerror = (error) => {
@@ -8046,6 +8065,29 @@ export default {
 </script>
 
 <style scoped>
+/* 压测汇总"各遍结果"徽标。注意：不能对该列 .cell 设 overflow:visible——
+   el-table 的列宽测量依赖 .cell 默认样式，改了会导致 body-wrapper 高度
+   折叠失效、max-height 不出滚动条、末行被裁。徽标自身 nowrap+整枚换行即可 */
+.round-badge {
+  display: inline-block;
+  white-space: nowrap;
+  margin: 0 6px 4px 0;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  color: #fff;
+}
+.round-badge-pass {
+  background-color: rgb(31, 181, 51);
+}
+.round-badge-fail {
+  background-color: #eb1919;
+}
+/* 保证该列有足够横向空间，徽标不被挤压 */
+:deep(.round-badges-col .cell) {
+  line-height: 1.6;
+}
+
 * {
   margin: 0;
   padding: 0;

@@ -332,6 +332,7 @@
             { header: '操作步骤序列', key: 'ActionTestSequences', width: 30 },
             { header: '预期结果序列', key: 'ExpectedTestSequences', width: 30 },
             { header: '测试结果', key: 'Result', width: 10 },
+            { header: '压测明细', key: 'StressResults', width: 20 },
             { header: '实际结果', key: 'ActualResult', width: 30 },
             { header: '是否选中', key: 'Selected', width: 10 },
             { header: 'PR号', key: 'PRNo', width: 10 },
@@ -373,8 +374,9 @@
                 cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
             });
 
-            // 实际结果列（第18列）：抓取该行全部缩略图（多帧竖排），逐张嵌入 Excel
-            const tdActual = table.tBodies[0].rows[htmlIdx].cells[17];
+            // 实际结果列（第20格）：抓取该行全部缩略图（多帧竖排），逐张嵌入 Excel
+            // 表头含 id..Result(16)/StressResults(17)/Shots(18)/ActualResult(19)
+            const tdActual = table.tBodies[0].rows[htmlIdx].cells[19];
             const imgs = tdActual ? Array.from(tdActual.querySelectorAll('img')) : [];
             if (imgs.length) {
                 // 修复空行：多帧图不再往下错位 14 行（浮到后续数据行上），
@@ -387,7 +389,7 @@
                             extension: 'png',
                         });
                         ws.addImage(imgId, {
-                            tl: { col: 17, row: excelRow.number - 1 },
+                            tl: { col: 19, row: excelRow.number - 1 },
                             ext: { width: 160, height: 100 },
                             editAs: 'oneCell'
                         });
@@ -396,7 +398,7 @@
                 // 行高按图片数量撑开：首行 90 + 每加一张 88
                 excelRow.height = 90 + (imgs.length - 1) * 88;
             } else {
-                excelRow.getCell(18).value = '无图片';
+                excelRow.getCell(20).value = '无图片';
             }
         });
 

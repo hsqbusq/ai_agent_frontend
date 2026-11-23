@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>验证页：压测汇总弹窗渲染</title>
+<script src="https://unpkg.com/vue@3.5.18/dist/vue.global.prod.js"></script>
+<script src="https://unpkg.com/element-plus@2.10.7/dist/index.full.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/element-plus@2.10.7/dist/index.css">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; font-family:"Segoe UI","Microsoft YaHei",sans-serif; }
+body { background:#f5f7fa; padding:10px; }
+/* ==== 与 Test.vue scoped 样式逐字一致 ==== */
+.round-badges-col .cell {
+  overflow: visible;
+  white-space: normal;
+}
+.round-badge {
+  display: inline-block;
+  white-space: nowrap;
+  margin: 0 6px 4px 0;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  color: #fff;
+}
+.round-badge-pass { background-color: rgb(31,181,51); }
+.round-badge-fail { background-color: #eb1919; }
+</style>
+</head>
+<body>
+<div id="app">
+  <el-dialog v-model="visible" title="压测结果汇总" width="70%">
+    <el-table :data="rows" border max-height="480">
+      <el-table-column prop="id" label="用例ID" min-width="100" />
+      <el-table-column prop="rounds" label="遍数" width="70" align="center" />
+      <el-table-column prop="pass" label="Pass" width="70" align="center" />
+      <el-table-column prop="fail" label="Fail" width="70" align="center" />
+      <el-table-column label="各遍结果" min-width="300" class-name="round-badges-col">
+        <template #default="{ row }">
+          <span v-for="(r, i) in row.results" :key="i"
+            class="round-badge"
+            :class="/pass/i.test(r) ? 'round-badge-pass' : 'round-badge-fail'"
+            >第{{ i + 1 }}遍: {{ r }}</span>
+        </template>
+      </el-table-column>
+    </el-table>
+    <template #footer>
+      <el-button type="primary" @click="visible = false">关 闭</el-button>
+    </template>
+  </el-dialog>
+</div>
+<script>
+const { createApp, ref } = Vue;
+const app = createApp({
+  setup() {
+    const visible = ref(true);
+    // 模拟 30 行：第1遍混 Pass/Fail，复现用户截图数据形态
+    const rows = ref(Array.from({length: 30}, (_, n) => {
+      const id = String(101 + n);
+      const results = [
+        n % 3 === 0 ? "Fail" : (n % 5 === 0 ? "Fail" : "Pass"),
+        n % 2 === 0 ? "Pass" : "Fail",
+        n % 4 === 0 ? "Pass" : "Fail",
+      ];
+      return {
+        id, rounds: results.length,
+        pass: results.filter(r => /pass/i.test(r)).length,
+        fail: results.filter(r => r && !/pass/i.test(r)).length,
+        results,
+      };
+    }));
+    return { visible, rows };
+  },
+});
+app.use(ElementPlus);
+app.mount("#app");
+</script>
+</body>
+</html>

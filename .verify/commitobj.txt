@@ -1,0 +1,8 @@
+tree 8c885bd84a6a49463b99e3d08cdd2c1df3ac95c4
+parent ec537de23c4e552b360ea40f44b7a1470c3e10c6
+author gloomy <487779424@qq.com> 2026-11-19 16:31:13 +0800
+committer gloomy <487779424@qq.com> 2026-11-19 16:31:13 +0800
+
+fix: revert cell overflow visible; badge nowrap; playwright regression passed
+
+Co-Authored-By: glm-5.3 - CodeChat
