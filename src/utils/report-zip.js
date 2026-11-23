@@ -49,7 +49,8 @@ a:hover{color:#a8caff}
 .card .cap{padding:6px 9px;font-size:12px;color:#9fb0c6;display:flex;justify-content:space-between;gap:8px}
 #zoom{position:fixed;inset:0;background:rgba(6,9,13,.94);display:none;z-index:99;overflow:auto;cursor:zoom-out}
 #zoom.on{display:flex;align-items:center;justify-content:center}
-#zoom img{max-width:none;image-rendering:auto;background:#fff}`;
+#zoom img{max-width:none;image-rendering:auto;background:#fff}
+.round-head{margin:22px 22px 2px;font-size:15px;font-weight:600;color:#7db1ff;border-bottom:1px solid #2b3644;padding-bottom:8px}`;
 
 // 拉取一个用例的全部截图文件名（clip 时间序，过滤标注图）
 export const fetchCaseImageNames = async (testId) => {
@@ -108,7 +109,9 @@ export const exportZipReport = async (cases, hooks = {}) => {
   const fail = tested.length - pass;
   const untested = total - tested.length;
 
-  const targets = list.filter((c) => c.Testid);
+  const targets = list.filter(
+    (c) => c.Testid || (c.StressResults || []).some((r) => r && r.testid)
+  );
   if (targets.length) {
     notify(`正在获取 ${targets.length} 条用例的截图...`);
   }
@@ -117,54 +120,94 @@ export const exportZipReport = async (cases, hooks = {}) => {
   const safeKey = (s) =>
     (s ?? "").toString().replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 60) || "case";
 
-  // 收集：caseKey -> {row, images:[{seq, filename, blob}]}；并发限制 4；分批进度反馈
+  // 收集：caseKey -> {row, rounds:[{label, images:[{seq, filename, blob}]}]}
+  // 压测用例按 StressResults 每遍 testid 各拉一份截图（每轮独立子目录）；
+  // 非压测用例单 Testid 一轮。并发限制 4；分批进度反馈
   const albumEntries = [];
-  for (let i = 0; i < targets.length; i += 4) {
-    if (i % 40 === 0 && i > 0) {
-      notify(`正在获取截图 ${i}/${targets.length} 条用例...`);
-    }
-    const group = targets.slice(i, i + 4);
-    const groupLists = await Promise.all(
-      group.map(async (c) => ({ c, filenames: await fetchCaseImageNames(c.Testid) }))
+  // 一个 testid -> 一轮 {label, images}；图片拉取失败/无图返回 null
+  const collectRound = async (c, testid, label) => {
+    const filenames = await fetchCaseImageNames(testid);
+    if (!filenames.length) return null;
+    const blobs = await Promise.all(
+      filenames.map(async (filename, idx) => {
+        try {
+          const r = await fetch(
+            `/dev-api/test_logs/${encodeURIComponent(testid)}/image?file=${encodeURIComponent(filename)}`
+          );
+          if (!r.ok) return null;
+          return { filename, blob: await r.blob(), seq: idx + 1 };
+        } catch {
+          return null;
+        }
+      })
     );
-    for (const { c, filenames } of groupLists) {
-      if (!filenames.length) continue;
-      const blobs = await Promise.all(
-        filenames.map(async (filename, idx) => {
-          try {
-            const r = await fetch(
-              `/dev-api/test_logs/${encodeURIComponent(c.Testid)}/image?file=${encodeURIComponent(filename)}`
-            );
-            if (!r.ok) return null;
-            return { filename, blob: await r.blob(), seq: idx + 1 };
-          } catch {
-            return null;
-          }
-        })
-      );
-      const images = blobs.filter(Boolean);
-      if (images.length) albumEntries.push({ caseKey: safeKey(c.id), row: c, images });
+    const images = blobs.filter(Boolean);
+    return images.length ? { label, images } : null;
+  };
+  // 展开为 [case, testid, label] 任务列表
+  const tasks = [];
+  for (const c of targets) {
+    const sr = (c.StressResults || []).filter((r) => r && r.testid);
+    if (sr.length) {
+      sr.forEach((r, i) => tasks.push({ c, testid: r.testid, label: `第${i + 1}遍` }));
+    } else if (c.Testid) {
+      tasks.push({ c, testid: c.Testid, label: null });
+    }
+  }
+  for (let i = 0; i < tasks.length; i += 4) {
+    if (i % 40 === 0 && i > 0) {
+      notify(`正在获取截图 ${i}/${tasks.length} 轮...`);
+    }
+    const group = tasks.slice(i, i + 4);
+    const results = await Promise.all(
+      group.map(({ c, testid, label }) => collectRound(c, testid, label).then((round) => ({ c, round })))
+    );
+    for (const { c, round } of results) {
+      if (!round) continue;
+      const key = safeKey(c.id);
+      let entry = albumEntries.find((e) => e.row.id === c.id);
+      if (!entry) {
+        entry = { caseKey: key, row: c, rounds: [] };
+        albumEntries.push(entry);
+      }
+      entry.rounds.push(round);
     }
   }
 
-  // 截图文件 + 单用例图册页
+  // 截图文件 + 单用例图册页（压测用例每轮独立子目录 第1遍/第2遍/...）
   for (const entry of albumEntries) {
-    for (const img of entry.images) img.ext = await imgExt(img.blob, img.filename);
-    for (const img of entry.images) {
-      zip.file(
-        `截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${img.ext}`,
-        img.blob
-      );
+    for (const round of entry.rounds) {
+      for (const img of round.images) img.ext = await imgExt(img.blob, img.filename);
     }
-    const cards = entry.images
-      .map((img) => {
-        const rel = `../截图/${entry.caseKey}/${String(img.seq).padStart(2, "0")}.${img.ext}`;
-        const alt = escapeHtml(entry.row.id) + " 第" + img.seq + "张";
-        return (
-          `<div class="card"><img src="${rel}" data-full="${rel}" alt="${alt}" loading="lazy">` +
-          `<div class="cap"><span>#${String(img.seq).padStart(2, "0")}</span>` +
-          `<a href="${rel}" target="_blank">原图</a></div></div>`
+    const multiRound = entry.rounds.length > 1;
+    for (const round of entry.rounds) {
+      const dir = multiRound ? `${entry.caseKey}/${round.label}` : entry.caseKey;
+      for (const img of round.images) {
+        zip.file(
+          `截图/${dir}/${String(img.seq).padStart(2, "0")}.${img.ext}`,
+          img.blob
         );
+      }
+    }
+    const totalImages = entry.rounds.reduce((n, r) => n + r.images.length, 0);
+    const sections = entry.rounds
+      .map((round) => {
+        const dir = multiRound ? `${entry.caseKey}/${round.label}` : entry.caseKey;
+        const cards = round.images
+          .map((img) => {
+            const rel = `../截图/${dir}/${String(img.seq).padStart(2, "0")}.${img.ext}`;
+            const alt = escapeHtml(entry.row.id) + (round.label ? " " + round.label + " " : " ") + "第" + img.seq + "张";
+            return (
+              `<div class="card"><img src="${rel}" data-full="${rel}" alt="${alt}" loading="lazy">` +
+              `<div class="cap"><span>#${String(img.seq).padStart(2, "0")}</span>` +
+              `<a href="${rel}" target="_blank">原图</a></div></div>`
+            );
+          })
+          .join("");
+        const head = multiRound
+          ? `<h2 class="round-head">${round.label} · ${round.images.length} 张</h2>`
+          : "";
+        return `${head}<div class="grid">${cards}</div>`;
       })
       .join("");
     const isPass = /pass/i.test(entry.row.Result ?? "");
@@ -178,9 +221,9 @@ export const exportZipReport = async (cases, hooks = {}) => {
       `<style>${albumStyles}</style></head><body>\n` +
       `<div id="zoom" onclick="resetZoom()"><img alt=""></div>\n` +
       `<header><h1>用例 ${escapeHtml(entry.row.id)} · ${resultTag}</h1>` +
-      `<span class="hint">${entry.images.length} 张 · 点击缩略图放大，滚轮缩放，Esc 关闭</span>` +
+      `<span class="hint">${multiRound ? entry.rounds.length + " 轮 · " : ""}${totalImages} 张 · 点击缩略图放大，滚轮缩放，Esc 关闭</span>` +
       `<a href="../index.html">← 返回总览</a></header>\n` +
-      `<div class="grid">${cards}</div>\n` +
+      `${sections}\n` +
       `${scriptOpen}${albumZoomScript}${scriptClose}</body></html>`;
     zip.file(`图册/${entry.caseKey}.html`, albumHtml);
   }
@@ -194,11 +237,22 @@ export const exportZipReport = async (cases, hooks = {}) => {
       const result = c.Result || "未测试";
       const color = /pass/i.test(c.Result ?? "") ? "rgb(80,220,100)" : "#ff6b6b";
       if (entry) {
-        const rel = `截图/${entry.caseKey}/01.${entry.images[0].ext}`;
+        // 封面用最新一轮的第一张图；多轮时计数显示"N轮X张"
+        const lastRound = entry.rounds[entry.rounds.length - 1];
+        const firstImg = lastRound.images[0];
+        const multiRound = entry.rounds.length > 1;
+        const coverDir = multiRound
+          ? `${entry.caseKey}/${lastRound.label}`
+          : entry.caseKey;
+        const rel = `截图/${coverDir}/01.${firstImg.ext}`;
+        const totalImages = entry.rounds.reduce((n, r) => n + r.images.length, 0);
+        const countText = multiRound
+          ? `${entry.rounds.length} 轮 ${totalImages} 张`
+          : `${totalImages} 张`;
         return (
           `<div class="card"><img src="${rel}" data-full="${rel}" alt="${escapeHtml(c.id)}" loading="lazy">` +
           `<div class="cap"><a href="图册/${entry.caseKey}.html">${escapeHtml(c.id)}</a>` +
-          `<span style="color:${color}">${escapeHtml(result)} · ${entry.images.length} 张</span></div></div>`
+          `<span style="color:${color}">${escapeHtml(result)} · ${countText}</span></div></div>`
         );
       }
       return (
@@ -333,7 +387,10 @@ export const exportZipReport = async (cases, hooks = {}) => {
       // 正斜杠写法部分 Office 版本会当未知协议 URL，弹"选择应用"框
       // .\ 前缀强制 Excel 将其识别为当前目录文件路径而非 URL，
       // 避免 Office 对相对路径超链接弹"选择应用/安全确认"框
-      shotCell.value = { text: `打开图册（${entry.images.length} 张）`, hyperlink: `.\\图册\\${entry.caseKey}.html` };
+      const _multi = entry.rounds.length > 1;
+      const _total = entry.rounds.reduce((n, r) => n + r.images.length, 0);
+      const _txt = _multi ? `${entry.rounds.length} 轮 ${_total} 张` : `${_total} 张`;
+      shotCell.value = { text: `打开图册（${_txt}）`, hyperlink: `.\\图册\\${entry.caseKey}.html` };
       shotCell.font = { color: { argb: "FF0563C1" }, underline: true };
     } else if (!excelRow.getCell(19).value) {
       excelRow.getCell(19).value = "无图片";
