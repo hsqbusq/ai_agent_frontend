@@ -1200,7 +1200,7 @@
           <el-input-number
             v-model="stressRounds"
             :min="1"
-            :max="50"
+            :max="9999"
             :step="1"
             step-strictly
             style="width: 100%"

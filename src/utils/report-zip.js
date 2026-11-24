@@ -249,9 +249,12 @@ export const exportZipReport = async (cases, hooks = {}) => {
         const countText = multiRound
           ? `${entry.rounds.length} 轮 ${totalImages} 张`
           : `${totalImages} 张`;
+        // 图片整体包一层链接进图册页（该页含全部轮次截图）；
+        // 放大查看在图册页里做，总览页点击即直达全部截图
+        const albumHref = `图册/${entry.caseKey}.html`;
         return (
-          `<div class="card"><img src="${rel}" data-full="${rel}" alt="${escapeHtml(c.id)}" loading="lazy">` +
-          `<div class="cap"><a href="图册/${entry.caseKey}.html">${escapeHtml(c.id)}</a>` +
+          `<div class="card"><a href="${albumHref}"><img src="${rel}" alt="${escapeHtml(c.id)}" loading="lazy"></a>` +
+          `<div class="cap"><a href="${albumHref}">${escapeHtml(c.id)}</a>` +
           `<span style="color:${color}">${escapeHtml(result)} · ${countText}</span></div></div>`
         );
       }
@@ -275,7 +278,7 @@ export const exportZipReport = async (cases, hooks = {}) => {
     `<div id="zoom" onclick="resetZoom()"><img alt=""></div>
 ` +
     `<header><h1>自动化测试报告 · 截图总览</h1>` +
-    `<span class="hint">共 ${total} 条 · Pass ${pass} / Fail ${fail} / 未测 ${untested} · 明细见 测试报告_全量.xlsx · 点击图片放大，点击用例号进图册</span></header>
+    `<span class="hint">共 ${total} 条 · Pass ${pass} / Fail ${fail} / 未测 ${untested} · 明细见 测试报告_全量.xlsx · 点击图片或用例号进入图册查看该用例全部截图</span></header>
 ` +
     `<div class="grid">${overviewCards}</div>
 ` +
