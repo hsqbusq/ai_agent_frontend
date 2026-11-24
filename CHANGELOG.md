@@ -24,7 +24,20 @@
 
 ---
 
-## 压测多轮截图入报告（2026-11-23）
+## fa92166 feat: 总览页点击图片直达图册 + 压测遍数上限放开到 9999（2026-11-24）
+
+- **变更文件**：
+  - `src/utils/report-zip.js`：
+    - 总览卡片图片整体包 `<a href="图册/{caseKey}.html">`，用例号同为链接——点击即进入图册页看该用例全部轮次截图
+    - index.html 生成段去掉 zoom 层 div 和 albumZoomScript 注入（该脚本全局点击监听 preventDefault 会拦截链接跳转，图册页保留完整缩放交互不受影响）
+    - 头部提示文案同步
+  - `src/views/Test.vue`：压测遍数 el-input-number 上限 50 → 9999（前端唯一限制）
+- **修改原因**：新需求——总览页点图即看全部截图；压测遍数不设上限
+- **问题归因**：fa92166 首版把图片包进 <a> 后仍弹单图浮层——albumZoomScript 被 index.html 共用，document 级点击监听对 .card img 命中即 preventDefault 吞掉跳转（本次维护引入的冲突）
+- **触发条件**：导出含截图报告后点击总览页缩略图
+- **影响范围**：仅 index.html 总览页交互；图册页/Excel 不变
+- **验证方式**：npm run build 通过；待用户重新导出验证点击直达图册页（含全部轮次截图）
+- **发布状态**：已推送 gitlab + GitHub（2026-11-24）；未发布服务器
 
 - **变更文件**：`src/utils/report-zip.js`
   - 截图收集：含 `StressResults` 的用例按每遍 testid 各拉一份截图（任务展开为 [用例, testid, 轮次] 列表，并发 4 不变）；非压测用例维持单 Testid 单轮

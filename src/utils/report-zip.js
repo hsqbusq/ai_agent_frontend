@@ -275,14 +275,12 @@ export const exportZipReport = async (cases, hooks = {}) => {
 ` +
     `<style>${albumStyles}</style></head><body>
 ` +
-    `<div id="zoom" onclick="resetZoom()"><img alt=""></div>
-` +
     `<header><h1>自动化测试报告 · 截图总览</h1>` +
     `<span class="hint">共 ${total} 条 · Pass ${pass} / Fail ${fail} / 未测 ${untested} · 明细见 测试报告_全量.xlsx · 点击图片或用例号进入图册查看该用例全部截图</span></header>
 ` +
     `<div class="grid">${overviewCards}</div>
 ` +
-    `${scriptOpen}${albumZoomScript}${scriptClose}</body></html>`;
+    `</body></html>`;
 
   zip.file("index.html", indexHtml);
 
